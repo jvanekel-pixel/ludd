@@ -1,3 +1,7 @@
+// PixiJS normally builds its drawing code with new Function, which the installed app's security
+// policy (no 'unsafe-eval') blocks, leaving the design area blank. This add-on makes PixiJS work
+// without it, so the policy can stay strict. It must load before PixiJS draws anything.
+import "pixi.js/unsafe-eval";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";

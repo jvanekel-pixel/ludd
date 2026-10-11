@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1 (Oct 11, 2026)
+
+- **Fixed: the design area stayed blank (grey) in the installed app.** The installed app runs under a strict security policy that forbids building code at run time, which the drawing library (PixiJS) does by default; the development version doesn't have the policy, so it never showed there. LUDD now loads PixiJS's add-on for this, so the policy stays strict. A test fails if that ever goes missing, and if the design area can't start for any other reason LUDD now says so instead of showing grey.
+- **The Windows installer shows the LUDD logo**: on its welcome and finish pages, in the banner on the other steps, and as its icon. (`scripts/make_installer_art.py` makes the pictures.)
+- The PDF manual (`docs/LUDD-User-Manual.pdf`) and the script that makes it.
+
 ## 1.0.0 (Oct 11, 2026)
 
 ### From the first hands-on test

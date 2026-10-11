@@ -778,6 +778,14 @@ export function StitchCanvas() {
           sceneRef.current = buildScene(app, st.design, null);
           refresh(sceneRef.current);
         }
+      })
+      .catch((err: unknown) => {
+        // Never fail silently: a blank design area with no explanation is the worst outcome.
+        console.error("The design area couldn't start", err);
+        useStore.getState().notify({
+          kind: "error",
+          text: `The design area couldn't start (${err instanceof Error ? err.message : String(err)}). Please report this at github.com/jvanekel-pixel/ludd/issues.`,
+        });
       });
     return () => {
       alive = false;
