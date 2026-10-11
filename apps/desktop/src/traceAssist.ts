@@ -186,12 +186,12 @@ export function setStep(mm: number) {
   useStore.getState().setTraceStep(v);
 }
 
-/** Switch the last placed point between corner and curve. */
+/** Switch the last placed point: curve → straight → sharp corner. */
 export function toggleLastPoint() {
   const s = useStore.getState();
   const pen = s.pen;
   if (!pen) return;
-  const flip = (n: PathNode): PathNode => [n[0], n[1], n[2] === "c" ? "s" : "c"];
+  const flip = (n: PathNode): PathNode => [n[0], n[1], n[2] === "s" ? "l" : n[2] === "l" ? "c" : "s"];
   if (pen.kind === "satin" && pen.b.length === pen.a.length && pen.b.length) {
     s.setPen({ ...pen, a: [...pen.a.slice(0, -1), flip(pen.a[pen.a.length - 1])], b: [...pen.b.slice(0, -1), flip(pen.b[pen.b.length - 1])] });
   } else if (pen.a.length) {

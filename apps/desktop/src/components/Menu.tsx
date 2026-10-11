@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { command } from "../actions";
 import { formatShortcut } from "../commands";
 import { holdEscape } from "../escape";
@@ -7,7 +7,7 @@ import { useStore } from "../store";
 export type MenuItem = { id: string; label?: string; checked?: boolean } | "separator";
 
 /** A "⋯" button with a dropdown of commands, each showing its shortcut. */
-export function Menu({ items, label = "More" }: { items: MenuItem[]; label?: string }) {
+export function Menu({ items, label = "More", trigger, className }: { items: MenuItem[]; label?: string; trigger?: ReactNode; className?: string }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   // Re-render when state that commands depend on changes.
@@ -31,8 +31,8 @@ export function Menu({ items, label = "More" }: { items: MenuItem[]; label?: str
 
   return (
     <div className="menu" ref={root}>
-      <button aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} title={label} aria-label={label}>
-        ⋯
+      <button className={className} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} title={label} aria-label={label}>
+        {trigger ?? "⋯"}
       </button>
       {open && (
         <ul role="menu" className="menu-list">

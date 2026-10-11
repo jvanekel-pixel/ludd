@@ -326,3 +326,30 @@ def test_star_fill_has_no_long_stitches(angle):
     recs, _ = generate({"kind": "fill", "geometry": {"outline": pts}, "params": {"angle_deg": angle}})
     st = [r for r in recs if r[2] == STITCH]
     assert max(math.dist(a[:2], b[:2]) for a, b in zip(st, st[1:])) <= 4.1
+
+
+def test_fill_random_moves_penetrations_but_keeps_stitches_short():
+    shape = [c(0, 0), c(30, 0), c(30, 20), c(0, 20)]
+    plain, _ = fill(shape, [], FillParams(angle_deg=0, underlay=()))
+    rnd, _ = fill(shape, [], FillParams(angle_deg=0, underlay=(), random_pct=30))
+    again, _ = fill(shape, [], FillParams(angle_deg=0, underlay=(), random_pct=30))
+    assert rnd == again  # the same design always gives the same stitches
+    assert pts(rnd) != pts(plain)
+    st = [r for r in rnd if r[2] == STITCH]
+    assert max(math.dist(a[:2], b[:2]) for a, b in zip(st, st[1:])) <= 3.5 * 1.16
+    with pytest.raises(DigitizeError, match="Random"):
+        FillParams.from_dict({"random_pct": 80})
+
+
+def test_fill_reverse_sews_from_the_other_end():
+    shape = [c(0, 0), c(30, 0), c(30, 20), c(0, 20)]
+    fwd, _ = fill(shape, [], FillParams(angle_deg=0, underlay=()))
+    rev, _ = fill(shape, [], FillParams(angle_deg=0, underlay=(), reverse=True))
+    assert pts(rev) == pts(fwd)[::-1]
+
+
+def test_satin_split_breaks_long_stitches():
+    a, b = [c(0, 0), c(30, 0)], [c(0, 9), c(30, 9)]
+    recs, _ = satin(a, b, SatinParams(underlay=(), pull_comp_mm=0, split_mm=4))
+    st = [r for r in recs if r[2] == STITCH]
+    assert max(math.dist(p[:2], q[:2]) for p, q in zip(st, st[1:])) <= 4 * 1.2

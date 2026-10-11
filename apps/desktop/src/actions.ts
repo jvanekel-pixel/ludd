@@ -1,6 +1,7 @@
 import { message, open, save } from "@tauri-apps/plugin-dialog";
 import type { Command } from "./commands";
 import {
+  ADD_OFFSET_MM,
   IDENTITY,
   addImage,
   addItem,
@@ -9,7 +10,10 @@ import {
   deleteColor,
   duplicateItem,
   repeatItem,
+  setGroup,
+  transformTogether,
   type RepeatSpec,
+  type TogetherOp,
   insertAt,
   itemLabel,
   jumpsToTrims,
@@ -25,6 +29,7 @@ import {
   removeImage,
   removeItem,
   rotateBy,
+  scaleBy,
   undo,
   updateImage,
   updateObject,
@@ -46,6 +51,7 @@ import type {
   FontInfo,
   FontRef,
   Layout,
+  LayoutItem,
   Machine,
   ObjectItem,
   ObjectKind,
@@ -64,7 +70,7 @@ import { resolveResource } from "@tauri-apps/api/path";
 import { printDesign } from "./print";
 import { cancelTraceQueue, queueAccept, queueAcceptMany, setStep, toggleLastPoint } from "./traceAssist";
 import { loadPrefs, savePrefs } from "./prefs";
-import { isDirty, PLAYER_SPEEDS, selectHoop, selectMachine, useStore, type Tool } from "./store";
+import { isDirty, MACHINE_SPEED, PLAYER_SPEEDS, selectHoop, selectMachine, useStore, type Tool } from "./store";
 
 /** Formats listed first in pickers: the user's Brother (PES) and Janome (JEF). */
 export const PREFERRED_FORMATS = ["pes", "jef"];
@@ -489,10 +495,80 @@ export function targetId(): string | null {
   return layout.items.length === 1 && !s.history.present?.images.some((im) => im.id === s.selectedId) ? layout.items[0].id : null;
 }
 
-function editTarget(fn: (l: Layout, id: string) => Layout) {
+/** The selected designs and shapes (several with Shift+click, Ctrl+A or a group), else the target. */
+export function selectionIds(): string[] {
+  const s = useStore.getState();
   const l = currentLayout();
-  const id = targetId();
-  if (l && id) void commit(fn(l, id));
+  if (!l) return [];
+  const ids = [s.selectedId, ...s.extraIds].filter((id): id is string => !!id && l.items.some((it) => it.id === id));
+  if (ids.length) return ids;
+  const t = targetId();
+  return t ? [t] : [];
+}
+
+/** Each selected item's centre on screen, and the centre of them all. */
+export function selectionGeometry(ids: string[]): { centers: Record<string, [number, number]>; box: [number, number, number, number] | null; center: [number, number] } {
+  const s = useStore.getState();
+  const l = currentLayout();
+  const centers: Record<string, [number, number]> = {};
+  let box: [number, number, number, number] | null = null;
+  for (const id of ids) {
+    const i = l?.items.findIndex((it) => it.id === id) ?? -1;
+    const b = i >= 0 ? s.design?.items?.[i]?.bounds_mm : null;
+    if (!b) continue;
+    centers[id] = [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2];
+    box = box ? [Math.min(box[0], b[0]), Math.min(box[1], b[1]), Math.max(box[2], b[2]), Math.max(box[3], b[3])] : [b[0], b[1], b[2], b[3]];
+  }
+  return { centers, box, center: box ? [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2] : [0, 0] };
+}
+
+/** Turn, mirror, resize or move everything selected, as one. */
+export function editSelection(op: TogetherOp) {
+  const l = currentLayout();
+  const ids = selectionIds();
+  if (!l || !ids.length) return;
+  if (ids.length === 1 && !op.move) {
+    // One item turns, flips and grows about its own centre.
+    const id = ids[0];
+    return void commit(op.rotate ? rotateBy(l, id, op.rotate) : op.mirror ? mirror(l, id, op.mirror) : op.scale ? scaleBy(l, id, op.scale) : l);
+  }
+  const g = selectionGeometry(ids);
+  void commit(transformTogether(l, ids, g.centers, g.center, op));
+}
+
+/** Click on an item: select it, and the rest of its group. Shift+click adds or removes it. */
+export function pickItem(id: string, add: boolean) {
+  const s = useStore.getState();
+  const l = currentLayout();
+  const it = l?.items.find((x) => x.id === id);
+  if (!l || !it) return s.select(id);
+  const members = it.group ? l.items.filter((x) => x.group === it.group).map((x) => x.id) : [id];
+  const current = [s.selectedId, ...s.extraIds].filter((x): x is string => !!x && l.items.some((y) => y.id === x));
+  if (add) {
+    const on = current.includes(id);
+    const next = on ? current.filter((x) => !members.includes(x)) : [...current, ...members.filter((x) => !current.includes(x))];
+    return s.setSelection(next[0] ?? null, next.slice(1));
+  }
+  // Clicking something already selected keeps the whole selection (so a drag moves it all).
+  if (current.includes(id)) return;
+  s.setSelection(id, members.filter((x) => x !== id));
+}
+
+/** Ctrl+A: select every design and shape. */
+function selectAll() {
+  const l = currentLayout();
+  if (!l?.items.length) return;
+  useStore.getState().setSelection(l.items[0].id, l.items.slice(1).map((it) => it.id));
+}
+
+/** Ctrl+G / Ctrl+U: group the selection (it selects and moves as one) or ungroup it. */
+function groupSelection(on: boolean) {
+  const l = currentLayout();
+  const ids = selectionIds();
+  if (!l || (on && ids.length < 2)) return info("Select two or more things first (Shift+click, or Ctrl+A for everything).");
+  void commit(setGroup(l, ids, on ? `g${Date.now().toString(36)}` : null)).then(() =>
+    info(on ? `Grouped ${ids.length} things: they now select and move together.` : "Ungrouped."),
+  );
 }
 
 /** Remove the selected design, drawn object or picture. */
@@ -505,7 +581,9 @@ export function removeSelected() {
     s.select(null);
     return;
   }
-  void commit(removeItem(doc.layout, s.selectedId));
+  let l = doc.layout;
+  for (const id of selectionIds()) l = removeItem(l, id);
+  void commit(l);
   s.select(null);
 }
 
@@ -627,7 +705,7 @@ export function penCancel() {
 }
 
 /** Turn the pen's points into an object, add it to the layout and select it. */
-export async function penFinish() {
+export async function penFinish(opts: { close?: boolean } = {}) {
   const s = useStore.getState();
   const pen = s.pen;
   if (!pen || !penReady()) {
@@ -639,11 +717,21 @@ export async function penFinish() {
   const thread = s.drawThread;
   const obj =
     pen.kind === "run"
-      ? { kind: "run" as const, geometry: { nodes: pen.a }, params: { ...DEFAULT_PARAMS.run }, thread }
+      ? { kind: "run" as const, geometry: { nodes: pen.a, ...(opts.close ? { closed: true } : {}) }, params: { ...DEFAULT_PARAMS.run }, thread }
       : pen.kind === "satin"
         ? { kind: "satin" as const, geometry: { rail_a: pen.a, rail_b: pen.b }, params: { ...DEFAULT_PARAMS.satin }, thread }
         : { kind: "fill" as const, geometry: { outline: pen.a }, params: { ...DEFAULT_PARAMS.fill }, thread };
   s.setPen(null);
+  // A hole (O): add it to the fill it was drawn in.
+  if (pen.holeFor && layout.items.some((it) => it.id === pen.holeFor)) {
+    const id = pen.holeFor;
+    const next = updateObject(layout, id, (o) =>
+      o.kind === "fill" || o.kind === "applique" ? ({ ...o, geometry: { ...o.geometry, holes: [...(o.geometry.holes ?? []), pen.a] } } as ObjectItem) : o,
+    );
+    useStore.getState().setTool("select");
+    if (await commit(next)) useStore.getState().select(id);
+    return;
+  }
   // Continuing an object replaces its points and keeps its thread and settings.
   if (pen.replaceId && layout.items.some((it) => it.id === pen.replaceId)) {
     const id = pen.replaceId;
@@ -817,8 +905,11 @@ export function moveNode(id: string, key: NodeList, index: number, x: number, y:
   editObject(id, (o) => withNodes(o, key, (ns) => ns.map((n, i) => (i === index ? [round2(x), round2(y), n[2]] : n))));
 }
 
+/** Right-click on a point (or C while drawing) cycles curve → line → cusp. */
+export const nextKind = (k: PathNode[2]): PathNode[2] => (k === "s" ? "l" : k === "l" ? "c" : "s");
+
 export function toggleNodeKind(id: string, key: NodeList, index: number) {
-  editObject(id, (o) => withNodes(o, key, (ns) => ns.map((n, i) => (i === index ? [n[0], n[1], n[2] === "c" ? "s" : "c"] : n))));
+  editObject(id, (o) => withNodes(o, key, (ns) => ns.map((n, i) => (i === index ? [n[0], n[1], nextKind(n[2])] : n))));
 }
 
 export function deleteNode(id: string, key: NodeList, index: number) {
@@ -928,6 +1019,120 @@ function toggleLayout(key: "merge_colors" | "color_sort") {
 function toggleKnockdown() {
   const l = currentLayout();
   if (l) void commit({ ...l, knockdown: { margin_mm: 2, ...l.knockdown, enabled: !l.knockdown?.enabled } });
+}
+
+// ---------------------------------------------------------------- Embrilliance-style create, view and clipboard keys
+
+/** D: switch between Select and the drawing tool used last. */
+async function toggleCreate() {
+  const s = useStore.getState();
+  if (s.tool === "select") await tool(s.lastTool)();
+  else await tool("select")();
+}
+
+/** Q / W: draw another shape of the same kind as the last object (or the one before it). */
+function drawLike(back: 0 | 1) {
+  const items = (currentLayout()?.items ?? []).filter(isObject);
+  const o = items[items.length - 1 - back];
+  if (!o) return info(back ? "There's no earlier shape to copy the kind of." : "Draw a shape first.");
+  void tool(o.kind === "applique" ? "fill" : o.kind)();
+}
+
+/** O: draw a hole in the selected fill. */
+function startHole() {
+  const s = useStore.getState();
+  const o = currentLayout()?.items.find((it) => it.id === s.selectedId);
+  if (!o || (o.kind !== "fill" && o.kind !== "applique")) return info("Select a fill first, then press O to draw a hole in it.");
+  s.setTool("fill");
+  s.setPen({ kind: "fill", a: [], b: [], holeFor: o.id });
+  info("Click around the hole; Enter or right-click finishes it.");
+}
+
+/** I: draw a line across a fill to set its stitch angle (Embrilliance's inclination line). */
+function startAngle() {
+  const s = useStore.getState();
+  const o = currentLayout()?.items.find((it) => it.id === s.selectedId);
+  if (!o || o.kind !== "fill") return info("Select a fill first, then press I and draw a line the stitches should follow.");
+  s.setAngleFor({ id: o.id, points: [] });
+}
+
+/** Called by the canvas when the inclination line is done. */
+export function finishAngle(id: string, a: [number, number], b: [number, number]) {
+  useStore.getState().setAngleFor(null);
+  const deg = (((Math.atan2(b[1] - a[1], b[0] - a[0]) * 180) / Math.PI) % 180 + 180) % 180;
+  setObjectParams(id, { angle_deg: Math.round(deg) });
+}
+
+/** M: the measuring tool. Click two points to see the distance; press M or Esc to put it away. */
+function toggleRuler() {
+  const s = useStore.getState();
+  if (s.ruler) return s.setRuler(null);
+  if (s.tool !== "select") void tool("select")();
+  s.setRuler([]);
+}
+
+/** S: zoom to the selection. */
+function zoomSelected() {
+  const s = useStore.getState();
+  const l = currentLayout();
+  const img = s.history.present?.images.find((im) => im.id === s.selectedId);
+  if (img) return s.requestZoom("box", { box: [img.x - img.width_mm / 2, img.y - img.height_mm / 2, img.x + img.width_mm / 2, img.y + img.height_mm / 2] });
+  const id = targetId();
+  const i = l && id ? l.items.findIndex((it) => it.id === id) : -1;
+  const b = i >= 0 ? s.design?.items?.[i]?.bounds_mm : null;
+  if (b) s.requestZoom("box", { box: b });
+}
+
+/** 0: zoom to the hoop. */
+function zoomHoop() {
+  const h = selectHoop(useStore.getState());
+  if (h) useStore.getState().requestZoom("box", { box: [-h.width_mm / 2, -h.height_mm / 2, h.width_mm / 2, h.height_mm / 2] });
+}
+
+let clipboard: LayoutItem[] = [];
+
+/** Ctrl+C / Ctrl+X: copy (or cut) the selected design or shape. */
+function copySelected(cut: boolean) {
+  const l = currentLayout();
+  const ids = selectionIds();
+  const items = l?.items.filter((x) => ids.includes(x.id)) ?? [];
+  if (!items.length) return;
+  clipboard = items.map((it) => structuredClone(it));
+  if (cut) removeSelected();
+  else info("Copied. Ctrl+V pastes it.");
+}
+
+/** Ctrl+V: paste a copy, a little down and to the right of where it was. */
+function pasteClipboard() {
+  const l = currentLayout();
+  if (!l || !clipboard.length) return;
+  let out = l;
+  const pasted: string[] = [];
+  // Pasted copies keep their own group, apart from the originals.
+  const group = clipboard.some((it) => it.group) ? `g${Date.now().toString(36)}` : undefined;
+  for (const src of clipboard) {
+    const copy = { ...structuredClone(src), id: newId(), group: src.group ? group : undefined } as LayoutItem;
+    out = { ...out, items: [...out.items, copy] };
+    out = moveBy(out, copy.id, ADD_OFFSET_MM, ADD_OFFSET_MM);
+    pasted.push(copy.id);
+  }
+  void commit(out).then((ok) => ok && useStore.getState().setSelection(pasted[0], pasted.slice(1)));
+}
+
+/** Step the stitch-out speed up or down the speed scale. */
+function changeSpeed(dir: -1 | 1) {
+  const s = useStore.getState();
+  const i = PLAYER_SPEEDS.findIndex((v) => v >= s.speed);
+  const next = PLAYER_SPEEDS[Math.min(PLAYER_SPEEDS.length - 1, Math.max(0, (i < 0 ? PLAYER_SPEEDS.length - 1 : i) + dir))];
+  s.setSpeed(next);
+  info(`Stitch-out speed: ${next === MACHINE_SPEED ? "machine speed" : `${next} stitches a second`}.`);
+}
+
+/** Pin a design or shape in place (it can't be dragged; its settings still change). */
+export function setItemPinned(id: string, pinned: boolean) {
+  const l = currentLayout();
+  if (!l) return;
+  void commit({ ...l, items: l.items.map((it) => (it.id === id ? ({ ...it, locked: pinned || undefined } as LayoutItem) : it)) });
 }
 
 /** Copies of the selected design in a row, round a circle or mirrored four ways. */
@@ -1167,7 +1372,7 @@ const nudge = (dx: number, dy: number) => () => {
     if (!img.locked) setPicture(img.id, { x: img.x + dx, y: img.y + dy });
     return;
   }
-  editTarget((l, id) => moveBy(l, id, dx, dy));
+  editSelection({ move: [dx, dy] });
 };
 const tool = (t: Tool) => async () => {
   // Switching tools mid-shape keeps the shape if it's complete enough, rather than losing it.
@@ -1191,7 +1396,7 @@ export const COMMANDS: Command[] = [
   { id: "trace.pick2", title: "Take branch 2", shortcut: "2", run: () => queueAccept(2), enabled: hasJunction },
   { id: "trace.shorter", title: "Shorter steps", shortcut: "[", run: () => setStep(useStore.getState().traceStep - 0.5), enabled: drawing },
   { id: "trace.longer", title: "Longer steps", shortcut: "]", run: () => setStep(useStore.getState().traceStep + 0.5), enabled: drawing },
-  { id: "pen.toggleKind", title: "Make the last point a corner / curve", shortcut: "C", run: toggleLastPoint, enabled: drawing },
+  { id: "pen.toggleKind", title: "Switch the last point: curve, straight, sharp corner", shortcut: "C", run: toggleLastPoint, enabled: drawing },
   {
     id: "trace.toggle",
     title: "Trace Assist (suggest the next point)",
@@ -1202,6 +1407,8 @@ export const COMMANDS: Command[] = [
   { id: "pen.undoPoint", title: "Remove the last point", shortcut: "Backspace", run: penUndoPoint, enabled: drawing },
   { id: "pen.cancel", title: "Cancel the shape", shortcut: "Escape", run: penCancel, enabled: drawing },
   // Esc lets go of one thing per press (see escape.ts): these follow drawing, in this order.
+  { id: "ruler.cancel", title: "Put the measuring tool away", shortcut: "Escape", run: () => useStore.getState().setRuler(null), enabled: () => useStore.getState().ruler !== null },
+  { id: "angle.cancel", title: "Stop setting the angle", shortcut: "Escape", run: () => useStore.getState().setAngleFor(null), enabled: () => useStore.getState().angleFor !== null },
   {
     id: "measure.cancel",
     title: "Stop measuring",
@@ -1244,8 +1451,16 @@ export const COMMANDS: Command[] = [
   { id: "tool.select", title: "Select and move", shortcut: "V", run: tool("select"), enabled: notDrawing },
   { id: "tool.run", title: "Draw a running stitch line", shortcut: "L", run: tool("run"), enabled: notDrawing },
   { id: "tool.satin", title: "Draw a satin column", shortcut: "C", run: tool("satin"), enabled: notDrawing },
-  { id: "tool.fill", title: "Draw a fill shape", shortcut: "A", run: tool("fill"), enabled: notDrawing },
-  { id: "tool.text", title: "Add text (click where it goes)", shortcut: "T", run: tool("text"), enabled: notDrawing },
+  { id: "tool.fill", title: "Draw a fill shape", shortcut: "F", run: tool("fill"), enabled: notDrawing },
+  { id: "tool.text", title: "Add text (click where it goes)", shortcut: "Shift+T", run: tool("text"), enabled: notDrawing },
+  // Embrilliance's create keys.
+  { id: "create.toggle", title: "Switch between Create and Select", shortcut: "D", run: () => void toggleCreate(), enabled: notDrawing },
+  { id: "create.again", title: "Draw again with the last tool", shortcut: "X", run: () => void tool(useStore.getState().lastTool)(), enabled: notDrawing },
+  { id: "create.line", title: "Draw a line (running stitch)", shortcut: "Shift+X", run: tool("run"), enabled: notDrawing },
+  { id: "create.same", title: "Draw a shape like the last one", shortcut: "Q", run: () => drawLike(0), enabled: notDrawing },
+  { id: "create.prior", title: "Draw a shape like the one before the last", shortcut: "W", run: () => drawLike(1), enabled: notDrawing },
+  { id: "object.hole", title: "Add a hole to the selected fill", shortcut: "O", run: startHole, enabled: () => notDrawing() && hasSelection() },
+  { id: "object.angle", title: "Set the stitch angle with a line", shortcut: "I", run: startAngle, enabled: () => notDrawing() && hasSelection() },
   { id: "text.monogram", title: "Add a monogram", shortcut: "Mod+Alt+M", run: () => void addText(0, 0, true), enabled: engineReady },
   { id: "shape.rectangle", title: "Add a rectangle", shortcut: "Mod+Alt+1", run: () => void addShape("rectangle"), enabled: engineReady },
   { id: "shape.circle", title: "Add a circle", shortcut: "Mod+Alt+2", run: () => void addShape("circle"), enabled: engineReady },
@@ -1269,10 +1484,13 @@ export const COMMANDS: Command[] = [
     enabled: () => useStore.getState().tool !== "select",
   },
 
-  { id: "arrange.rotateCw", title: "Rotate 90° right", shortcut: "R", run: () => editTarget((l, id) => rotateBy(l, id, 90)), enabled: hasTarget },
-  { id: "arrange.rotateCcw", title: "Rotate 90° left", shortcut: "Shift+R", run: () => editTarget((l, id) => rotateBy(l, id, -90)), enabled: hasTarget },
-  { id: "arrange.mirrorX", title: "Mirror left–right", shortcut: "M", run: () => editTarget((l, id) => mirror(l, id, "x")), enabled: hasTarget },
-  { id: "arrange.mirrorY", title: "Mirror top–bottom", shortcut: "Shift+M", run: () => editTarget((l, id) => mirror(l, id, "y")), enabled: hasTarget },
+  { id: "arrange.rotateCw", title: "Rotate 90° right", shortcut: "R", run: () => editSelection({ rotate: 90 }), enabled: hasTarget },
+  { id: "arrange.rotateCcw", title: "Rotate 90° left", shortcut: "Shift+R", run: () => editSelection({ rotate: -90 }), enabled: hasTarget },
+  { id: "edit.selectAll", title: "Select everything", shortcut: "Mod+A", run: selectAll, enabled: () => hasDoc() && !drawing() },
+  { id: "arrange.group", title: "Group (select and move together)", shortcut: "Mod+G", run: () => groupSelection(true), enabled: hasTarget },
+  { id: "arrange.ungroup", title: "Ungroup", shortcut: "Mod+U", run: () => groupSelection(false), enabled: hasTarget },
+  { id: "arrange.mirrorX", title: "Mirror left–right", shortcut: "Alt+H", run: () => editSelection({ mirror: "x" }), enabled: hasTarget },
+  { id: "arrange.mirrorY", title: "Mirror top–bottom", shortcut: "Alt+V", run: () => editSelection({ mirror: "y" }), enabled: hasTarget },
   { id: "arrange.duplicate", title: "Duplicate", shortcut: "Mod+D", run: duplicateSelected, enabled: hasTarget },
   {
     id: "node.delete",
@@ -1325,10 +1543,11 @@ export const COMMANDS: Command[] = [
   { id: "arrange.repeat", title: "Repeat, carousel or mirror…", shortcut: "Mod+Shift+D", run: () => useStore.getState().setRepeatOpen(true), enabled: hasTarget },
   { id: "applique.svg", title: "Save applique cut file (SVG)…", shortcut: "Mod+Shift+U", run: () => void saveAppliqueSvg(), enabled: hasApplique },
 
-  { id: "view.density", title: "Density map", shortcut: "Shift+D", run: () => useStore.getState().toggleDensity(), enabled: hasDesign },
-  { id: "view.fit", title: "Fit design to window", shortcut: "F", run: () => useStore.getState().requestFit(), enabled: hasDoc },
+  { id: "file.newAlt", title: "New design", shortcut: "Shift+D", run: () => void newProject(), enabled: engineReady },
+  { id: "view.density", title: "Density map", shortcut: "Alt+D", run: () => useStore.getState().toggleDensity(), enabled: hasDesign },
+  { id: "view.fit", title: "Zoom to all", shortcut: "A", run: () => useStore.getState().requestFit(), enabled: hasDoc },
   { id: "view.jumps", title: "Show trims, jumps and stops", shortcut: "J", run: () => useStore.getState().toggleJumps() },
-  { id: "view.realistic", title: "Realistic thread", shortcut: "Shift+T", run: () => useStore.getState().toggleRealistic() },
+  { id: "view.realistic", title: "Realistic thread (3D)", shortcut: "T", run: () => useStore.getState().toggleRealistic() },
   { id: "view.hoop", title: "Show hoop", shortcut: "H", run: () => useStore.getState().toggleHoop() },
   { id: "view.grid", title: "Show grid", shortcut: "G", run: () => useStore.getState().toggleGrid() },
   { id: "view.units", title: "Measure in millimetres", shortcut: "U", run: () => useStore.getState().toggleUnits() },
@@ -1336,6 +1555,28 @@ export const COMMANDS: Command[] = [
   { id: "view.zoomInPlus", title: "Zoom in", shortcut: "Shift++", run: () => useStore.getState().requestZoom("in"), enabled: hasDoc },
   { id: "view.zoomInPad", title: "Zoom in", shortcut: "+", run: () => useStore.getState().requestZoom("in"), enabled: hasDoc },
   { id: "view.zoomOut", title: "Zoom out", shortcut: "-", run: () => useStore.getState().requestZoom("out"), enabled: hasDoc },
+  { id: "view.zoomSelected", title: "Zoom to the selection", shortcut: "S", run: zoomSelected, enabled: () => hasDesign() && (targetId() !== null || hasSelection()) },
+  { id: "view.zoomHoop", title: "Zoom to the hoop", shortcut: "0", run: zoomHoop, enabled: hasDoc },
+  ...[2, 3, 4, 5, 6, 7, 8, 9].map((k) => ({
+    id: `view.zoom${k}`,
+    title: `Zoom to ${k}× real size`,
+    shortcut: String(k),
+    run: () => useStore.getState().requestZoom("scale", { factor: k }),
+    enabled: hasDoc,
+  })),
+  { id: "view.measure", title: "Measure (click two points)", shortcut: "M", run: toggleRuler, enabled: () => hasDoc() && !drawing() },
+  { id: "view.points", title: "Show stitch points", shortcut: "P", run: () => useStore.getState().toggleView("showPoints"), enabled: hasDesign },
+  { id: "view.stitches", title: "Show stitches", shortcut: "N", run: () => useStore.getState().toggleView("showStitches"), enabled: hasDoc },
+  { id: "view.pictures", title: "Show pictures", shortcut: "B", run: () => useStore.getState().toggleView("showPictures"), enabled: hasDoc },
+  { id: "view.crosshair", title: "Crosshairs", shortcut: "E", run: () => useStore.getState().toggleView("crosshair"), enabled: hasDoc },
+  { id: "view.snap", title: "Snap new points to the grid", shortcut: "Shift+G", run: () => useStore.getState().toggleSnapGrid(), enabled: hasDoc },
+  { id: "edit.copy", title: "Copy", shortcut: "Mod+C", run: () => copySelected(false), enabled: hasTarget },
+  { id: "edit.cut", title: "Cut", shortcut: "Mod+X", run: () => copySelected(true), enabled: hasTarget },
+  { id: "edit.paste", title: "Paste", shortcut: "Mod+V", run: pasteClipboard, enabled: () => canEdit() && clipboard.length > 0 },
+  { id: "arrange.leftFine", title: "Nudge left 0.1 mm", shortcut: "Mod+ArrowLeft", run: nudge(-0.1, 0), enabled: hasSelection },
+  { id: "arrange.rightFine", title: "Nudge right 0.1 mm", shortcut: "Mod+ArrowRight", run: nudge(0.1, 0), enabled: hasSelection },
+  { id: "arrange.upFine", title: "Nudge up 0.1 mm", shortcut: "Mod+ArrowUp", run: nudge(0, -0.1), enabled: hasSelection },
+  { id: "arrange.downFine", title: "Nudge down 0.1 mm", shortcut: "Mod+ArrowDown", run: nudge(0, 0.1), enabled: hasSelection },
   { id: "view.zoomActual", title: "Zoom to real size (100%)", shortcut: "1", run: () => useStore.getState().requestZoom("actual"), enabled: hasDoc },
   {
     id: "threads.charts",
@@ -1361,6 +1602,15 @@ export const COMMANDS: Command[] = [
   { id: "player.forward100", title: "Forward 100 stitches", shortcut: "Shift+ArrowRight", run: () => step(100), enabled: noSelection },
   { id: "player.prevColor", title: "Previous color", shortcut: "PageUp", run: () => jumpColor(-1), enabled: hasDesign },
   { id: "player.nextColor", title: "Next color", shortcut: "PageDown", run: () => jumpColor(1), enabled: hasDesign },
+  {
+    id: "player.slower",
+    title: "Stitch out slower",
+    shortcut: ",",
+    run: () => changeSpeed(-1),
+    enabled: hasDesign,
+  },
+  { id: "player.faster", title: "Stitch out faster", shortcut: ".", run: () => changeSpeed(1), enabled: hasDesign },
+  { id: "player.machineSpeed", title: "Stitch out at machine speed", shortcut: "Shift+,", run: () => useStore.getState().setSpeed(MACHINE_SPEED), enabled: hasDesign },
   { id: "player.start", title: "Go to start", shortcut: "Home", run: () => step(-Infinity), enabled: hasDesign },
   { id: "player.end", title: "Show whole design", shortcut: "End", run: () => step(Infinity), enabled: hasDesign },
   {

@@ -1,7 +1,7 @@
 /**
  * Pen-tool paths in the UI: the same curve rule as the engine (engine/threadline_engine/digitize/paths.py)
- * so what you see while drawing matches the stitches. Corner nodes stay sharp; curve nodes get
- * Catmull-Rom tangents (cubic Hermite segments).
+ * so what you see while drawing matches the stitches. A node's kind is the path coming into it:
+ * "s" curve (smooth through it), "l" line (straight in), "c" cusp (curves meet at a sharp point).
  */
 
 import type { PathNode } from "./types";
@@ -28,7 +28,7 @@ export function flatten(nodes: readonly PathNode[], closed = false): Pt[] {
     const j = (i + 1) % n;
     const [p0, p1] = [p[i], p[j]];
     const [t0, t1] = [tangent(i), tangent(j)];
-    if (!t0[0] && !t0[1] && !t1[0] && !t1[1]) {
+    if ((!t0[0] && !t0[1] && !t1[0] && !t1[1]) || nodes[j][2] === "l") {
       out.push(p1);
       continue;
     }

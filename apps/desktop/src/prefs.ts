@@ -14,6 +14,12 @@ export type Prefs = {
   canvasBg?: "theme" | "light";
   /** Ask GitHub for a newer version when LUDD starts (on unless turned off). */
   checkUpdates?: boolean;
+  /** Stitch-out speed, stitches per second. */
+  playSpeed?: number;
+  /** Width of the right panel, px. */
+  panelWidth?: number;
+  /** Panel sections folded away (false) or open. */
+  folds?: Record<string, boolean>;
   /** The fabric picked last; new designs start with it. */
   fabric?: string;
   welcomed?: boolean;

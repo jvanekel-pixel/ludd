@@ -149,6 +149,13 @@ export function mapObjectNodes(o: ObjectItem, fn: (x: number, y: number) => [num
   return { ...o, geometry: { outline: m(o.geometry.outline), holes: o.geometry.holes?.map(m) } };
 }
 
+/** A fill with its stitch angle changed (kept in 0..179°); other objects as they are. */
+function withFillAngle(o: ObjectItem, f: (deg: number) => number): ObjectItem {
+  if (o.kind !== "fill") return o;
+  const a = f(o.params.angle_deg ?? 45);
+  return { ...o, params: { ...o.params, angle_deg: Math.round((((a % 180) + 180) % 180) * 100) / 100 } };
+}
+
 function onItem(layout: Layout, id: string, file: (it: LayoutItem) => LayoutItem, obj: (o: ObjectItem) => ObjectItem): Layout {
   return updateItem(layout, id, (it) => (isObject(it) ? obj(it) : file(it)));
 }
@@ -171,7 +178,11 @@ export function rotateBy(layout: Layout, id: string, deg: number): Layout {
       const [cx, cy] = objectCenter(o);
       const a = (deg * Math.PI) / 180;
       const [ca, sa] = [Math.cos(a), Math.sin(a)];
-      return mapObjectNodes(o, (x, y) => [cx + (x - cx) * ca - (y - cy) * sa, cy + (x - cx) * sa + (y - cy) * ca]);
+      // A fill's stitch direction turns with it.
+      return withFillAngle(
+        mapObjectNodes(o, (x, y) => [cx + (x - cx) * ca - (y - cy) * sa, cy + (x - cx) * sa + (y - cy) * ca]),
+        (ang) => ang + deg,
+      );
     },
   );
 }
@@ -190,7 +201,11 @@ export function mirror(layout: Layout, id: string, axis: "x" | "y"): Layout {
     },
     (o) => {
       const [cx, cy] = objectCenter(o);
-      return mapObjectNodes(o, (x, y) => (axis === "x" ? [2 * cx - x, y] : [x, 2 * cy - y]));
+      // A mirrored fill's rows mirror too.
+      return withFillAngle(
+        mapObjectNodes(o, (x, y) => (axis === "x" ? [2 * cx - x, y] : [x, 2 * cy - y])),
+        (ang) => -ang,
+      );
     },
   );
 }
@@ -270,6 +285,42 @@ export function repeatItem(layout: Layout, id: string, center: [number, number],
     ids.push(copy.id);
   }
   return { layout: out, ids };
+}
+
+export type TogetherOp = { rotate?: number; mirror?: "x" | "y"; scale?: number; move?: [number, number] };
+
+/** Turn, mirror, resize or move several items as one, about their common centre `c` (mm).
+ *  `centers` are the items' own centres on screen. Each item turns (or flips, or grows) about its
+ *  own centre, then moves so the whole set keeps its arrangement. */
+export function transformTogether(layout: Layout, ids: string[], centers: Record<string, [number, number]>, c: [number, number], op: TogetherOp): Layout {
+  let out = layout;
+  for (const id of ids) {
+    const p = centers[id];
+    if (!p) continue;
+    let q: [number, number] = p;
+    if (op.rotate) {
+      out = rotateBy(out, id, op.rotate);
+      const a = (op.rotate * Math.PI) / 180;
+      const [dx, dy] = [p[0] - c[0], p[1] - c[1]];
+      q = [c[0] + dx * Math.cos(a) - dy * Math.sin(a), c[1] + dx * Math.sin(a) + dy * Math.cos(a)];
+    }
+    if (op.mirror) {
+      out = mirror(out, id, op.mirror);
+      q = op.mirror === "x" ? [2 * c[0] - p[0], p[1]] : [p[0], 2 * c[1] - p[1]];
+    }
+    if (op.scale) {
+      out = scaleBy(out, id, op.scale);
+      q = [c[0] + (p[0] - c[0]) * op.scale, c[1] + (p[1] - c[1]) * op.scale];
+    }
+    if (op.move) q = [p[0] + op.move[0], p[1] + op.move[1]];
+    if (q[0] !== p[0] || q[1] !== p[1]) out = moveBy(out, id, round2(q[0] - p[0]), round2(q[1] - p[1]));
+  }
+  return out;
+}
+
+/** Put items in a group (they select and move as one), or take them out (group null). */
+export function setGroup(layout: Layout, ids: string[], group: string | null): Layout {
+  return { ...layout, items: layout.items.map((it) => (ids.includes(it.id) ? ({ ...it, group: group ?? undefined } as LayoutItem) : it)) };
 }
 
 /** Move a design earlier or later in the sewing order. */

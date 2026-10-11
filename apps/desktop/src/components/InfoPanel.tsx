@@ -10,6 +10,7 @@ import {
   setObjectThread,
   setPicture,
   saveAppliqueSvg,
+  setItemPinned,
 } from "../actions";
 import { formatShortcut } from "../commands";
 import { MM_PER_IN, type Units } from "../design/grid";
@@ -18,6 +19,7 @@ import { hoopFit } from "../design/machine";
 import { blockAt, visibleRecords } from "../design/player";
 import { isObject, isText, type FileItem, type LayoutItemInfo, type ObjectItem, type RefImage, type Thread } from "../design/types";
 import { selectHoop, selectImages, selectLayout, useStore } from "../store";
+import { FoldTitle, useFold } from "./Fold";
 import { Menu } from "./Menu";
 import { AdvisorPanel } from "./AIPanels";
 import { Checks, FabricPicker } from "./QualityPanel";
@@ -243,184 +245,288 @@ function AdvisorButton() {
   );
 }
 
-/** A drawn object: its thread, type and stitch settings. */
+/** Several things selected (Shift+click, Ctrl+A, a group): what you can do to them together. */
+function SelectionBar() {
+  const extra = useStore((s) => s.extraIds.length);
+  const layout = useStore(selectLayout);
+  const selectedId = useStore((s) => s.selectedId);
+  if (!extra || !layout) return null;
+  const ids = [selectedId, ...useStore.getState().extraIds];
+  const grouped = ids.every((id) => {
+    const it = layout.items.find((x) => x.id === id);
+    return it?.group && it.group === layout.items.find((x) => x.id === ids[0])?.group;
+  });
+  return (
+    <section className="selection-bar">
+      <h3>
+        {extra + 1} selected{grouped ? " (a group)" : ""}
+      </h3>
+      <p className="hint">They move, turn, resize, mirror, copy and delete together. Shift+click adds or removes one.</p>
+      <div className="btn-row">
+        {grouped ? <Cmd id="arrange.ungroup" label="Ungroup" /> : <Cmd id="arrange.group" label="Group" />}
+        <Cmd id="arrange.rotateCw" label="⟳ 90°" />
+        <Cmd id="arrange.mirrorX" label="⇋" />
+        <Cmd id="arrange.delete" label="Remove" />
+      </div>
+    </section>
+  );
+}
+
+/** Which tab the shape panel shows; kept while you click from shape to shape. */
+let lastObjectTab: "thread" | "stitches" | "shape" = "stitches";
+
+/** A number with − and + buttons beside it (like Embrilliance's spinners). */
+function Stepper({
+  label,
+  value,
+  step,
+  min,
+  max,
+  digits = 2,
+  suffix,
+  onCommit,
+  title,
+}: {
+  label: string;
+  value: number;
+  step: number;
+  min: number;
+  max: number;
+  digits?: number;
+  suffix?: string;
+  onCommit: (v: number) => void;
+  title?: string;
+}) {
+  const clampTo = (v: number) => Math.min(max, Math.max(min, Math.round(v / step) * step));
+  return (
+    <div className="stepper" title={title}>
+      <span className="stepper-label">{label}</span>
+      <button className="step" onClick={() => onCommit(clampTo(value - step))} disabled={value <= min} aria-label={`Less ${label.toLowerCase()}`}>
+        −
+      </button>
+      <NumberField label="" value={value} step={step} digits={digits} onCommit={(v) => onCommit(Math.min(max, Math.max(min, v)))} />
+      <button className="step" onClick={() => onCommit(clampTo(value + step))} disabled={value >= max} aria-label={`More ${label.toLowerCase()}`}>
+        +
+      </button>
+      {suffix && <small>{suffix}</small>}
+    </div>
+  );
+}
+
+/** A row of toggle buttons for underlay kinds, plus Automatic. */
+function UnderlayButtons({ kinds, value, set }: { kinds: { id: string; label: string; title: string }[]; value: string[] | undefined; set: (v: string[] | undefined) => void }) {
+  const auto = value == null;
+  return (
+    <div className="toggle-row" role="group" aria-label="Underlay">
+      <span className="stepper-label">Underlay</span>
+      <button aria-pressed={auto} onClick={() => set(auto ? kinds.slice(0, 1).map((k) => k.id) : undefined)} title="Chosen for you from the fabric and the shape's width">
+        Auto
+      </button>
+      {kinds.map((k) => (
+        <button
+          key={k.id}
+          aria-pressed={!auto && value!.includes(k.id)}
+          disabled={auto}
+          onClick={() => set(toggled(value, k.id, !value!.includes(k.id)))}
+          title={k.title}
+        >
+          {k.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** A drawn object: Thread, Stitches and Shape tabs, every setting in view. */
 function SelectedObject({ item, info }: { item: ObjectItem; info: LayoutItemInfo }) {
   const [picking, setPicking] = useState(false);
+  const [tab, setTabState] = useState(lastObjectTab);
+  const setTab = (t: typeof tab) => {
+    lastObjectTab = t;
+    setTabState(t);
+  };
   const p = item.params as Record<string, unknown>;
   const set = (patch: Record<string, unknown>) => setObjectParams(item.id, patch);
   const spacing = (p.spacing_mm as number | undefined) ?? 0.4;
   const density = DENSITY.reduce((best, d) =>
     Math.abs((item.kind === "fill" ? d.fill : d.satin) - spacing) < Math.abs((item.kind === "fill" ? best.fill : best.satin) - spacing) ? d : best,
   );
+  const pinned = !!item.locked;
   return (
     <section className="selected">
-      <h3>{info.name}</h3>
-      <button className="thread-button" onClick={() => setPicking(true)} title="Change thread">
-        <span className="swatch" style={{ background: item.thread.color }} />
-        <span className="tname">
-          {item.thread.name || item.thread.color}
-          <small>{[item.thread.brand, item.thread.catalog].filter(Boolean).join(" ") || "Click to choose a thread"}</small>
-        </span>
-      </button>
-
-      {item.kind !== "satin" && (
-        <div className="seg" role="group" aria-label="Stitch type">
-          {(["run", "fill", "applique"] as const).map((k) => (
-            <button
-              key={k}
-              aria-pressed={item.kind === k}
-              onClick={() => convertObject(item.id, k)}
-              title={k === "applique" ? "Sew a piece of fabric on, edged with satin" : undefined}
-            >
-              {k === "run" ? "Line" : k === "fill" ? "Fill" : "Applique"}
-            </button>
-          ))}
-        </div>
-      )}
-      {item.kind === "applique" && (
-        <>
-          <ol className="applique-steps">
-            <li>Placement line, then the machine stops: lay your fabric over it.</li>
-            <li>Tack-down, then it stops: trim the fabric close to the stitching.</li>
-            <li>A satin border covers the edge.</li>
-          </ol>
-          <div className="size-row">
-            <NumberField
-              label="Border width"
-              value={(p.cover_width_mm as number | undefined) ?? 3}
-              step={0.5}
-              digits={1}
-              suffix="mm"
-              onCommit={(v) => set({ cover_width_mm: Math.min(8, Math.max(1, v)) })}
-            />
-          </div>
-          <div className="seg" role="group" aria-label="Tack-down">
-            {(["zigzag", "run"] as const).map((t) => (
-              <button key={t} aria-pressed={(p.tack ?? "zigzag") === t} onClick={() => set({ tack: t })} title={t === "zigzag" ? "A narrow zigzag holds the edge firmly" : "A straight line: quicker, for felt and other fabrics that don't fray"}>
-                {t === "zigzag" ? "Zigzag tack-down" : "Straight tack-down"}
-              </button>
-            ))}
-          </div>
-          <button className="wide" onClick={() => void saveAppliqueSvg()} title="The piece's outline at real size, for a cutting machine or to print and cut">
-            Save cut file (SVG)…
+      <h3>
+        {info.name} {pinned && <span title="Pinned: it can't be moved by dragging">📌</span>}
+      </h3>
+      <div className="tabs object-tabs" role="tablist">
+        {(["thread", "stitches", "shape"] as const).map((t) => (
+          <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}>
+            {t === "thread" ? "Thread" : t === "stitches" ? "Stitches" : "Shape"}
           </button>
+        ))}
+      </div>
+
+      {tab === "thread" && (
+        <>
+          <button className="thread-button" onClick={() => setPicking(true)} title="Change thread">
+            <span className="swatch" style={{ background: item.thread.color }} />
+            <span className="tname">
+              {item.thread.name || item.thread.color}
+              <small>{[item.thread.brand, item.thread.catalog].filter(Boolean).join(" ") || "Click to choose a thread"}</small>
+            </span>
+          </button>
+          <AdvisorButton />
         </>
       )}
 
-      {item.kind === "run" && (
-        <div className="seg" role="group" aria-label="Line style">
-          {(["single", "triple", "bean"] as const).map((st) => (
-            <button
-              key={st}
-              aria-pressed={(p.style ?? "single") === st}
-              onClick={() => set({ style: st })}
-              title={st === "single" ? "One pass" : st === "triple" ? "Sewn three times end to end: bolder" : "Each stitch sewn three times: boldest"}
-            >
-              {st === "single" ? "Single" : st === "triple" ? "Triple" : "Bean"}
-            </button>
-          ))}
-        </div>
-      )}
-      {(item.kind === "satin" || item.kind === "fill") && (
-        <div className="seg" role="group" aria-label="Density">
-          {DENSITY.map((d) => (
-            <button key={d.label} aria-pressed={density === d} onClick={() => set({ spacing_mm: item.kind === "fill" ? d.fill : d.satin })}>
-              {d.label}
-            </button>
-          ))}
-        </div>
-      )}
-      {item.kind === "fill" && (
-        <label className="slider">
-          Stitch angle <strong>{Math.round((p.angle_deg as number | undefined) ?? 45)}°</strong>
-          <input
-            type="range"
-            min={0}
-            max={179}
-            step={1}
-            defaultValue={(p.angle_deg as number | undefined) ?? 45}
-            key={`${item.id}-${p.angle_deg}`}
-            onPointerUp={(e) => set({ angle_deg: Number((e.target as HTMLInputElement).value) })}
-            onKeyUp={(e) => set({ angle_deg: Number((e.target as HTMLInputElement).value) })}
-          />
-        </label>
+      {tab === "stitches" && (
+        <>
+          {item.kind !== "satin" && (
+            <div className="seg" role="group" aria-label="Stitch type">
+              {(["run", "fill", "applique"] as const).map((k) => (
+                <button key={k} aria-pressed={item.kind === k} onClick={() => convertObject(item.id, k)} title={k === "applique" ? "Sew a piece of fabric on, edged with satin" : undefined}>
+                  {k === "run" ? "Line" : k === "fill" ? "Fill" : "Applique"}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {item.kind === "run" && (
+            <>
+              <div className="seg" role="group" aria-label="Line style">
+                {(["single", "triple", "bean"] as const).map((st) => (
+                  <button
+                    key={st}
+                    aria-pressed={(p.style ?? "single") === st}
+                    onClick={() => set({ style: st })}
+                    title={st === "single" ? "One pass" : st === "triple" ? "Sewn three times end to end: bolder" : "Each stitch sewn three times: boldest"}
+                  >
+                    {st === "single" ? "Single" : st === "triple" ? "Triple" : "Bean"}
+                  </button>
+                ))}
+              </div>
+              <Stepper label="Length" value={(p.stitch_mm as number | undefined) ?? 2.5} step={0.1} min={0.5} max={12} digits={1} suffix="mm" onCommit={(v) => set({ stitch_mm: v })} title="Stitch length" />
+            </>
+          )}
+
+          {(item.kind === "satin" || item.kind === "fill") && (
+            <>
+              <UnderlayButtons
+                kinds={
+                  item.kind === "fill"
+                    ? [
+                        { id: "edge", label: "Edge", title: "A running stitch just inside the edge: crisp outline" },
+                        { id: "tatami", label: "Cross-hatch", title: "A light fill across the top stitches: holds the fabric flat" },
+                      ]
+                    : [
+                        { id: "center", label: "Centre", title: "A run down the middle: for narrow columns" },
+                        { id: "edge", label: "Edge", title: "Runs along both sides: crisp edges" },
+                        { id: "zigzag", label: "Zigzag", title: "A loose zigzag: lifts wide columns" },
+                      ]
+                }
+                value={p.underlay as string[] | undefined}
+                set={(v) => set({ underlay: v })}
+              />
+              <Stepper label="Density" value={spacing} step={0.05} min={0.2} max={item.kind === "fill" ? 2 : 1.5} suffix="mm" onCommit={(v) => set({ spacing_mm: v })} title="Distance between rows: smaller is denser" />
+              <div className="seg chips" role="group" aria-label="Density presets">
+                {DENSITY.map((d) => (
+                  <button key={d.label} aria-pressed={density === d} onClick={() => set({ spacing_mm: item.kind === "fill" ? d.fill : d.satin })}>
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {item.kind === "fill" && (
+            <>
+              <Stepper label="Angle" value={Math.round((p.angle_deg as number | undefined) ?? 45)} step={5} min={0} max={179} digits={0} suffix="°" onCommit={(v) => set({ angle_deg: v })} title="Direction of the rows" />
+              <div className="btn-row">
+                <Cmd id="object.angle" label="Draw the angle (I)" />
+              </div>
+              <Stepper label="Length" value={(p.stitch_mm as number | undefined) ?? 3.5} step={0.1} min={1} max={8} digits={1} suffix="mm" onCommit={(v) => set({ stitch_mm: v })} title="Stitch length along each row" />
+              <Stepper label="Random" value={(p.random_pct as number | undefined) ?? 0} step={5} min={0} max={50} digits={0} suffix="%" onCommit={(v) => set({ random_pct: v })} title="Moves the needle points a little at random, so no lines show across the fill" />
+            </>
+          )}
+
+          {(item.kind === "satin" || item.kind === "fill") &&
+            (p.pull_comp_mm == null ? (
+              <div className="toggle-row">
+                <span className="stepper-label">Edge pad</span>
+                <button aria-pressed onClick={() => set({ pull_comp_mm: 0.2 })} title="Pull compensation, chosen from the fabric and width. Click to set it yourself.">
+                  Auto
+                </button>
+              </div>
+            ) : (
+              <div className="toggle-row">
+                <Stepper label="Edge pad" value={p.pull_comp_mm as number} step={0.05} min={0} max={2} suffix="mm" onCommit={(v) => set({ pull_comp_mm: v })} title="Pull compensation: widens the shape because stitches pull the fabric in" />
+                <button onClick={() => set({ pull_comp_mm: undefined })} title="Let LUDD choose from the fabric and width">
+                  Auto
+                </button>
+              </div>
+            ))}
+
+          {item.kind === "fill" && <Check label="Sew from the other end (reverse)" checked={!!p.reverse} onChange={(v) => set({ reverse: v })} />}
+          {item.kind === "satin" && (
+            <>
+              <Check label="Split long stitches" checked={!!p.split_mm} onChange={(v) => set({ split_mm: v ? 7 : 0 })} hint="Wide satins get stitches that can snag; this splits them into shorter ones" />
+              {!!p.split_mm && <Stepper label="Longest" value={p.split_mm as number} step={0.5} min={2} max={12} digits={1} suffix="mm" onCommit={(v) => set({ split_mm: v })} />}
+            </>
+          )}
+
+          {item.kind === "applique" && (
+            <>
+              <ol className="applique-steps">
+                <li>Placement line, then the machine stops: lay your fabric over it.</li>
+                <li>Tack-down, then it stops: trim the fabric close to the stitching.</li>
+                <li>A satin border covers the edge.</li>
+              </ol>
+              <Stepper label="Border" value={(p.cover_width_mm as number | undefined) ?? 3} step={0.5} min={1} max={8} digits={1} suffix="mm" onCommit={(v) => set({ cover_width_mm: v })} title="Width of the satin border" />
+              <Stepper label="Density" value={spacing} step={0.05} min={0.2} max={1.5} suffix="mm" onCommit={(v) => set({ spacing_mm: v })} />
+              <div className="seg" role="group" aria-label="Tack-down">
+                {(["zigzag", "run"] as const).map((t) => (
+                  <button key={t} aria-pressed={(p.tack ?? "zigzag") === t} onClick={() => set({ tack: t })} title={t === "zigzag" ? "A narrow zigzag holds the edge firmly" : "A straight line: quicker, for felt and other fabrics that don't fray"}>
+                    {t === "zigzag" ? "Zigzag tack-down" : "Straight tack-down"}
+                  </button>
+                ))}
+              </div>
+              <Check label="Sew a placement line first" checked={(p.placement as boolean | undefined) ?? true} onChange={(v) => set({ placement: v })} hint="Untick for pieces cut beforehand and placed by eye" />
+              <button className="wide" onClick={() => void saveAppliqueSvg()} title="The piece's outline at real size, for a cutting machine or to print and cut">
+                Save cut file (SVG)…
+              </button>
+            </>
+          )}
+
+          <div className="toggle-row">
+            <Check label="Lock stitches at start" checked={(p.tie_in as boolean | undefined) ?? true} onChange={(v) => set({ tie_in: v })} />
+            <Check label="at end" checked={(p.tie_off as boolean | undefined) ?? true} onChange={(v) => set({ tie_off: v })} />
+          </div>
+        </>
       )}
 
-      <div className="btn-row">
-        <Cmd id="arrange.rotateCcw" label="⟲ 90°" />
-        <Cmd id="arrange.rotateCw" label="⟳ 90°" />
-        <Cmd id="arrange.mirrorX" label="⇋" />
-        <Cmd id="arrange.mirrorY" label="⇵" />
-        <Cmd id="arrange.duplicate" label="Duplicate" />
-        <Cmd id="arrange.repeat" label="Repeat…" />
-      </div>
-      <SizeFields id={item.id} info={info} />
-      <AdvisorButton />
-      <p className="hint">Drag a point to reshape; right-click a point to switch corner/curve; double-click the outline to add a point.</p>
-
-      <details className="more">
-        <summary>More options</summary>
-        {item.kind === "run" && (
-          <div className="size-row">
-            <NumberField label="Stitch length" value={(p.stitch_mm as number | undefined) ?? 2.5} step={0.1} digits={1} suffix="mm" onCommit={(v) => set({ stitch_mm: v })} />
+      {tab === "shape" && (
+        <>
+          <SizeFields id={item.id} info={info} />
+          <div className="btn-row">
+            <Cmd id="arrange.rotateCcw" label="⟲ 90°" />
+            <Cmd id="arrange.rotateCw" label="⟳ 90°" />
+            <Cmd id="arrange.mirrorX" label="⇋ Mirror" />
+            <Cmd id="arrange.mirrorY" label="⇵ Flip" />
           </div>
-        )}
-        {(item.kind === "satin" || item.kind === "fill") && (
-          <div className="size-row">
-            <NumberField label="Spacing" value={spacing} step={0.05} suffix="mm" onCommit={(v) => set({ spacing_mm: v })} />
-            {p.pull_comp_mm != null && (
-              <NumberField label="Pull comp." value={p.pull_comp_mm as number} step={0.05} suffix="mm" onCommit={(v) => set({ pull_comp_mm: v })} />
-            )}
+          <div className="btn-row">
+            <Cmd id="arrange.duplicate" label="Duplicate" />
+            <Cmd id="arrange.repeat" label="Repeat…" />
+            <Cmd id="draw.continue" label="Add points (K)" />
+            {(item.kind === "fill" || item.kind === "applique") && <Cmd id="object.hole" label="Add a hole (O)" />}
           </div>
-        )}
-        {(item.kind === "satin" || item.kind === "fill") && (
-          <Check
-            label="Automatic pull compensation (from the fabric and width)"
-            checked={p.pull_comp_mm == null}
-            onChange={(on) => set({ pull_comp_mm: on ? undefined : 0.2 })}
-          />
-        )}
-        {item.kind === "fill" && (
-          <div className="size-row">
-            <NumberField label="Stitch length" value={(p.stitch_mm as number | undefined) ?? 3.5} step={0.1} digits={1} suffix="mm" onCommit={(v) => set({ stitch_mm: v })} />
+          <div className="btn-row">
+            <button aria-pressed={pinned} onClick={() => setItemPinned(item.id, !pinned)} title="A pinned shape can't be moved by dragging (its settings still change)">
+              📌 {pinned ? "Pinned" : "Pin in place"}
+            </button>
+            <Cmd id="arrange.delete" label="Remove" />
           </div>
-        )}
-        {(item.kind === "satin" || item.kind === "fill") && (
-          <Check
-            label="Automatic underlay (from the fabric and width)"
-            checked={p.underlay == null}
-            onChange={(on) => set({ underlay: on ? undefined : item.kind === "satin" ? ["center"] : ["edge", "tatami"] })}
-          />
-        )}
-        {item.kind === "satin" && p.underlay != null && (
-          <fieldset className="underlay">
-            <legend>Underlay</legend>
-            {(["center", "edge", "zigzag"] as const).map((u) => (
-              <Check key={u} label={u === "center" ? "Centre run" : u === "edge" ? "Edge run" : "Zigzag"} checked={((p.underlay as string[]) ?? []).includes(u)} onChange={(on) => set({ underlay: toggled(p.underlay as string[], u, on) })} />
-            ))}
-          </fieldset>
-        )}
-        {item.kind === "fill" && p.underlay != null && (
-          <fieldset className="underlay">
-            <legend>Underlay</legend>
-            {(["edge", "tatami"] as const).map((u) => (
-              <Check key={u} label={u === "edge" ? "Edge run" : "Cross-hatch (tatami)"} checked={((p.underlay as string[]) ?? []).includes(u)} onChange={(on) => set({ underlay: toggled(p.underlay as string[], u, on) })} />
-            ))}
-          </fieldset>
-        )}
-        {item.kind === "applique" && (
-          <Check
-            label="Sew a placement line first (untick for pieces cut beforehand and placed by eye)"
-            checked={(p.placement as boolean | undefined) ?? true}
-            onChange={(v) => set({ placement: v })}
-          />
-        )}
-        <Check label="Lock stitches at start" checked={(p.tie_in as boolean | undefined) ?? true} onChange={(v) => set({ tie_in: v })} />
-        <Check label="Lock stitches at end" checked={(p.tie_off as boolean | undefined) ?? true} onChange={(v) => set({ tie_off: v })} />
-        <div className="btn-row">
-          <Cmd id="arrange.delete" label="Remove" />
-        </div>
-      </details>
+          <p className="hint">Drag a point to reshape; right-click a point to switch it between curve, straight and sharp corner; double-click the outline to add a point.</p>
+        </>
+      )}
       <ThreadPickerFor open={picking} current={item.thread} onPick={(t) => setObjectThread(item.id, t)} onClose={() => setPicking(false)} />
     </section>
   );
@@ -457,7 +563,7 @@ function SelectedPicture({ img }: { img: RefImage }) {
       </label>
       <div className="btn-row">
         <button onClick={() => setPicture(img.id, { locked: !img.locked })} aria-pressed={img.locked}>
-          {img.locked ? "🔒 Locked" : "🔓 Lock in place"}
+          📌 {img.locked ? "Pinned to the board" : "Pin to the board"}
         </button>
         <button onClick={() => setPicture(img.id, { visible: !img.visible })}>{img.visible ? "Hide" : "Show"}</button>
       </div>
@@ -486,7 +592,10 @@ function SelectedPicture({ img }: { img: RefImage }) {
         </div>
       )}
       <p className="hint">
-        {img.locked ? "Locked pictures ignore clicks, so you can draw over them." : "Drag to move; drag a corner to resize."} Saved inside your project.
+        {img.locked
+          ? "Pinned: it can't move, and clicks go through it so you can draw over it. Unpin it here or with 📌 in the Pictures list."
+          : "Drag to move; drag a corner to resize. Pin it once it's where you want it."}{" "}
+        Saved inside your project.
       </p>
       <div className="btn-row">
         <Cmd id="arrange.delete" label="Remove picture" />
@@ -502,13 +611,18 @@ function Contents() {
   const design = useStore((s) => s.design);
   const selectedId = useStore((s) => s.selectedId);
   const select = useStore((s) => s.select);
+  const [orderOpen, toggleOrder] = useFold("order");
+  const [picsOpen, togglePics] = useFold("pictures");
   if (!layout) return null;
   const many = layout.items.length > 1 || layout.items.some((it) => isObject(it) || isText(it));
   return (
     <>
       {many && (
         <section>
-          <h3>Sewing order</h3>
+          <FoldTitle open={orderOpen} onToggle={toggleOrder}>
+            Sewing order ({layout.items.length})
+          </FoldTitle>
+          {orderOpen && (
           <ol className="design-list">
             {layout.items.map((it, i) => (
               <li key={it.id} className={it.id === selectedId ? "current" : undefined}>
@@ -517,6 +631,15 @@ function Contents() {
                 </span>
                 <button className="name" onClick={() => select(it.id === selectedId ? null : it.id)}>
                   {i + 1}. {design?.items?.[i]?.name ?? itemLabel(it, i)}
+                </button>
+                <button
+                  className={`pin${it.locked ? " on" : ""}`}
+                  aria-pressed={!!it.locked}
+                  aria-label={it.locked ? "Unpin" : "Pin in place"}
+                  title={it.locked ? "Pinned: can't be dragged. Click to unpin." : "Pin in place, so it can't be moved by accident"}
+                  onClick={() => setItemPinned(it.id, !it.locked)}
+                >
+                  📌
                 </button>
                 <button aria-label="Sew earlier" title="Sew earlier" disabled={i === 0} onClick={() => void commit(reorder(layout, it.id, -1))}>
                   ↑
@@ -527,19 +650,29 @@ function Contents() {
               </li>
             ))}
           </ol>
+          )}
         </section>
       )}
       {images.length > 0 && (
         <section>
-          <h3>Pictures</h3>
+          <FoldTitle open={picsOpen} onToggle={togglePics}>
+            Pictures ({images.length})
+          </FoldTitle>
+          {picsOpen && (
           <ul className="design-list">
             {images.map((im) => (
               <li key={im.id} className={im.id === selectedId ? "current" : undefined}>
                 <button className="name" onClick={() => select(im.id === selectedId ? null : im.id)}>
                   🖼 {im.name}
                 </button>
-                <button title={im.locked ? "Unlock" : "Lock"} aria-label={im.locked ? "Unlock" : "Lock"} onClick={() => setPicture(im.id, { locked: !im.locked })}>
-                  {im.locked ? "🔒" : "🔓"}
+                <button
+                  className={`pin${im.locked ? " on" : ""}`}
+                  aria-pressed={im.locked}
+                  title={im.locked ? "Pinned to the board: clicks go through it. Click to unpin." : "Pin to the board, so it can't be moved by accident"}
+                  aria-label={im.locked ? "Unpin" : "Pin to the board"}
+                  onClick={() => setPicture(im.id, { locked: !im.locked })}
+                >
+                  📌
                 </button>
                 <button title={im.visible ? "Hide" : "Show"} aria-label={im.visible ? "Hide" : "Show"} onClick={() => setPicture(im.id, { visible: !im.visible })}>
                   {im.visible ? "👁" : "◌"}
@@ -547,6 +680,7 @@ function Contents() {
               </li>
             ))}
           </ul>
+          )}
         </section>
       )}
     </>
@@ -566,6 +700,7 @@ export function InfoPanel() {
   const hasMine = useStore((s) => s.charts.some((c) => c.mine && c.count > 0));
   const [picking, setPicking] = useState<number | null>(null);
   const [matching, setMatching] = useState(false);
+  const [threadsOpen, toggleThreads] = useFold("threads");
   if (!layout) return null;
 
   const picture = images.find((im) => im.id === selectedId);
@@ -632,6 +767,7 @@ export function InfoPanel() {
       <FabricPicker />
       <AdvisorPanel />
 
+      <SelectionBar />
       {picture && <SelectedPicture img={picture} />}
       {selItem && selInfo && (isObject(selItem) ? (
         <SelectedObject item={selItem} info={selInfo} />
@@ -646,7 +782,9 @@ export function InfoPanel() {
       {design && (
         <>
           <div className="threads-head">
-            <h3>Threads, in sewing order</h3>
+            <FoldTitle open={threadsOpen} onToggle={toggleThreads}>
+              Threads, in sewing order
+            </FoldTitle>
             <button onClick={() => setMatching(true)} disabled={!engine} title="Find the closest of your threads (or a brand's) for every color">
               {hasMine ? "Match to mine…" : "Match…"}
             </button>
@@ -659,6 +797,7 @@ export function InfoPanel() {
               ]}
             />
           </div>
+          {threadsOpen && (
           <ol className="threads">
             {design.blocks.map((b, i) => {
               const t = design.threads[b.thread];
@@ -694,6 +833,7 @@ export function InfoPanel() {
               );
             })}
           </ol>
+          )}
         </>
       )}
       <ThreadPicker index={picking} onClose={() => setPicking(null)} />

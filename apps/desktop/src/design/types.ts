@@ -82,10 +82,15 @@ export type FileItem = {
   /** Replacement thread per source color block (null = as in the file). */
   threads: (Thread | null)[];
   ops: LayoutOp[];
+  /** Pinned: can't be dragged on the canvas. */
+  locked?: boolean;
+  /** Items with the same group select and move together (Ctrl+G). */
+  group?: string;
 };
 
-/** A pen-tool point in mm: corner ("c") or curve ("s"). */
-export type PathNode = [number, number, "c" | "s"];
+/** A pen-tool point in mm; its kind is the path coming into it: curve ("s"), line ("l") or cusp ("c"). */
+export type NodeKind = "s" | "l" | "c";
+export type PathNode = [number, number, NodeKind];
 
 export type ObjectKind = "run" | "satin" | "fill" | "applique";
 
@@ -123,6 +128,9 @@ export type AppliqueParams = {
 type ObjectBase = {
   id: string;
   name?: string;
+  /** Pinned: can't be dragged on the canvas. */
+  locked?: boolean;
+  group?: string;
   thread: Thread;
   transform: Transform;
   threads: (Thread | null)[];
@@ -154,6 +162,8 @@ export type TextItem = {
   style: "satin" | "fill";
   shape: TextShape;
   monogram: boolean;
+  locked?: boolean;
+  group?: string;
   thread: Thread;
   transform: Transform;
   threads: (Thread | null)[];

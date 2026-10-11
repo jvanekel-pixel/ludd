@@ -5,6 +5,9 @@ import {
   commit,
   currentDoc,
   currentLayout,
+  finishAngle,
+  pickItem,
+  selectionGeometry,
   insertNode,
   moveNode,
   nodeLists,
@@ -15,13 +18,14 @@ import {
   type NodeList,
 } from "../actions";
 import { gridLines, gridSpacing, PX_PER_MM_ACTUAL } from "../design/grid";
-import { hitTest, moveBy, rotateBy, scaleBy } from "../design/layout";
+import { hitTest, moveBy, rotateBy, scaleBy, transformTogether } from "../design/layout";
 import { heatColor } from "../design/heat";
 import { hoopFit } from "../design/machine";
 import { flatten, spanAt, type Pt } from "../design/paths";
 import { chunkBlocks, visibleRecords, type Chunk } from "../design/player";
 import { threadLayers } from "../design/threadLook";
-import { isObject, Kind, type Design, type Heatmap, type Hoop, type ObjectItem, type PathNode, type RefImage } from "../design/types";
+import { buildThreadChunk, showUpTo, type ThreadChunk } from "./threadRender";
+import { isObject, Kind, type Design, type Heatmap, type Hoop, type NodeKind, type ObjectItem, type PathNode, type RefImage } from "../design/types";
 import { clamp, fitView, MAX_SCALE, MIN_SCALE, zoomAt, type View } from "../design/view";
 import { holdEscape } from "../escape";
 import { selectCanvasDark, selectHoop, useStore, type Ghost, type Pen } from "../store";
@@ -70,7 +74,11 @@ type Scene = {
   hoop: Graphics;
   stitches: Container;
   chunks: Chunk[];
-  full: Graphics[]; // one per chunk, fully drawn
+  full: Container[]; // one per chunk, fully drawn
+  /** Realistic thread: each chunk's stitches as sprites (null in the flat view). */
+  real: (ThreadChunk | null)[];
+  /** Needle points (P). */
+  points: Graphics;
   partial: Graphics; // the chunk under the playhead, drawn up to it
   jumps: Graphics;
   needle: Graphics;
@@ -84,7 +92,19 @@ type Scene = {
 };
 
 /** A selected thing's frame: four corners (clockwise from top-left), centre and rotate knob. */
-type Frame = { kind: "item" | "image"; index: number; id: string; corners: Pt[]; center: Pt; knob: Pt; up: Pt; locked: boolean };
+type Frame = {
+  kind: "item" | "image";
+  index: number;
+  id: string;
+  /** Everything the frame holds (several with Shift+click, Ctrl+A or a group). */
+  indices: number[];
+  ids: string[];
+  corners: Pt[];
+  center: Pt;
+  knob: Pt;
+  up: Pt;
+  locked: boolean;
+};
 
 type Drag =
   | { kind: "pan"; x: number; y: number; moved: boolean; deselect: boolean }
@@ -352,24 +372,30 @@ function selectedFrame(scene: Scene): Frame | null {
     const topMid: Pt = rotatePt([c[0], c[1] - hh], c, rad);
     const up: Pt = [Math.sin(rad), -Math.cos(rad)];
     const knob: Pt = [topMid[0] + (up[0] * ROTATE_KNOB_PX) / s, topMid[1] + (up[1] * ROTATE_KNOB_PX) / s];
-    return { kind: "image", index: imgIndex, id: im.id, corners, center: c, knob, up, locked: im.locked };
+    return { kind: "image", index: imgIndex, id: im.id, indices: [imgIndex], ids: [im.id], corners, center: c, knob, up, locked: im.locked };
   }
   const index = doc.layout.items.findIndex((it) => it.id === st.selectedId);
-  const b = scene.design?.items?.[index]?.bounds_mm;
-  if (index < 0 || !b) return null;
+  const ids = [st.selectedId, ...st.extraIds].filter((id) => doc.layout.items.some((it) => it.id === id));
+  const indices = ids.map((id) => doc.layout.items.findIndex((it) => it.id === id));
+  const boxes = indices.map((i) => scene.design?.items?.[i]?.bounds_mm).filter((x): x is [number, number, number, number] => !!x);
+  if (index < 0 || !boxes.length) return null;
+  const b = [Math.min(...boxes.map((x) => x[0])), Math.min(...boxes.map((x) => x[1])), Math.max(...boxes.map((x) => x[2])), Math.max(...boxes.map((x) => x[3]))];
   // Drawn objects get a little padding so the frame's handles don't sit on the shape's own points.
-  const pad = isObject(doc.layout.items[index]) ? OBJECT_BOX_PAD_PX / s : 0;
+  const pad = ids.length > 1 || isObject(doc.layout.items[index]) ? OBJECT_BOX_PAD_PX / s : 0;
   const [x0, y0, x1, y1] = [b[0] - pad, b[1] - pad, b[2] + pad, b[3] + pad];
   const c: Pt = [(x0 + x1) / 2, (y0 + y1) / 2];
   return {
     kind: "item",
     index,
     id: st.selectedId,
+    indices,
+    ids,
     corners: [[x0, y0], [x1, y0], [x1, y1], [x0, y1]],
     center: c,
     knob: [c[0], y0 - ROTATE_KNOB_PX / s],
     up: [0, -1],
-    locked: false,
+    // Pinned designs and shapes can't be dragged (the frame shows faded, without handles).
+    locked: indices.some((i) => !!doc.layout.items[i].locked),
   };
 }
 
@@ -387,6 +413,33 @@ function drawOverlay(scene: Scene, live?: { id: string; list: NodeList; index: n
   const px = 1 / s;
   if (st.pen) drawPen(g, st.pen, cursorMm, px);
   if (st.pen && st.ghost) drawGhost(g, st.pen, st.ghost, px);
+  if (st.crosshair && cursorMm) {
+    const [w, h] = [scene.app.screen.width / s, scene.app.screen.height / s];
+    const [vx, vy] = [-scene.view.x / s, -scene.view.y / s];
+    g.moveTo(vx, cursorMm[1]).lineTo(vx + w, cursorMm[1]).moveTo(cursorMm[0], vy).lineTo(cursorMm[0], vy + h).stroke({ width: px, color: C.select, alpha: 0.55 });
+  }
+  if (!st.showStitches) {
+    // Stitches hidden (N): show every drawn shape's outline instead.
+    for (const it of st.history.present?.layout.items ?? []) {
+      if (!isObject(it)) continue;
+      for (const l of nodeLists(it)) {
+        const poly = flatten(l.nodes, l.closed);
+        if (poly.length < 2) continue;
+        g.moveTo(poly[0][0], poly[0][1]);
+        for (const p of poly.slice(1)) g.lineTo(p[0], p[1]);
+        if (l.closed) g.closePath();
+        g.stroke({ width: 1.5 * px, color: parseInt(it.thread.color.slice(1), 16) });
+      }
+    }
+  }
+  for (const tool of [st.ruler, st.angleFor?.points] as ([number, number][] | null | undefined)[]) {
+    if (!tool) continue;
+    const end = tool.length === 1 ? cursorMm : tool[1];
+    if (tool.length && end) {
+      g.moveTo(tool[0][0], tool[0][1]).lineTo(end[0], end[1]).stroke({ width: 2 * px, color: tool === st.ruler ? C.select : C.ghost });
+      for (const p of [tool[0], end]) g.circle(p[0], p[1], 3.5 * px).fill(HANDLE_FILL).stroke({ width: px, color: 0x121114 });
+    }
+  }
   if (st.measure) {
     const pts = st.measure.points;
     for (const p of pts) g.circle(p[0], p[1], 4 * px).fill(C.select).stroke({ width: px, color: 0xffffff });
@@ -436,8 +489,7 @@ function drawOverlay(scene: Scene, live?: { id: string; list: NodeList; index: n
     l.nodes.forEach((n, i) => {
       const on = sel && sel.id === o.id && sel.list === l.key && sel.index === i;
       const r = (NODE_PX / 2) * px;
-      if (n[2] === "s") g.circle(n[0], n[1], r);
-      else g.rect(n[0] - r, n[1] - r, 2 * r, 2 * r);
+      nodeMark(g, n, r);
       g.fill(on ? HANDLE_FILL : 0xffffff).stroke({ width: 1.5 * px, color: C.select });
     });
   }
@@ -460,10 +512,18 @@ function drawOverlay(scene: Scene, live?: { id: string; list: NodeList; index: n
   }
 }
 
+/** Point marker: curve = circle, line = square, cusp = diamond. */
+function nodeMark(g: Graphics, n: PathNode, r: number) {
+  if (n[2] === "s") g.circle(n[0], n[1], r);
+  else if (n[2] === "l") g.rect(n[0] - r, n[1] - r, 2 * r, 2 * r);
+  else g.poly([n[0], n[1] - r * 1.3, n[0] + r * 1.3, n[1], n[0], n[1] + r * 1.3, n[0] - r * 1.3, n[1]]);
+}
+
 /** What the pen has drawn so far, plus a rubber band to the cursor. */
 function drawPen(g: Graphics, pen: Pen, cursor: Pt | null, px: number) {
   const color = parseInt(useStore.getState().drawThread.color.slice(1), 16);
-  const withCursor = (nodes: PathNode[]) => (cursor ? [...nodes, [cursor[0], cursor[1], "c"] as PathNode] : nodes);
+  // The rubber band shows the kind of point the next click makes (curve, or line with Ctrl, cusp with Shift).
+  const withCursor = (nodes: PathNode[]) => (cursor ? [...nodes, [cursor[0], cursor[1], cursorKind] as PathNode] : nodes);
   const line = (poly: Pt[], width: number, alpha: number) => {
     if (poly.length < 2) return;
     g.moveTo(poly[0][0], poly[0][1]);
@@ -488,13 +548,15 @@ function drawPen(g: Graphics, pen: Pen, cursor: Pt | null, px: number) {
     g.stroke({ width: 3 * px, color, alpha: 0.35 });
   }
   const r = 3 * px;
-  for (const n of [...pen.a, ...pen.b]) {
-    if (n[2] === "s") g.circle(n[0], n[1], r);
-    else g.rect(n[0] - r, n[1] - r, 2 * r, 2 * r);
-  }
+  for (const n of [...pen.a, ...pen.b]) nodeMark(g, n, r);
   g.fill(0xffffff).stroke({ width: px, color: C.select });
 }
 let cursorMm: Pt | null = null;
+let cursorKind: NodeKind = "s";
+
+/** The kind of point a click makes, from the keys held. */
+const pointKind = (e: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }): NodeKind =>
+  e.ctrlKey || e.metaKey ? "l" : e.shiftKey ? "c" : "s";
 
 const ALT_COLOR = 0xe08a00;
 
@@ -531,23 +593,34 @@ function buildScene(app: Application, d: Design | null, prev: View | null): Scen
   const stitches = new Container();
   world.addChild(pictures, hoop, stitches);
   const chunks = d ? chunkBlocks(d) : [];
-  const full = chunks.map((c) => {
+  const realistic = useStore.getState().realistic;
+  const real: (ThreadChunk | null)[] = [];
+  const full: Container[] = chunks.map((c) => {
+    const color = d!.threads[c.thread]?.color ?? "#808080";
+    if (realistic) {
+      const tc = buildThreadChunk(d!, c.start, c.end, color);
+      real.push(tc);
+      stitches.addChild(tc.root);
+      return tc.root;
+    }
     const g = new Graphics();
-    drawStitches(g, d!, c.start, c.end, d!.threads[c.thread]?.color ?? "#808080");
+    drawStitches(g, d!, c.start, c.end, color);
     stitches.addChild(g);
+    real.push(null);
     return g;
   });
   const partial = new Graphics();
+  const points = new Graphics();
   const jumps = new Graphics();
   const needle = new Graphics();
   const overlay = new Graphics();
-  stitches.addChild(partial);
+  stitches.addChild(partial, points);
   const heat = new Container();
   const split = new Container();
   world.addChild(heat, jumps, needle, split, overlay);
   const view = prev ?? fitView(fitBounds(d), app.screen.width, app.screen.height);
   const scene: Scene = {
-    app, grid, world, pictures, hoop, stitches, chunks, full, partial, jumps, needle, overlay, heat, split, design: d, view,
+    app, grid, world, pictures, hoop, stitches, chunks, full, real, points, partial, jumps, needle, overlay, heat, split, design: d, view,
     autoFit: prev === null,
   };
   applyView(scene);
@@ -558,6 +631,9 @@ function buildScene(app: Application, d: Design | null, prev: View | null): Scen
 /** Redraw everything whose line width depends on zoom, and the playhead state. */
 function refresh(scene: Scene) {
   const s = useStore.getState();
+  scene.stitches.visible = s.showStitches;
+  scene.pictures.visible = s.showPictures;
+  drawPoints(scene, s.showPoints);
   updatePlayhead(scene, s.stitchIdx, s.playhead, s.showJumps);
   drawHoop(scene, selectHoop(s), s.showHoop);
   drawOverlay(scene);
@@ -573,6 +649,13 @@ function updatePlayhead(scene: Scene, stitchIdx: Int32Array, playhead: number, s
   const upTo = visibleRecords(stitchIdx, playhead, d.records.kind.length);
   let current = -1;
   chunks.forEach((c, i) => {
+    const tc = scene.real[i];
+    if (tc) {
+      // Realistic: show the chunk's own sprites up to the playhead (no redraw needed).
+      full[i].visible = upTo > c.start;
+      if (upTo > c.start) showUpTo(tc, upTo);
+      return;
+    }
     full[i].visible = upTo >= c.end;
     if (upTo > c.start && upTo < c.end) current = i;
   });
@@ -593,6 +676,18 @@ function updatePlayhead(scene: Scene, stitchIdx: Int32Array, playhead: number, s
   }
 }
 
+/** Needle points (P): a dot where the needle goes down, in a colour that shows on any thread. */
+function drawPoints(scene: Scene, show: boolean) {
+  const g = scene.points;
+  g.clear();
+  const d = scene.design;
+  if (!show || !d) return;
+  const { x, y, kind } = d.records;
+  const r = Math.max(0.08, 1.6 / scene.view.scale);
+  for (let i = 0; i < kind.length; i++) if (kind[i] === Kind.Stitch) g.circle(x[i], y[i], r);
+  g.fill({ color: 0xffffff, alpha: 0.9 }).stroke({ width: 0.6 / scene.view.scale, color: 0x121114, alpha: 0.9 });
+}
+
 /** A copy of one item's stitches that follows the pointer while dragging; everything else dims. */
 function startGhost(scene: Scene, f: Frame): Container | null {
   if (f.kind === "image") return null; // the picture itself moves
@@ -601,7 +696,7 @@ function startGhost(scene: Scene, f: Frame): Container | null {
   ghost.position.set(f.center[0], f.center[1]);
   const g = new Graphics();
   const d = scene.design;
-  if (d) for (const b of d.blocks) drawStitches(g, d, b.start, b.end, d.threads[b.thread]?.color ?? "#808080", f.index);
+  if (d) for (const i of f.indices) for (const b of d.blocks) drawStitches(g, d, b.start, b.end, d.threads[b.thread]?.color ?? "#808080", i);
   ghost.addChild(g);
   scene.stitches.alpha = DIM_ALPHA;
   scene.overlay.visible = false;
@@ -639,7 +734,14 @@ export function StitchCanvas() {
   const showDensity = useStore((s) => s.showDensity);
   const centerRequest = useStore((s) => s.centerRequest);
   const splitPreview = useStore((s) => s.splitPreview);
+  const showPoints = useStore((s) => s.showPoints);
+  const showStitches = useStore((s) => s.showStitches);
+  const showPictures = useStore((s) => s.showPictures);
+  const crosshair = useStore((s) => s.crosshair);
+  const ruler = useStore((s) => s.ruler);
+  const angleFor = useStore((s) => s.angleFor);
   const selectedId = useStore((s) => s.selectedId);
+  const extraIds = useStore((s) => s.extraIds);
   const selectedNode = useStore((s) => s.selectedNode);
   const realistic = useStore((s) => s.realistic);
   const tool = useStore((s) => s.tool);
@@ -731,8 +833,8 @@ export function StitchCanvas() {
   useEffect(() => {
     const scene = sceneRef.current;
     if (scene) drawOverlay(scene);
-    if (host.current) host.current.classList.toggle("drawing", tool !== "select" || measure !== null);
-  }, [selectedId, selectedNode, tool, pen, images, measure, ghost]);
+    if (host.current) host.current.classList.toggle("drawing", tool !== "select" || measure !== null || !!useStore.getState().ruler || !!useStore.getState().angleFor);
+  }, [selectedId, extraIds, selectedNode, tool, pen, images, measure, ghost]);
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -758,6 +860,14 @@ export function StitchCanvas() {
     if (scene) drawSplit(scene, splitPreview);
   }, [splitPreview, design]);
 
+  // View toggles (P, N, B, E) and the measuring and angle tools.
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (scene) refresh(scene);
+    const st = useStore.getState();
+    if (host.current) host.current.classList.toggle("drawing", st.tool !== "select" || !!st.measure || !!ruler || !!angleFor);
+  }, [showPoints, showStitches, showPictures, crosshair, ruler, angleFor]);
+
   // A quality check was clicked: bring its spot to the middle (zooming in if far out).
   useEffect(() => {
     const scene = sceneRef.current;
@@ -777,8 +887,18 @@ export function StitchCanvas() {
     if (!scene || !zoomRequest.n) return;
     const { width, height } = scene.app.screen;
     const v = scene.view;
-    const target = zoomRequest.kind === "in" ? v.scale * ZOOM_STEP : zoomRequest.kind === "out" ? v.scale / ZOOM_STEP : PX_PER_MM_ACTUAL;
-    scene.view = zoomAt(v, clamp(target, MIN_SCALE, MAX_SCALE) / v.scale, width / 2, height / 2);
+    if (zoomRequest.kind === "box" && zoomRequest.box) {
+      // S (selection) and 0 (hoop): fit that area.
+      scene.view = fitView(zoomRequest.box, width, height, 48);
+    } else {
+      const target =
+        zoomRequest.kind === "in"
+          ? v.scale * ZOOM_STEP
+          : zoomRequest.kind === "out"
+            ? v.scale / ZOOM_STEP
+            : PX_PER_MM_ACTUAL * (zoomRequest.kind === "scale" ? (zoomRequest.factor ?? 1) : 1);
+      scene.view = zoomAt(v, clamp(target, MIN_SCALE, MAX_SCALE) / v.scale, width / 2, height / 2);
+    }
     scene.autoFit = false;
     applyView(scene);
     refresh(scene);
@@ -816,9 +936,18 @@ export function StitchCanvas() {
     };
     /** Snap to an existing point of a drawn shape within a few pixels (so shapes meet exactly);
      *  holding Shift snaps to the grid's minor lines instead. */
-    const snapped = (scene: Scene, p: Pt, e: { shiftKey: boolean }, skip?: { id: string; list: NodeList; index: number }): Pt => {
+    const snapped = (scene: Scene, p: Pt, e: { altKey: boolean }, skip?: { id: string; list: NodeList; index: number }): Pt => {
       const st = useStore.getState();
-      if (e.shiftKey) {
+      // Alt while drawing: keep the new point on a 15-degree line from the last one (as in Embrilliance).
+      const last = st.pen ? (st.pen.kind === "satin" && st.pen.b.length === st.pen.a.length && st.pen.b.length ? st.pen.b : st.pen.a).at(-1) : undefined;
+      if (e.altKey && last && !skip) {
+        const dx = p[0] - last[0];
+        const dy = p[1] - last[1];
+        const len = Math.hypot(dx, dy);
+        const a = Math.round(Math.atan2(dy, dx) / (Math.PI / 12)) * (Math.PI / 12);
+        return [last[0] + Math.cos(a) * len, last[1] + Math.sin(a) * len];
+      }
+      if (st.snapGrid) {
         const step = gridSpacing(scene.view.scale, st.units).minorMm;
         return [Math.round(p[0] / step) * step, Math.round(p[1] / step) * step];
       }
@@ -908,6 +1037,19 @@ export function StitchCanvas() {
         return;
       }
       // Measuring a picture: collect two clicks (the panel asks for the real distance).
+      // Measuring tool (M): two clicks; a third starts a new measurement.
+      if (st.ruler && e.button === 0) {
+        const p = toWorld(scene, sx, sy);
+        st.setRuler(st.ruler.length >= 2 ? [p] : [...st.ruler, p]);
+        return;
+      }
+      // Inclination (I): a line across the fill sets its stitch angle.
+      if (st.angleFor && e.button === 0) {
+        const p = toWorld(scene, sx, sy);
+        if (st.angleFor.points.length) finishAngle(st.angleFor.id, st.angleFor.points[0], p);
+        else st.setAngleFor({ ...st.angleFor, points: [p] });
+        return;
+      }
       if (st.measure && e.button === 0) {
         if (st.measure.points.length < 2) st.setMeasure({ ...st.measure, points: [...st.measure.points, toWorld(scene, sx, sy)] });
         return;
@@ -918,10 +1060,15 @@ export function StitchCanvas() {
         void addText(p[0], p[1]);
         return;
       }
-      // Drawing: left click = corner, right click = curve.
+      // Drawing, as in Embrilliance: click = curve point, Ctrl+click = line point, Shift+click = cusp.
+      // Right-click finishes the shape; Ctrl+right-click finishes and closes it.
       if (st.tool !== "select" && st.tool !== "text") {
+        if (e.button === 2) {
+          if (st.pen) void penFinish({ close: e.ctrlKey || e.metaKey });
+          return;
+        }
         const p = snapped(scene, toWorld(scene, sx, sy), e);
-        penAdd([round2(p[0]), round2(p[1]), e.button === 2 ? "s" : "c"]);
+        penAdd([round2(p[0]), round2(p[1]), pointKind(e)]);
         return;
       }
       const node = nodeAt(scene, sx, sy);
@@ -948,8 +1095,12 @@ export function StitchCanvas() {
       const hit = pick(scene, toWorld(scene, sx, sy));
       el.setPointerCapture(e.pointerId);
       if (hit) {
-        st.select(hit.id);
+        const isItem = !!currentLayout()?.items.some((it) => it.id === hit.id);
+        if (isItem) pickItem(hit.id, e.shiftKey || e.ctrlKey || e.metaKey);
+        else st.select(hit.id);
         drawOverlay(scene);
+        // Shift+click only adds to (or takes from) the selection; it doesn't start a drag.
+        if (isItem && (e.shiftKey || e.ctrlKey || e.metaKey)) return;
         const f = selectedFrame(scene);
         if (f) drag = { kind: "move", frame: f, startX: sx, startY: sy, ghost: null, moved: false };
         return;
@@ -984,9 +1135,10 @@ export function StitchCanvas() {
       if (!scene) return;
       const [sx, sy] = local(e);
       const st = useStore.getState();
-      if ((st.tool !== "select" || st.measure) && !drag) {
+      if ((st.tool !== "select" || st.measure || st.ruler || st.angleFor || st.crosshair) && !drag) {
         cursorMm = snapped(scene, toWorld(scene, sx, sy), e);
-        if (st.pen || st.measure) drawOverlay(scene);
+        cursorKind = pointKind(e);
+        if (st.pen || st.measure || st.ruler || st.angleFor || st.crosshair) drawOverlay(scene);
         return;
       }
       if (!drag) {
@@ -1079,7 +1231,19 @@ export function StitchCanvas() {
       const layout = currentLayout();
       if (!ghost || !layout) return endGhost(scene, ghost);
       let next = null;
-      if (d.kind === "move") next = moveBy(layout, f.id, ghost.position.x - f.center[0], ghost.position.y - f.center[1]);
+      if (f.ids.length > 1) {
+        // Several things move, grow or turn together, about the frame's centre.
+        const g = selectionGeometry(f.ids);
+        const k = Math.round(ghost.scale.x * 1000) / 1000;
+        const deg = Math.round(((ghost.rotation * 180) / Math.PI) * 2) / 2;
+        const op =
+          d.kind === "move"
+            ? { move: [ghost.position.x - f.center[0], ghost.position.y - f.center[1]] as [number, number] }
+            : d.kind === "scale"
+              ? k !== 1 ? { scale: k } : null
+              : deg !== 0 ? { rotate: deg } : null;
+        if (op) next = transformTogether(layout, f.ids, g.centers, f.center, op);
+      } else if (d.kind === "move") next = moveBy(layout, f.id, ghost.position.x - f.center[0], ghost.position.y - f.center[1]);
       else if (d.kind === "scale") {
         const k = Math.round(ghost.scale.x * 1000) / 1000;
         if (k !== 1) next = scaleBy(layout, f.id, k);

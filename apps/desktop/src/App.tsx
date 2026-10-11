@@ -25,6 +25,7 @@ import { BatchDialog } from "./components/BatchDialog";
 import { ExportDialog } from "./components/ExportDialog";
 import { InfoPanel } from "./components/InfoPanel";
 import { LuddMark } from "./components/Logo";
+import { PanelResizer, usePanelWidth } from "./components/PanelResizer";
 import { Player } from "./components/Player";
 import { HelpDialog, SendPreview } from "./components/AIPanels";
 import { RepeatDialog } from "./components/RepeatDialog";
@@ -39,6 +40,7 @@ import type { Formats } from "./design/types";
 import { startEngine } from "./engine/sidecar";
 import { startTraceAssist } from "./traceAssist";
 import { installUpdate, startUpdateCheck } from "./updates";
+import { startDialogDragging } from "./dragDialogs";
 import { invoke } from "@tauri-apps/api/core";
 import { loadPrefs, savePrefs } from "./prefs";
 import { isDirty, selectCanvasDark, useStore } from "./store";
@@ -307,6 +309,7 @@ export function App() {
     });
   });
   useEffect(() => startUpdateCheck(), []);
+  useEffect(() => startDialogDragging(), []);
   useShortcuts();
   useWindowTitle();
   useEffect(() => startAutosave(), []);
@@ -318,6 +321,7 @@ export function App() {
     return () => q.removeEventListener("change", on);
   }, []);
   const canvasDark = useStore(selectCanvasDark);
+  const [panelWidth, setPanelWidth] = usePanelWidth();
   useEffect(() => startTraceAssist(), []);
   const dragging = useFileDrop();
   const hasDoc = useStore((s) => s.history.present !== null);
@@ -337,7 +341,14 @@ export function App() {
           {hasDoc && <ZoomControls />}
           {hasDoc && <DrawHint />}
         </main>
-        {hasDoc && <InfoPanel />}
+        {hasDoc && (
+          <>
+            <PanelResizer width={panelWidth} onWidth={setPanelWidth} />
+            <div className="info-panel-wrap" style={{ width: panelWidth }}>
+              <InfoPanel />
+            </div>
+          </>
+        )}
       </div>
       {hasDesign && <Player />}
       <StatusBar />

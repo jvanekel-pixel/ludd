@@ -61,23 +61,29 @@ Output lands in `apps/desktop/src-tauri/target/release/bundle/`. Official releas
 
 ## Everyday shortcuts
 
+LUDD uses Embrilliance's keys where they exist. The full list is in [docs/USER-MANUAL.md](docs/USER-MANUAL.md#keyboard-shortcuts).
+
 | Do this | Press |
 | --- | --- |
-| New design / Open / Save project | Ctrl+N / Ctrl+O / Ctrl+S |
+| New / Open / Save project | Ctrl+N (or Shift+D) / Ctrl+O / Ctrl+S |
 | Save for machine (PES, JEF…) | Ctrl+E |
-| Add a picture to trace | Ctrl+I |
-| Select / Line / Satin / Fill / Text | V / L / C / A / T |
+| Select / Line / Satin / Fill / Text | V / L / C / F / Shift+T |
+| Switch between drawing and Select | D |
+| Place a curve point / straight point / sharp corner | click / Ctrl+click / Shift+click |
+| Finish a shape / undo a point / cancel | Enter or right-click / Backspace / Esc |
 | Trace Assist: take the suggested point / keep going | Tab / Shift+Tab |
-| Finish a shape / undo a point | Enter / Backspace |
-| Let go of whatever you're doing (a drag, a half-drawn shape, a menu, a typed value, the selection) | Esc, one thing per press |
-| Settings (light/dark mode, machine, units) | Ctrl+, |
-| Density map (where thread piles up) | Shift+D |
-| Repeat in a row, circle or mirrored ×4 | Ctrl+Shift+D |
-| Help (works offline) | F1 |
-| Stitch Advisor (AI add-on, off by default) | Ctrl+Shift+I |
+| Select several / select all / group / ungroup | Shift+click / Ctrl+A / Ctrl+G / Ctrl+U |
+| Copy / cut / paste | Ctrl+C / Ctrl+X / Ctrl+V |
+| Turn 90° / mirror | R / Alt+H, Alt+V |
+| Nudge 1 mm (Shift 1 cm, Ctrl 0.1 mm) | arrow keys |
+| Zoom to all / selection / hoop / 1–9× real size | A / S / 0 / 1–9 |
+| Realistic thread / stitch points / measure | T / P / M |
+| Stitch-out: play / slower / faster | Space / , / . |
+| Density map | Alt+D |
+| Help (works offline) / Settings | F1 / Ctrl+, |
 | Undo / Redo | Ctrl+Z / Ctrl+Y |
 
-Everything else is in the ⋯ menus, each with its shortcut.
+Esc lets go of whatever you're doing, one thing per press.
 
 ## License
 

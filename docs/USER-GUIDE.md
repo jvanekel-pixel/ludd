@@ -46,8 +46,9 @@ Applications, choose **Open**, then **Open** again. You only do this once.
 
 ## Drawing your own
 
-Choose a tool on the left: **Line** (L), **Satin** (C), **Fill** (A) or **Text** (T). Click to add
-corner points, right-click for curves, **Enter** to finish, **Esc** to let go. To trace a picture,
+Choose a tool on the left: **Line** (L), **Satin** (C), **Fill** (F) or **Text** (Shift+T). As in
+Embrilliance, a click places a **curve** point, **Ctrl+click** a straight point and **Shift+click** a
+sharp corner; **Enter** or right-click finishes, **Esc** lets go. To trace a picture,
 add it with **Ctrl+I**, then draw over it: Trace Assist shows the next point and **Tab** takes it.
 
 Select a shape to change its stitch type, density, angle and thread. More settings are under

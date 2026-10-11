@@ -2,6 +2,20 @@
 
 ## 1.0.0 (Oct 11, 2026)
 
+### From the first hands-on test
+- **Embrilliance's keyboard shortcuts** throughout (from its manual): A zoom all, S zoom to the selection, 0 the hoop, 1–9 real-size multiples, T realistic thread, P stitch points, N stitches on/off, B pictures on/off, E crosshairs, M measure, D Create/Select, X/Shift+X/Q/W draw again, O add a hole, I stitch angle by drawing a line, Ctrl+A/G/U select all, group, ungroup, Ctrl+C/X/V, Ctrl+arrows nudge 0.1 mm, Shift+D new design. Moved to make room: Fill is F, Text Shift+T, mirror Alt+H/Alt+V, density map Alt+D, snap to grid Shift+G.
+- **Curves by default, as in Embrilliance**: a click places a curve point, Ctrl+click a straight point, Shift+click a sharp corner; Alt keeps 15° steps; right-click finishes (Ctrl+right-click closes a line). The rubber band shows what the next click makes; points show as circle, square or diamond; right-click a point to switch it. A new "straight" point type in the engine; older projects keep their shape.
+- **Realistic thread rebuilt**: every stitch is its own piece of thread between two needle holes, at true thickness, rounded, with a fine twist, a shadow on the fabric and a sheen that changes with the stitch's angle, so fills at different angles catch the light differently and you can see density without the density map. Plain lines (T off, or while dragging) as before.
+- **Shape panel in tabs (Thread · Stitches · Shape)** with every setting in view and − / + steppers: underlay buttons (Auto, Edge, Cross-hatch / Centre, Edge, Zigzag), density, angle (or draw it with I), stitch length, **Random** (new: moves needle points so no lines show across a fill), **Edge pad** (pull compensation, Auto or set), **Reverse** (new: sew a fill from the other end), satin **Split long stitches** (new), lock stitches.
+- **Select several things**: Shift+click, Ctrl+A; they move, turn, resize, mirror, copy, cut and delete together, about their common centre. **Groups** (Ctrl+G) select as one.
+- **📌 Pin** pictures, designs and shapes so they can't be dragged by accident: from the Sewing order and Pictures lists, the picture panel, or the Shape tab. A pinned picture lets clicks through so you can draw over it.
+- **Stitch-out speed**: a slider from 2 to 5,000 stitches a second with a "machine speed" setting (about 12 a second, like a real home machine); comma and full stop slow down and speed up; remembered. The default is 200 a second (was 2,000, too fast to follow).
+- **Resizable panel**: drag the right panel's left edge (up to 60% of the window; double-click resets; remembered). Panel sections fold away by clicking their headings. Dialogs move by dragging their title.
+- **New tool icons**: clean line drawings that follow light and dark mode.
+- Fixed: turning or mirroring a fill now turns its stitch direction with it.
+- Release builds: Mac builds no longer try to sign without a certificate; the Intel Mac build uses GitHub's current Intel runner.
+- New: [docs/USER-MANUAL.md](USER-MANUAL.md), every feature and where to find it, with all shortcuts.
+
 ### M10 Release 1.0
 - **Installers** for Windows (per-user, no administrator password), Mac (Apple chip and Intel) and Linux, built by GitHub Actions on each version tag and placed on a draft release for the owner to publish. `.ludd` projects open LUDD when double-clicked.
 - **Updates**: LUDD asks GitHub on start whether a newer version exists (a tick box on the welcome screen and in Settings turns this off; nothing about you is sent) and offers **Install and restart**. Updates are signed; the app refuses unsigned ones. Settings shows the version and has Check now.

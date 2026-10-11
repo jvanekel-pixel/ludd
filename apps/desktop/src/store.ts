@@ -9,12 +9,22 @@ import type { EngineStatus } from "./engine/sidecar";
 import { loadPrefs, savePrefs } from "./prefs";
 import { applyTheme, resolveTheme, type ThemeChoice } from "./theme";
 
-export const PLAYER_SPEEDS = [100, 500, 2000, 10000] as const; // stitches per second
+/** Stitch-out speeds, stitches per second. 12 is a home machine at full speed (about 710 a minute). */
+export const PLAYER_SPEEDS = [2, 5, 12, 25, 50, 100, 200, 500, 1000, 2000, 5000] as const;
+export const MACHINE_SPEED = 12;
 
 export type Notice = { kind: "error" | "info"; text: string };
 
 /** What a click on the canvas does: select and move, or draw a new object. */
 export type Tool = "select" | "run" | "satin" | "fill" | "text";
+export type ZoomRequest = {
+  kind: "in" | "out" | "actual" | "scale" | "box";
+  n: number;
+  /** "scale": a multiple of real size. */
+  factor?: number;
+  /** "box": the area to show, mm. */
+  box?: [number, number, number, number];
+};
 
 /** Trace Assist's proposal for the next point (mm). */
 export type Ghost = {
@@ -30,7 +40,7 @@ export type Ghost = {
 export type NodeRef = { id: string; list: string | number; index: number };
 
 /** A shape being drawn: clicks so far. A satin's clicks alternate between its two sides. */
-export type Pen = { kind: ObjectKind; a: PathNode[]; b: PathNode[]; replaceId?: string };
+export type Pen = { kind: ObjectKind; a: PathNode[]; b: PathNode[]; replaceId?: string; /** Drawing a hole in this fill (O). */ holeFor?: string };
 
 type State = {
   engineStatus: EngineStatus;
@@ -42,6 +52,8 @@ type State = {
   design: Design | null;
   /** A selected layout item or picture (ids are unique across both). */
   selectedId: string | null;
+  /** Other selected designs and shapes, with `selectedId` (Shift+click, Ctrl+A, a group). */
+  extraIds: string[];
   /** Where the open project is saved, if it has been. */
   projectPath: string | null;
   /** The document as last saved; anything else means unsaved changes. */
@@ -106,7 +118,18 @@ type State = {
   /** Current canvas zoom in px per mm, for the zoom readout. */
   zoomScale: number;
   /** Bumped to ask the canvas to zoom; `kind` says how. */
-  zoomRequest: { kind: "in" | "out" | "actual"; n: number };
+  zoomRequest: ZoomRequest;
+  /** View toggles from Embrilliance's hotkeys: stitch points (P), stitches (N), pictures (B), crosshairs (E). */
+  showPoints: boolean;
+  showStitches: boolean;
+  showPictures: boolean;
+  crosshair: boolean;
+  /** The drawing tool used last (D and X go back to it). */
+  lastTool: Exclude<Tool, "select">;
+  /** Measuring tool (M): the points clicked, in mm. */
+  ruler: [number, number][] | null;
+  /** Inclination tool (I): drawing a line to set a fill's stitch angle. */
+  angleFor: { id: string; points: [number, number][] } | null;
   charts: ChartSummary[];
   /** Installed fonts (loaded the first time lettering is used). */
   fonts: FontInfo[] | null;
@@ -115,6 +138,8 @@ type State = {
   checks: CheckResult | null;
   /** Show the density map over the design. */
   showDensity: boolean;
+  /** New points land on the grid's lines. */
+  snapGrid: boolean;
   /** Bumped to ask the canvas to centre on a spot (mm). */
   centerRequest: { at: [number, number]; n: number } | null;
 };
@@ -135,6 +160,8 @@ type Actions = {
   /** Show a new render. `fresh` (a newly opened design) resets the player and fits the view. */
   setDesign: (d: Design | null, fresh?: boolean) => void;
   select: (id: string | null) => void;
+  /** Select several designs and shapes: `primary` is the one the panel shows. */
+  setSelection: (primary: string | null, extras: string[]) => void;
   setLoading: (what: string | null) => void;
   setPlayhead: (n: number) => void;
   setPlaying: (p: boolean) => void;
@@ -165,12 +192,16 @@ type Actions = {
   setCanvasBg: (bg: "theme" | "light") => void;
   setSettingsOpen: (open: boolean) => void;
   setZoomScale: (s: number) => void;
-  requestZoom: (kind: "in" | "out" | "actual") => void;
+  requestZoom: (kind: ZoomRequest["kind"], extra?: { factor?: number; box?: [number, number, number, number] }) => void;
+  toggleView: (key: "showPoints" | "showStitches" | "showPictures" | "crosshair") => void;
+  setRuler: (r: [number, number][] | null) => void;
+  setAngleFor: (a: { id: string; points: [number, number][] } | null) => void;
   setCharts: (c: ChartSummary[]) => void;
   setFonts: (f: FontInfo[]) => void;
   setFabrics: (f: Fabric[]) => void;
   setChecks: (c: CheckResult | null) => void;
   toggleDensity: () => void;
+  toggleSnapGrid: () => void;
   requestCenter: (at: [number, number]) => void;
 };
 
@@ -190,6 +221,8 @@ export const selectedImage = (s: State): RefImage | null =>
   s.history.present?.images.find((im) => im.id === s.selectedId) ?? null;
 /** The design area is dark: dark mode is showing and the user hasn't asked for light fabric. */
 export const selectCanvasDark = (s: State): boolean => s.canvasBg !== "light" && resolveTheme(s.theme, s.systemDark) === "dark";
+/** Every selected design and shape (the panel's one first), in sewing order of selection. */
+export const selectedIds = (s: State): string[] => (s.selectedId ? [s.selectedId, ...s.extraIds] : []);
 export const isDirty = (s: State): boolean => s.history.present !== s.savedDoc;
 
 export const useStore = create<State & Actions>()((set) => ({
@@ -199,6 +232,7 @@ export const useStore = create<State & Actions>()((set) => ({
   history: { past: [], present: null, future: [] },
   design: null,
   selectedId: null,
+  extraIds: [],
   projectPath: null,
   savedDoc: null,
   tool: "select",
@@ -214,7 +248,7 @@ export const useStore = create<State & Actions>()((set) => ({
   loading: null,
   playhead: 0,
   playing: false,
-  speed: 2000,
+  speed: prefs.playSpeed ?? 200,
   showJumps: false,
   fitRequest: 0,
   batchOpen: false,
@@ -241,11 +275,19 @@ export const useStore = create<State & Actions>()((set) => ({
   settingsOpen: false,
   zoomScale: 1,
   zoomRequest: { kind: "actual", n: 0 },
+  showPoints: false,
+  showStitches: true,
+  showPictures: true,
+  crosshair: false,
+  lastTool: "fill",
+  ruler: null,
+  angleFor: null,
   charts: [],
   fonts: null,
   fabrics: [],
   checks: null,
   showDensity: false,
+  snapGrid: false,
   centerRequest: null,
 
   setEngine: (engineStatus, client) =>
@@ -259,9 +301,18 @@ export const useStore = create<State & Actions>()((set) => ({
       // Measuring a picture or holding a point that's gone would leave clicks doing nothing.
       const measure = s.measure && doc?.images.some((im) => im.id === s.measure!.imageId) ? s.measure : null;
       const selectedNode = s.selectedNode && doc?.layout.items.some((it) => it.id === s.selectedNode!.id) ? s.selectedNode : null;
-      return { history, selectedId: exists ? s.selectedId : null, measure, selectedNode };
+      const extraIds = exists && doc ? s.extraIds.filter((id) => doc.layout.items.some((it) => it.id === id)) : [];
+      return { history, selectedId: exists ? s.selectedId : null, extraIds, measure, selectedNode };
     }),
-  setTool: (tool) => set((s) => ({ tool, pen: null, selectedId: tool === "select" ? s.selectedId : null })),
+  setTool: (tool) =>
+    set((s) => ({
+      tool,
+      pen: null,
+      selectedId: tool === "select" ? s.selectedId : null,
+      lastTool: tool === "select" ? s.lastTool : tool,
+      ruler: null,
+      angleFor: null,
+    })),
   setDrawThread: (drawThread) => set({ drawThread }),
   // Any change to the drawing makes the old suggestion stale.
   setPen: (pen) => set({ pen, ghost: null }),
@@ -289,7 +340,13 @@ export const useStore = create<State & Actions>()((set) => ({
         fitRequest: fresh ? s.fitRequest + 1 : s.fitRequest,
       };
     }),
-  select: (selectedId) => set((s) => ({ selectedId, selectedNode: s.selectedNode?.id === selectedId ? s.selectedNode : null })),
+  select: (selectedId) => set((s) => ({ selectedId, extraIds: [], selectedNode: s.selectedNode?.id === selectedId ? s.selectedNode : null })),
+  setSelection: (selectedId, extras) =>
+    set((s) => ({
+      selectedId,
+      extraIds: selectedId ? extras.filter((x) => x !== selectedId) : [],
+      selectedNode: s.selectedNode?.id === selectedId ? s.selectedNode : null,
+    })),
   setLoading: (loading) => set({ loading }),
   setPlayhead: (n) =>
     set((s) => ({ playhead: Math.max(0, Math.min(Math.round(n), s.stitchIdx.length)) })),
@@ -299,7 +356,10 @@ export const useStore = create<State & Actions>()((set) => ({
       // Pressing play at the end restarts from the beginning.
       playhead: playing && s.playhead >= s.stitchIdx.length ? 0 : s.playhead,
     })),
-  setSpeed: (speed) => set({ speed }),
+  setSpeed: (speed) => {
+    savePrefs({ playSpeed: speed });
+    set({ speed });
+  },
   toggleJumps: () => set((s) => ({ showJumps: !s.showJumps })),
   requestFit: () => set((s) => ({ fitRequest: s.fitRequest + 1 })),
   setBatchOpen: (batchOpen) => set({ batchOpen }),
@@ -368,12 +428,16 @@ export const useStore = create<State & Actions>()((set) => ({
     set({ canvasBg });
   },
   setZoomScale: (zoomScale) => set({ zoomScale }),
-  requestZoom: (kind) => set((s) => ({ zoomRequest: { kind, n: s.zoomRequest.n + 1 } })),
+  requestZoom: (kind, extra) => set((s) => ({ zoomRequest: { kind, n: s.zoomRequest.n + 1, ...extra } })),
+  toggleView: (key) => set((s) => ({ [key]: !s[key] }) as Partial<State>),
+  setRuler: (ruler) => set({ ruler }),
+  setAngleFor: (angleFor) => set({ angleFor }),
   setCharts: (charts) => set({ charts }),
   setFonts: (fonts) => set({ fonts }),
   setFabrics: (fabrics) => set({ fabrics }),
   setChecks: (checks) => set({ checks }),
   toggleDensity: () => set((s) => ({ showDensity: !s.showDensity })),
+  toggleSnapGrid: () => set((s) => ({ snapGrid: !s.snapGrid })),
   requestCenter: (at) => set((s) => ({ centerRequest: { at, n: (s.centerRequest?.n ?? 0) + 1 } })),
 }));
 

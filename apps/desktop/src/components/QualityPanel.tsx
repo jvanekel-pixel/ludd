@@ -2,6 +2,7 @@ import { setFabric, showCheck } from "../actions";
 import { DEFAULT_FABRIC } from "../design/layout";
 import type { Fabric, QualityCheck, Warning } from "../design/types";
 import { selectLayout, useStore } from "../store";
+import { FoldTitle, useFold } from "./Fold";
 
 export function fabricAdvice(f: Fabric): string {
   return `Stabilizer: ${f.stabilizer}.${f.topping ? ` Topping: ${f.topping}.` : ""}`;
@@ -38,6 +39,7 @@ export function Checks() {
   const checks = useStore((s) => s.checks);
   const showDensity = useStore((s) => s.showDensity);
   const toggleDensity = useStore((s) => s.toggleDensity);
+  const [open, toggle] = useFold("checks");
   if (!design) return null;
   const items: (Warning & Partial<QualityCheck>)[] = [
     ...(design.warnings ?? []).filter((w) => w.level !== "info"),
@@ -46,13 +48,15 @@ export function Checks() {
   return (
     <section className="checks" aria-label="Checks">
       <div className="checks-head">
-        <h3>{items.length ? `Check before stitching (${items.length})` : "Checks"}</h3>
-        <label className="check" title="Color the design by how much thread is in each spot (Shift+D)">
+        <FoldTitle open={open} onToggle={toggle}>
+          {items.length ? `Check before stitching (${items.length})` : "Checks"}
+        </FoldTitle>
+        <label className="check" title="Color the design by how much thread is in each spot (Alt+D)">
           <input type="checkbox" checked={showDensity} onChange={toggleDensity} /> Density map
         </label>
       </div>
-      {items.length === 0 && checks && <p className="hint ok">✓ Nothing to fix: no thick spots, gaps or loose stitches found.</p>}
-      <ul>
+      {open && items.length === 0 && checks && <p className="hint ok">✓ Nothing to fix: no thick spots, gaps or loose stitches found.</p>}
+      <ul hidden={!open}>
         {items.map((c) => (
           <li key={c.code} className={`check-${c.level}`}>
             <p className="what">

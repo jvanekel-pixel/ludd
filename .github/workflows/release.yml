@@ -25,18 +25,19 @@ jobs:
           - name: Mac (Apple Silicon)
             os: macos-latest
           - name: Mac (Intel)
-            os: macos-13
+            os: macos-15-intel
           - name: Linux
             os: ubuntu-22.04
     runs-on: ${{ matrix.os }}
     env:
       HAS_WINDOWS_CERT: ${{ secrets.WINDOWS_CERTIFICATE != '' }}
+      HAS_APPLE_CERT: ${{ secrets.APPLE_CERTIFICATE != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - uses: dtolnay/rust-toolchain@stable
@@ -91,6 +92,23 @@ jobs:
             echo "LUDD_NOTES_END"
           } >> "$GITHUB_OUTPUT"
 
+      # Optional Mac signing and notarization (an Apple Developer account); see docs/RELEASING.md.
+      # Only set when the secrets exist: an empty APPLE_CERTIFICATE makes the build try to sign and fail.
+      - name: Mac signing certificate
+        if: runner.os == 'macOS' && env.HAS_APPLE_CERT == 'true'
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          for v in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            echo "$v<<LUDD_END" >> "$GITHUB_ENV"; printenv "$v" >> "$GITHUB_ENV"; echo "LUDD_END" >> "$GITHUB_ENV"
+          done
+
       - name: Build and upload to the draft release
         uses: tauri-apps/tauri-action@v0
         env:
@@ -98,13 +116,6 @@ jobs:
           # Signs the update files so the in-app updater only accepts genuine LUDD updates.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # Optional Mac signing and notarization (an Apple Developer account); see docs/RELEASING.md.
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         with:
           projectPath: apps/desktop
           tagName: ${{ github.ref_name }}

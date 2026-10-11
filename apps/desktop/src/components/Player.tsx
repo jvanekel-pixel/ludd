@@ -1,7 +1,15 @@
 import { useEffect } from "react";
 import { command } from "../actions";
 import { formatShortcut } from "../commands";
-import { PLAYER_SPEEDS, useStore } from "../store";
+import { MACHINE_SPEED, PLAYER_SPEEDS, useStore } from "../store";
+
+export const speedIndex = (v: number) => {
+  let best = 0;
+  PLAYER_SPEEDS.forEach((s, i) => Math.abs(Math.log(s / v)) < Math.abs(Math.log(PLAYER_SPEEDS[best] / v)) && (best = i));
+  return best;
+};
+
+const speedText = (v: number) => (v === MACHINE_SPEED ? "machine speed" : `${v.toLocaleString()} stitches/s`);
 
 /** Advances the playhead while playing. */
 function usePlayback() {
@@ -81,18 +89,21 @@ export function Player() {
       <span className="count">
         {playhead.toLocaleString()} / {total.toLocaleString()}
       </span>
-      <select
-        value={speed}
-        onChange={(e) => setSpeed(Number(e.target.value))}
-        aria-label="Playback speed"
-        title={`Playback speed (${formatShortcut("[")} / ${formatShortcut("]")})`}
-      >
-        {PLAYER_SPEEDS.map((v) => (
-          <option key={v} value={v}>
-            {v.toLocaleString()} st/s
-          </option>
-        ))}
-      </select>
+      <label className="speed" title={`Speed: ${tip("player.slower")} slower, ${tip("player.faster")} faster`}>
+        <span aria-hidden>🐢</span>
+        <input
+          type="range"
+          min={0}
+          max={PLAYER_SPEEDS.length - 1}
+          step={1}
+          value={speedIndex(speed)}
+          onChange={(e) => setSpeed(PLAYER_SPEEDS[Number(e.target.value)])}
+          aria-label="Stitch-out speed"
+          aria-valuetext={speedText(speed)}
+        />
+        <span aria-hidden>🐇</span>
+        <span className="speed-value">{speedText(speed)}</span>
+      </label>
     </div>
   );
 }

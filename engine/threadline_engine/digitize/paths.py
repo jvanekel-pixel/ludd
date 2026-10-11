@@ -1,9 +1,12 @@
-"""Paths from the pen tool: corner and curve nodes to polylines, and resampling by length.
+"""Paths from the pen tool: nodes to polylines, and resampling by length.
 
-Nodes are [x, y, kind] in mm, kind "c" (corner) or "s" (smooth/curve), the same convention
-as Embrilliance and Hatch: left-click places a corner, right-click a curve point.
-Curves are cubic Hermite segments with Catmull-Rom tangents at curve nodes and no tangent at
-corners, so a corner stays sharp and the line leaves it straight.
+Nodes are [x, y, kind] in mm. As in Embrilliance, a node's kind describes the path coming into it:
+- "s" curve: the path flows smoothly through it (left-click);
+- "l" line: the path comes in straight (Ctrl+click);
+- "c" cusp: curves meet at a sharp point (Shift+click). Two cusps in a row are joined straight,
+  which is how projects made before line nodes existed keep their shape.
+Curves are cubic Hermite segments with Catmull-Rom tangents at curve nodes and none at
+cusps and line nodes, so those stay sharp.
 """
 
 from __future__ import annotations
@@ -24,6 +27,10 @@ def _pt(n: Node) -> Point:
 
 def _smooth(n: Node) -> bool:
     return len(n) > 2 and n[2] == "s"
+
+
+def _line(n: Node) -> bool:
+    return len(n) > 2 and n[2] == "l"
 
 
 def dist(a: Point, b: Point) -> float:
@@ -56,7 +63,7 @@ def flatten(nodes: Sequence[Node], closed: bool = False) -> tuple[list[Point], l
         j = (i + 1) % n
         p0, p1 = pts[i], pts[j]
         t0, t1 = tangent(i), tangent(j)
-        if t0 == (0.0, 0.0) and t1 == (0.0, 0.0):
+        if (t0 == (0.0, 0.0) and t1 == (0.0, 0.0)) or _line(nodes[j]):
             out.append(p1)
         else:
             c1 = (p0[0] + t0[0] / 3, p0[1] + t0[1] / 3)

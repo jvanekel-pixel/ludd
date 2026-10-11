@@ -174,6 +174,7 @@ class SatinParams:
     underlay_level: str = "normal"  # for automatic underlay: light | normal | heavy (from the fabric)
     comp_by_width: bool = False  # scale pull compensation with the column's width at each stitch
     auto_widen: bool = False  # widen spots too thin to stitch
+    split_mm: float = 0.0  # split stitches longer than this into shorter, staggered ones (0: off)
 
     @classmethod
     def from_dict(cls, d: dict[str, Any] | None) -> "SatinParams":
@@ -186,7 +187,10 @@ class SatinParams:
             underlay_level=str(d.get("underlay_level", "normal")),
             comp_by_width=bool(d.get("comp_by_width", False)),
             auto_widen=bool(d.get("auto_widen", False)),
+            split_mm=float(d.get("split_mm", 0) or 0),
         )
+        if p.split_mm and not 2 <= p.split_mm <= 12:
+            raise DigitizeError("Split satin stitches longer than 2 to 12 mm")
         if p.underlay_level not in UNDERLAY_LEVELS:
             raise DigitizeError(f"Unknown underlay amount: {p.underlay_level}")
         if not 0.15 <= p.spacing_mm <= 3:
@@ -304,8 +308,17 @@ def satin(rail_a: Sequence, rail_b: Sequence, params: SatinParams) -> tuple[list
     for i, (a, b) in enumerate(pairs):
         comp = width_comp(params.pull_comp_mm, dist(a, b)) if params.comp_by_width else params.pull_comp_mm
         a2, b2 = inset(a, b, -comp / 2)
-        out.append(a2 if i % 2 == 0 else b2)
-        out.append(b2 if i % 2 == 0 else a2)
+        p, q = (a2, b2) if i % 2 == 0 else (b2, a2)
+        out.append(p)
+        w = dist(p, q)
+        if params.split_mm and w > params.split_mm:
+            # Split a long stitch so it can't snag, staggering the splits so they don't line up.
+            n = math.ceil(w / params.split_mm)
+            shift = ((i % 3) - 1) / (3 * n)
+            for k in range(1, n):
+                f = k / n + shift
+                out.append((p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f))
+        out.append(q)
     return stitch_run(out), warnings
 
 
@@ -319,6 +332,8 @@ class FillParams:
     stitch_mm: float = 3.5
     pull_comp_mm: float = 0.2
     underlay: tuple[str, ...] = ("edge", "tatami")  # any of: edge, tatami
+    random_pct: float = 0.0  # move penetrations by up to this % of a stitch (0-50)
+    reverse: bool = False  # sew the top stitching from the other end
 
     @classmethod
     def from_dict(cls, d: dict[str, Any] | None) -> "FillParams":
@@ -333,7 +348,11 @@ class FillParams:
             stitch_mm=float(d.get("stitch_mm", 3.5)),
             pull_comp_mm=float(d.get("pull_comp_mm") if d.get("pull_comp_mm") is not None else 0.2),
             underlay=tuple(u),
+            random_pct=float(d.get("random_pct", 0) or 0),
+            reverse=bool(d.get("reverse", False)),
         )
+        if not 0 <= p.random_pct <= 50:
+            raise DigitizeError("Random must be between 0 and 50%")
         if not 0.2 <= p.spacing_mm <= 5:
             raise DigitizeError("Fill spacing must be between 0.2 and 5 mm")
         if not 1 <= p.stitch_mm <= 8:
@@ -378,11 +397,21 @@ def _rows(poly: Polygon, angle: float, spacing: float, extend: float) -> list[li
     return rows
 
 
-def _row_stitches(x0: float, x1: float, y: float, step: float, offset: float, forward: bool) -> list[Point]:
-    """Stitches along a row; inner penetrations sit on a grid shifted by `offset` (brick pattern)."""
+def _jitter(row: int, k: int) -> float:
+    """A repeatable pseudo-random number in [-1, 1] for penetration k of a row (same design, same stitches)."""
+    v = math.sin(row * 12.9898 + k * 78.233) * 43758.5453
+    return (v - math.floor(v)) * 2 - 1
+
+
+def _row_stitches(x0: float, x1: float, y: float, step: float, offset: float, forward: bool,
+                  random: float = 0.0, row: int = 0) -> list[Point]:
+    """Stitches along a row; inner penetrations sit on a grid shifted by `offset` (brick pattern).
+    `random` (0..0.5) moves each penetration by up to that fraction of a stitch, which breaks up
+    the lines a regular pattern makes across a fill (Embrilliance's "Rnd")."""
     k0 = math.floor((x0 - offset) / step) + 1
     k1 = math.ceil((x1 - offset) / step)
-    inner = [x for x in (offset + k * step for k in range(k0, k1)) if x0 + MIN_STITCH_MM < x < x1 - MIN_STITCH_MM]
+    grid = ((offset + k * step + (random * step / 2) * _jitter(row, k)) for k in range(k0, k1))
+    inner = [x for x in grid if x0 + MIN_STITCH_MM < x < x1 - MIN_STITCH_MM]
     xs = [x0, *inner, x1]
     # Dropping a penetration too close to an end can leave one gap longer than `step`: split it.
     even: list[float] = [xs[0]]
@@ -399,7 +428,7 @@ def _row_stitches(x0: float, x1: float, y: float, step: float, offset: float, fo
 
 
 def tatami(poly: Polygon, angle: float, spacing: float, stitch: float, extend: float,
-           start_near: Point | None = None, travel_within: Polygon | None = None) -> list[Rec]:
+           start_near: Point | None = None, travel_within: Polygon | None = None, random: float = 0.0) -> list[Rec]:
     """Tatami fill of `poly`: serpentine rows grouped into regions, regions joined by travel.
     Travel runs inside `travel_within` (default `poly`), where later stitching covers it."""
     rot = affinity.rotate(poly, -angle, origin=(0, 0))
@@ -436,7 +465,7 @@ def tatami(poly: Polygon, angle: float, spacing: float, stitch: float, extend: f
         for r, i in region:
             x0, x1 = rows[r][i]
             y = miny + spacing / 2 + r * spacing
-            pts += _row_stitches(x0, x1, y, stitch, (r % 3) * stitch / 3, fwd)
+            pts += _row_stitches(x0, x1, y, stitch, (r % 3) * stitch / 3, fwd, random, r)
             fwd = not fwd
         return [to_world(p) for p in pts]
 
@@ -489,7 +518,10 @@ def fill(outline: Sequence, holes: Sequence[Sequence], params: FillParams) -> tu
                 out += travel(pos, (cross[0][0], cross[0][1]), poly)
             out += cross
     pos = (out[-1][0], out[-1][1]) if out else start
-    top = tatami(poly, params.angle_deg, params.spacing_mm, params.stitch_mm, params.pull_comp_mm / 2, pos)
+    top = tatami(poly, params.angle_deg, params.spacing_mm, params.stitch_mm, params.pull_comp_mm / 2, pos,
+                 random=params.random_pct / 100)
+    if params.reverse and top and all(r[2] == STITCH for r in top):
+        top = top[::-1]  # same stitches, sewn from the other end
     if out and top:
         out += travel(pos, (top[0][0], top[0][1]), poly.buffer(params.pull_comp_mm / 2 + 0.05))
     out += top

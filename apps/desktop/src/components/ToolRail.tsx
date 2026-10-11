@@ -1,14 +1,16 @@
 import { command, penReady } from "../actions";
+import type { ReactNode } from "react";
+import { FillIcon, LineIcon, PictureIcon, SatinIcon, SelectIcon, ShapesIcon, TextIcon } from "./Icons";
 import { Menu } from "./Menu";
 import { formatShortcut } from "../commands";
 import { useStore, type Tool } from "../store";
 
-const TOOLS: { id: string; tool: Tool; icon: string; label: string }[] = [
-  { id: "tool.select", tool: "select", icon: "➤", label: "Select" },
-  { id: "tool.run", tool: "run", icon: "〰", label: "Line" },
-  { id: "tool.satin", tool: "satin", icon: "▥", label: "Satin" },
-  { id: "tool.fill", tool: "fill", icon: "⬟", label: "Fill" },
-  { id: "tool.text", tool: "text", icon: "A", label: "Text" },
+const TOOLS: { id: string; tool: Tool; icon: ReactNode; label: string }[] = [
+  { id: "tool.select", tool: "select", icon: <SelectIcon />, label: "Select" },
+  { id: "tool.run", tool: "run", icon: <LineIcon />, label: "Line" },
+  { id: "tool.satin", tool: "satin", icon: <SatinIcon />, label: "Satin" },
+  { id: "tool.fill", tool: "fill", icon: <FillIcon />, label: "Fill" },
+  { id: "tool.text", tool: "text", icon: <TextIcon />, label: "Text" },
 ];
 
 /** Big, labelled tools down the left: what a beginner needs to start drawing. */
@@ -38,6 +40,15 @@ export function ToolRail() {
       <div className="rail-shapes">
         <Menu
           label="Shapes"
+          className="rail-menu"
+          trigger={
+            <>
+              <span className="icon">
+                <ShapesIcon />
+              </span>
+              <span>Shapes</span>
+            </>
+          }
           items={[
             { id: "shape.rectangle", label: "Rectangle" },
             { id: "shape.circle", label: "Circle" },
@@ -46,14 +57,14 @@ export function ToolRail() {
             { id: "text.monogram", label: "Monogram" },
           ]}
         />
-        <span>Shapes</span>
       </div>
       <span className="rail-sep" />
       <button onClick={command("file.picture").run} disabled={!engine} title={`${command("file.picture").title} (${formatShortcut(command("file.picture").shortcut)})`}>
         <span className="icon" aria-hidden>
-          🖼
+          <PictureIcon />
         </span>
         <span>Picture</span>
+        <kbd>{formatShortcut(command("file.picture").shortcut)}</kbd>
       </button>
     </nav>
   );
@@ -61,9 +72,9 @@ export function ToolRail() {
 
 const HINTS: Record<Exclude<Tool, "select">, string> = {
   text: "Click where the text should go, then type.",
-  run: "Click to place corners; right-click for curves.",
-  satin: "Click one side, then the other, then back again, all along the column. Right-click for curves.",
-  fill: "Click around the shape's edge; right-click for curves. It closes by itself.",
+  run: "Click along the line.",
+  satin: "Click one side, then the other, then back again, all along the column.",
+  fill: "Click around the shape's edge. It closes by itself.",
 };
 
 /** What to do next while drawing, in plain words. */
@@ -107,8 +118,9 @@ export function DrawHint() {
   const ready = penReady();
   return (
     <div className="draw-hint" role="status">
-      {next} {ready ? <>Press <kbd>Enter</kbd> or double-click to finish.</> : null} <kbd>Backspace</kbd> undoes a point, <kbd>Esc</kbd>{" "}
-      {pen ? "cancels" : "goes back to Select"}. Hold <kbd>Shift</kbd> to snap to the grid.
+      {next} <span className="kinds">Click = <b>curve</b> · <kbd>Ctrl</kbd>+click = <b>straight</b> · <kbd>Shift</kbd>+click = <b>sharp corner</b> · <kbd>Alt</kbd> = 15° steps</span>{" "}
+      {ready ? <>Finish: <kbd>Enter</kbd> or right-click{tool === "run" ? <> (<kbd>Ctrl</kbd>+right-click closes it)</> : null}.</> : null} <kbd>Backspace</kbd> undoes a point, <kbd>Esc</kbd>{" "}
+      {pen ? "cancels" : "goes back to Select"}.
     </div>
   );
 }
