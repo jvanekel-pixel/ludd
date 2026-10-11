@@ -1,0 +1,30 @@
+node_modules/
+dist/
+.vite/
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+apps/desktop/src-tauri/binaries/
+engine/.venv/
+engine/build/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Personal/purchased designs: never commit
+fixtures/*
+!fixtures/README.md
+
+# Third-party thread charts downloaded by the user (licence unknown): import, don't commit
+/*.csv
+
+# The owner's brand source files and research notes at the top level (the app's logo lives in
+# apps/desktop/src/components/Logo.tsx and src-tauri/icons/icon.svg)
+/*.pdf
+/*.png
+/*.zip
+/Embroidery Studio Research & Build Plan.md
+/compass_artifact_*.md
+
+# Release signing keys never go in the repository
+*.key
+*.key.pub

@@ -1,0 +1,8 @@
+# Text files are stored with LF line endings; design files and images are binary, never converted.
+* text=auto
+*.ludd binary
+*.pes binary
+*.jef binary
+*.png binary
+*.ico binary
+*.icns binary

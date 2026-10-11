@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- LUDD app icon: the dark mark (bone ink, techno-yellow thread) on an ink tile. Source of `pnpm tauri icon`. -->
+  <rect width="1024" height="1024" rx="220" fill="#121114"/>
+  <g transform="translate(512 520) scale(4.1) translate(-104 -99)">
+    <circle cx="100" cy="104" r="78" fill="none" stroke="#EEE9DF" stroke-width="9"/>
+    <circle cx="100" cy="104" r="68" fill="none" stroke="#EEE9DF" stroke-width="2.5"/>
+    <rect x="97.5" y="16" width="5" height="18" fill="#121114"/>
+    <rect x="85" y="12" width="12" height="20" rx="2" fill="#EEE9DF"/>
+    <rect x="103" y="12" width="12" height="20" rx="2" fill="#EEE9DF"/>
+    <rect x="78" y="18" width="44" height="7" rx="3.5" fill="#EEE9DF"/>
+    <g transform="rotate(-42 100 104)"><rect x="95.5" y="66" width="9" height="100" rx="4.5" fill="#EEE9DF"/><rect x="70" y="46" width="60" height="24" rx="3" fill="#EEE9DF"/></g>
+    <g transform="rotate(42 100 104)"><path d="M100 168 L95.5 74 L95.5 48 Q95.5 39 100 39 Q104.5 39 104.5 48 L104.5 74 Z" fill="#EEE9DF" stroke="#121114" stroke-width="6" stroke-linejoin="round" paint-order="stroke"/><rect x="98.2" y="46" width="3.6" height="16" rx="1.8" fill="#121114"/></g>
+    <path d="M124 58 L142 74.5 C162 92 188 82 186 58 C184 38 166 34 172 16" fill="none" stroke="#121114" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M124 58 L142 74.5 C162 92 188 82 186 58 C184 38 166 34 172 16" fill="none" stroke="#C8FF2E" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

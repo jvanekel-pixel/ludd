@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "ui", "runtimeExecutable": "corepack", "runtimeArgs": ["pnpm", "--dir", "apps/desktop", "dev"], "port": 1420 }
+  ]
+}

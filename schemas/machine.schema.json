@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://threadline.app/schemas/machine.schema.json",
+  "title": "Threadline machine profile",
+  "description": "Save as <data dir>/machines/<id>.json (Windows: %APPDATA%\\Threadline\\machines). A profile with a built-in's id replaces it.",
+  "type": "object",
+  "required": ["id", "name", "formats", "hoops", "cuts"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+    "name": { "type": "string" },
+    "brand": { "type": "string" },
+    "formats": {
+      "description": "File extensions the machine reads, preferred first.",
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "needles": { "type": "integer", "minimum": 1 },
+    "hoops": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "width_mm", "height_mm"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "width_mm": { "type": "number", "exclusiveMinimum": 0, "description": "Sewable width" },
+          "height_mm": { "type": "number", "exclusiveMinimum": 0, "description": "Sewable height" }
+        }
+      }
+    },
+    "cuts": {
+      "description": "trim: honors trim commands. color_change: cuts only at color changes and stops (use cut-stops). none: never cuts.",
+      "enum": ["trim", "color_change", "none"]
+    },
+    "max_stitch_mm": { "type": ["number", "null"], "description": "Longer stitches are split on export." },
+    "max_stitches": { "type": ["integer", "null"] },
+    "max_colors": { "type": ["integer", "null"], "description": "Color changes plus stops the machine accepts." },
+    "notes": { "type": "string" }
+  }
+}

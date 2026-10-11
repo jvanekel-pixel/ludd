@@ -1,0 +1,26 @@
+[project]
+name = "threadline-engine"
+version = "1.0.0"
+description = "LUDD stitch engine: JSON-RPC 2.0 sidecar over stdio"
+requires-python = ">=3.12,<3.13"
+license = "GPL-3.0-or-later"
+dependencies = [
+    "fonttools>=4.66.1",
+    "numpy>=2.5.4",
+    "pillow>=12.3.0",
+    "pyembroidery>=1.5.1",
+    "shapely>=2.2.0",
+]
+
+[project.scripts]
+threadline-engine = "threadline_engine.__main__:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "pyinstaller>=6"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

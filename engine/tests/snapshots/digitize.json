@@ -1,0 +1,37 @@
+{
+ "fill_donut": {
+  "jumps": 0,
+  "records": 450,
+  "sha1": "0859143e3a251b05145e7b6f697dd96a011777bf",
+  "stitches": 450,
+  "trims": 0
+ },
+ "fill_square_45": {
+  "jumps": 0,
+  "records": 559,
+  "sha1": "4b6ef29ed1ecac152c30cc7d7a0b4f3e59a7c819",
+  "stitches": 559,
+  "trims": 0
+ },
+ "run_bean": {
+  "jumps": 0,
+  "records": 32,
+  "sha1": "61c153f3f6d9bf531a5d30fb933cfa843d1984bc",
+  "stitches": 32,
+  "trims": 0
+ },
+ "run_single": {
+  "jumps": 0,
+  "records": 19,
+  "sha1": "1e472979dc8c47fb1713e778ad909d3c4133c0a3",
+  "stitches": 19,
+  "trims": 0
+ },
+ "satin_curved": {
+  "jumps": 0,
+  "records": 233,
+  "sha1": "95926f8d8a8c7cf64d0ae01de7b8e71840b9b61c",
+  "stitches": 233,
+  "trims": 0
+ }
+}

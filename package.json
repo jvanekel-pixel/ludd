@@ -1,0 +1,13 @@
+{
+  "name": "threadline",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "tauri": "pnpm --filter @threadline/desktop tauri",
+    "dev": "pnpm --filter @threadline/desktop dev",
+    "test": "pnpm --filter @threadline/desktop test",
+    "typecheck": "pnpm --filter @threadline/desktop typecheck",
+    "build:engine": "uv run --project engine python scripts/build_engine.py"
+  },
+  "packageManager": "pnpm@12.11.2"
+}
