@@ -12,19 +12,21 @@ from __future__ import annotations
 import io
 import json
 import math
+from pathlib import Path
 from typing import Any
 
-from PIL import Image, ImageDraw, ImageOps
+from PIL import Image, ImageDraw
 from shapely.geometry import LineString, Polygon
 from shapely.ops import polylabel
 
-from .. import fabrics, kept
+from .. import fabrics, kept, trace
 from ..digitize import stitches as dz
 from ..digitize.paths import flatten
 from .providers import AIError, Request, extract_json, require
 
 MAX_OBJECTS = 12
 CROP_PX = 320
+PICTURE_SIDE_PX = 2000  # a reference picture is read at most this big (plenty for a 320 px crop)
 STITCH_TYPES = ("run", "satin", "fill")
 DENSITIES = {"light": 0.5, "normal": 0.4, "dense": 0.33}
 LEVELS = ("light", "normal", "heavy")
@@ -49,11 +51,23 @@ Use only the ids you were given. Give one entry per shape."""
 # ---------------------------------------------------------------- what the model sees
 
 
+def _pairs(g: dict[str, Any], spacing: float = 1.0) -> list[tuple[Any, Any]]:
+    """The stitches across a satin, whichever way it was drawn: a ribbon (centre line and width,
+    what the Satin tool makes) or two rails."""
+    if g.get("nodes"):
+        return dz.ribbon_pairs(g["nodes"], float(g.get("width_mm", 3.0)), spacing, bool(g.get("closed")))
+    return dz.satin_pairs(g.get("rail_a") or [], g.get("rail_b") or [], spacing)
+
+
 def _ring(obj: dict[str, Any]) -> list[tuple[float, float]]:
     g = obj.get("geometry") or {}
     if obj["kind"] == "satin":
-        a, _ = flatten(g.get("rail_a") or [])
-        b, _ = flatten(g.get("rail_b") or [])
+        if g.get("nodes"):
+            pairs = _pairs(g, 0.5)
+            a, b = [tuple(p[0]) for p in pairs], [tuple(p[1]) for p in pairs]
+        else:
+            a, _ = flatten(g.get("rail_a") or [])
+            b, _ = flatten(g.get("rail_b") or [])
         return a + b[::-1] + a[:1]
     if obj["kind"] == "run":
         pts, _ = flatten(g.get("nodes") or [], bool(g.get("closed")))
@@ -73,7 +87,7 @@ def summarize(obj: dict[str, Any]) -> dict[str, Any]:
     }
     p = obj.get("params") or {}
     if obj["kind"] == "satin":
-        pairs = dz.satin_pairs((obj["geometry"] or {})["rail_a"], obj["geometry"]["rail_b"], 1.0)
+        pairs = _pairs(obj.get("geometry") or {})
         widths = sorted(math.dist(a, b) for a, b in pairs)
         out["column_width_mm"] = {"min": round(widths[0], 1), "typical": round(widths[len(widths) // 2], 1), "max": round(widths[-1], 1)}
         out["length_mm"] = round(LineString([((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) for a, b in pairs]).length, 1)
@@ -102,9 +116,10 @@ def _picture_under(images: list[dict[str, Any]], box: tuple[float, float, float,
         if not im.get("visible", True) or not im.get("path"):
             continue
         try:
-            with Image.open(kept.readable(im["path"])) as src:
-                pic = ImageOps.exif_transpose(src).convert("RGB")
-        except OSError:
+            # 8-bit RGB on white, turned as on screen, read at a reduced size (16-bit greyscale,
+            # transparency and huge pictures handled the same way as for tracing).
+            pic = trace.open_picture(Path(kept.readable(im["path"], as_added=True)), PICTURE_SIDE_PX)
+        except trace.TraceError:
             continue
         w_mm, h_mm = float(im["width_mm"]), float(im["height_mm"])
         a = math.radians(-float(im.get("rotate", 0)))
@@ -125,7 +140,9 @@ def _picture_under(images: list[dict[str, Any]], box: tuple[float, float, float,
     return None
 
 
-def render_crop(obj: dict[str, Any], images: list[dict[str, Any]]) -> bytes:
+def render_crop(obj: dict[str, Any], images: list[dict[str, Any]], others: list[dict[str, Any]] | None = None) -> bytes:
+    """The shape (red outline) over the picture under it, with the shapes around it drawn in their
+    thread colors: the model sees the design as a whole, not one shape alone."""
     ring = _ring(obj)
     xs, ys = [p[0] for p in ring], [p[1] for p in ring]
     w, h = max(xs) - min(xs), max(ys) - min(ys)
@@ -137,6 +154,20 @@ def render_crop(obj: dict[str, Any], images: list[dict[str, Any]]) -> bytes:
     picture = _picture_under(images, box, size)
     base = picture or Image.new("RGB", size, (255, 255, 255))
     draw = ImageDraw.Draw(base)
+    for o in others or []:
+        if o is obj or o.get("id") == obj.get("id"):
+            continue
+        try:
+            oring = _ring(o)
+        except Exception:  # noqa: BLE001 - a neighbour that can't be drawn is left out
+            continue
+        if not oring or not any(box[0] <= x <= box[2] and box[1] <= y <= box[3] for x, y in oring):
+            continue
+        opts = [((x - box[0]) * scale, (y - box[1]) * scale) for x, y in oring]
+        ocolor = (o.get("thread") or {}).get("color", "#888888")
+        if len(opts) > 2 and o["kind"] != "run" and picture is None:
+            draw.polygon(opts, fill=ocolor)
+        draw.line(opts, fill=ocolor if picture is None else (120, 120, 120), width=2)
     pts = [((x - box[0]) * scale, (y - box[1]) * scale) for x, y in ring]
     color = (obj.get("thread") or {}).get("color", "#1f3a93")
     if len(pts) > 2 and obj["kind"] != "run" and picture is None:
@@ -148,7 +179,10 @@ def render_crop(obj: dict[str, Any], images: list[dict[str, Any]]) -> bytes:
 
 
 def build_request(layout: dict[str, Any], images: list[dict[str, Any]], ids: list[str] | None) -> tuple[Request, list[dict[str, Any]]]:
-    objs = [it for it in layout.get("items") or [] if it.get("kind") in ("run", "satin", "fill")]
+    from ..shapeops import _world
+
+    objs = [_world(it) for it in layout.get("items") or [] if it.get("kind") in ("run", "satin", "fill")]
+    all_objs = list(objs)
     if ids:
         objs = [o for o in objs if o["id"] in set(ids)]
     if not objs:
@@ -159,10 +193,11 @@ def build_request(layout: dict[str, Any], images: list[dict[str, Any]], ids: lis
     text = (
         f"Fabric: {fabric['name']}.\n"
         f"There are {len(objs)} shapes, in the current sewing order. Picture 1 shows shape 1, and so on:"
-        " the red line is the shape's outline (over the picture being traced, if there is one).\n\n"
+        " the red line is the shape's outline (over the picture being traced, if there is one); the shapes"
+        " around it are drawn in their thread colors (grey lines over a picture), so you can see how they fit together.\n\n"
         + "\n".join(f"Shape {n + 1}: {json.dumps(s)}" for n, s in enumerate(summaries))
     )
-    req = Request(system=SYSTEM, text=text, images=[render_crop(o, images) for o in objs], json_out=True, max_tokens=1500)
+    req = Request(system=SYSTEM, text=text, images=[render_crop(o, images, all_objs) for o in objs], json_out=True, max_tokens=1500)
     return req, objs
 
 

@@ -6,12 +6,15 @@ converted as-is. Units sent to the UI are millimetres (pyembroidery uses 0.1 mm)
 
 from __future__ import annotations
 
+import os
+import unicodedata
+import uuid
 from pathlib import Path
 from typing import Any
 
 import pyembroidery as pe
 
-from .prepare import Options, prepare, write_settings
+from .prepare import PES_MAX_STEPS, Options, prepare, write_settings
 
 # Stitch record kinds sent to the UI. Keep in sync with apps/desktop/src/design/types.ts.
 STITCH, JUMP, TRIM, STOP, COLOR_CHANGE, END = range(6)
@@ -166,14 +169,90 @@ def open_design(path: str) -> dict[str, Any]:
     return {"path": str(p), "name": p.name, "format": _ext(p), **summarize(load(p))}
 
 
+# Names Windows keeps for devices, whatever the extension ("CON.pes" can't be a file).
+RESERVED_NAMES = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
+
+
+def color_steps(pattern: pe.EmbPattern) -> int:
+    """Colour steps as the machine sees them: one per colour, plus one per colour change and stop."""
+    return 1 + sum(1 for *_, c in pattern.stitches if c & pe.COMMAND_MASK in (pe.COLOR_CHANGE, pe.STOP))
+
+
+def _ascii(s: str | None) -> str | None:
+    if not s:
+        return s
+    return unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
+
+
+def _for_format(pattern: pe.EmbPattern, ext: str) -> pe.EmbPattern:
+    """A copy adjusted for the writer of `ext` (the original is never changed)."""
+    if ext == "pes" and any(not (s or "").isascii() for t in pattern.threadlist
+                            for s in (t.description, t.catalog_number, t.brand, t.chart)):
+        # pyembroidery writes a thread name's length in characters but its bytes in UTF-8, so one
+        # "ü" shifts the rest of the PES thread table. Plain letters keep it readable ("Grün" -> "Grun").
+        p = pattern.copy()
+        p.threadlist = []
+        for t in pattern.threadlist:
+            n = pe.EmbThread(t.hex_color(), _ascii(t.description), _ascii(t.catalog_number),
+                             brand=_ascii(t.brand), chart=_ascii(t.chart))
+            p.threadlist.append(n)
+        pattern = p
+    if ext in ("pes", "pec") and pattern.stitches:
+        # Brother machines (the PE550D at least) read a PES design from its top-left corner: its
+        # stitches must run from (0, 0) to its width and height, as Embrilliance and PE-Design write
+        # them. Centred on (0, 0), the machine showed it shifted up and left by half its size,
+        # mostly outside the hoop, and it couldn't be moved back. The machine centres it itself.
+        x0, y0, _, _ = pattern.bounds()
+        if x0 or y0:
+            p = pattern.copy()
+            p.stitches = [[x - x0, y - y0, c] for x, y, c in pattern.stitches]
+            pattern = p
+    if ext == "jef":
+        # The JEF header describes the design as centred on the hoop (extents are half its size each
+        # way), so put its centre there. Designs from many programs have their corner at (0, 0).
+        pts = [(x, y) for x, y, c in pattern.stitches if c & pe.COMMAND_MASK == pe.STITCH]
+        if pts:
+            xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+            cx, cy = round((min(xs) + max(xs)) / 2), round((min(ys) + max(ys)) / 2)
+            if cx or cy:
+                p = pattern.copy()
+                p.stitches = [[x - cx, y - cy, c] for x, y, c in pattern.stitches]
+                pattern = p
+    return pattern
+
+
 def write(pattern: pe.EmbPattern, dest: str | Path, extra: dict[str, Any] | None = None) -> None:
+    """Write a machine file. The file appears only when it's complete: a failure part-way leaves
+    whatever was there before untouched."""
+    dest = Path(dest)
     ext = _ext(dest)
+    if not ext:
+        raise DesignError(f"Add the file type to the name, for example {dest.name.rstrip('.')}.pes")
     if ext not in _writable():
-        raise DesignError(f"Can't write .{ext} files")
+        raise DesignError(f"Can't save .{ext} files. Choose a name ending in .pes, .jef or another machine format.")
+    if os.name == "nt" and dest.name.split(".")[0].strip().upper() in RESERVED_NAMES:
+        raise DesignError(f"“{dest.stem}” is a name Windows keeps for itself. Choose another file name.")
+    if not any(c & pe.COMMAND_MASK == pe.STITCH for *_, c in pattern.stitches):
+        raise DesignError("There's nothing to sew: this design has no stitches.")
+    if ext == "pes" and color_steps(pattern) > PES_MAX_STEPS:
+        raise DesignError(
+            f"A PES file holds at most {PES_MAX_STEPS} color steps; this design has {color_steps(pattern)} "
+            "(colors plus stops). Use fewer cut-stops (a longer minimum jump) or fewer colors.")
+    pattern = _for_format(pattern, ext)
+    # Stitches longer than the format allows are sewn in pieces (pyembroidery would otherwise jump
+    # half way with the needle up and lay only half the stitch).
+    settings = {"long_stitch_contingency": pe.CONTINGENCY_LONG_STITCH_SEW_TO, **WRITE_SETTINGS.get(ext, {}), **(extra or {})}
+    tmp = dest.with_name(f".{dest.stem}.{uuid.uuid4().hex[:8]}.part{dest.suffix}")
     try:
-        pe.write(pattern, str(dest), {**WRITE_SETTINGS.get(ext, {}), **(extra or {})})
+        pe.write(pattern, str(tmp), settings)
+        os.replace(tmp, dest)
     except Exception as exc:
-        raise DesignError(f"Couldn't write {Path(dest).name}: {exc}") from exc
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        why = exc.strerror if isinstance(exc, OSError) and exc.strerror else str(exc)
+        raise DesignError(f"Couldn't write {dest.name}: {why}") from exc
 
 
 def preview_export(src: str, options: dict[str, Any] | None = None, ext: str | None = None) -> dict[str, Any]:
@@ -218,13 +297,25 @@ def convert_folder(
         raise DesignError(f"Folder not found: {src}")
 
     readable = _readable()
-    files = sorted(src.rglob("*") if recursive else src.iterdir())
+    if recursive:
+        # Walk the folders, but not into links or Windows junctions (they can loop, or lead anywhere).
+        files = []
+        for root, dirs, names in os.walk(src, followlinks=False):
+            dirs[:] = [d for d in dirs if not (Path(root, d).is_symlink() or Path(root, d).is_junction())]
+            files += [Path(root, n) for n in names]
+        files.sort()
+    else:
+        files = sorted(src.iterdir())
     converted, failed, skipped = [], [], []
     dest_resolved = dest.resolve()
+    # Saving into a folder inside the source: don't convert what an earlier run saved there. (The
+    # list of files is taken before anything is written, so saving into the source folder itself,
+    # or a folder that contains it, is fine: new files never overwrite, see _free_name.)
+    inside = dest_resolved != src.resolve() and dest_resolved.is_relative_to(src.resolve())
     for f in files:
         if not f.is_file():
             continue
-        if f.resolve().is_relative_to(dest_resolved):  # don't re-convert our own output
+        if inside and f.resolve().is_relative_to(dest_resolved):
             continue
         if _ext(f) not in readable:
             skipped.append(str(f))

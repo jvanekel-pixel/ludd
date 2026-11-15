@@ -12,8 +12,10 @@ Only the standard library is used for HTTP, so the add-on adds nothing to instal
 from __future__ import annotations
 
 import base64
+import ipaddress
 import json
 import re
+import urllib.parse
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -82,12 +84,33 @@ def _post(url: str, body: dict[str, Any], headers: dict[str, str]) -> dict[str, 
         raise AIError("The AI service sent back something that isn't JSON") from exc
 
 
+def host_of(url: str) -> str:
+    try:
+        return urllib.parse.urlsplit(url).hostname or ""
+    except ValueError:
+        return ""
+
+
+def on_this_computer(url: str) -> bool:
+    """Whether an address points at this computer (anything else is another machine, so what's
+    sent is shown first, as for the cloud)."""
+    host = host_of(url).lower()
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 class Ollama(Provider):
     name = "ollama"
 
     def __init__(self, url: str, model: str) -> None:
         self.url = url.rstrip("/")
         self.model = model
+        # A model on another machine (a server on the network) sees what's sent, like a cloud one.
+        self.cloud = not on_this_computer(self.url)
         vision = any(k in model.lower() for k in ("vl", "llava", "vision", "gemma3", "llama4", "minicpm-v", "moondream"))
         self.capabilities = frozenset({"chat", "vision"} if vision else {"chat"})
 
@@ -180,12 +203,13 @@ def estimate(req: Request, provider: Provider) -> dict[str, Any]:
     tokens_in = (len(req.system) + len(req.text)) // 4 + 1100 * len(req.images)  # about 1,100 per small picture
     s = ai_settings.load()["cloud"]
     cost = None
-    if provider.cloud and s.get("price_in") is not None and s.get("price_out") is not None:
+    if isinstance(provider, (Anthropic, OpenAICompatible)) and s.get("price_in") is not None and s.get("price_out") is not None:
         cost = round((tokens_in * float(s["price_in"]) + req.max_tokens * float(s["price_out"])) / 1_000_000, 4)
     return {
         "provider": provider.name,
         "model": provider.model,
         "cloud": provider.cloud,
+        "host": host_of(getattr(provider, "url", None) or getattr(provider, "base_url", "")),
         "text": req.text,
         "images": [{"bytes": len(i), "data_url": "data:image/png;base64," + base64.b64encode(i).decode("ascii")} for i in req.images],
         "tokens_in": tokens_in,

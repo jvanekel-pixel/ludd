@@ -25,6 +25,7 @@ from threadline_engine.digitize.stitches import (
     fill,
     fill_polygon,
     generate,
+    ribbon_pairs,
     running,
     satin,
     satin_pairs,
@@ -242,9 +243,13 @@ def test_fill_rejects_tiny_or_degenerate_shapes():
 
 
 def test_self_intersecting_outline_is_repaired():
+    """QA (tests, fill, patterns, visual): a bow-tie sewed only one of its two triangles."""
     bowtie = [c(0, 0), c(10, 10), c(10, 0), c(0, 10)]
     recs, _ = fill(bowtie, [], FillParams(underlay=()))
-    assert pts(recs)
+    p = pts(recs)
+    assert any(x < 4 for x, _ in p) and any(x > 6 for x, _ in p)  # both lobes
+    # The two lobes only touch at a point: lock off, cut, move, lock in.
+    assert [k for *_, k in recs if k != STITCH] == [TRIM, JUMP]
 
 
 # ---------------------------------------------------------------- objects
@@ -273,11 +278,60 @@ SNAPSHOT_CASES = {
         "geometry": {"rail_a": [c(0, 0), s(15, 6), c(30, 0)], "rail_b": [c(0, 4), s(15, 10), c(30, 4)]},
         "params": {"underlay": ["center", "zigzag"]},
     },
+    "satin_ribbon_s_curve": {
+        "kind": "satin",
+        "geometry": {"nodes": [c(0, 0), s(10, 6), s(20, 0), c(30, 6)], "width_mm": 3},
+        "params": {"underlay": ["center"]},
+    },
+    "satin_ribbon_closed_square": {
+        "kind": "satin",
+        "geometry": {"nodes": [c(0, 0), c(20, 0), c(20, 20), c(0, 20)], "width_mm": 2.5, "closed": True},
+        "params": {"underlay": []},
+    },
     "fill_square_45": {"kind": "fill", "geometry": {"outline": SQUARE}, "params": {"angle_deg": 45}},
+    "fill_gradient": {"kind": "fill", "geometry": {"outline": SQUARE}, "params": {"pattern": "gradient", "underlay": []}},
+    "fill_wave": {"kind": "fill", "geometry": {"outline": SQUARE}, "params": {"pattern": "wave", "underlay": []}},
+    "fill_contour": {"kind": "fill", "geometry": {"outline": SQUARE}, "params": {"pattern": "contour", "spacing_mm": 1.5, "underlay": []}},
+    "fill_stipple": {"kind": "fill", "geometry": {"outline": SQUARE}, "params": {"pattern": "stipple", "underlay": []}},
+    "fill_cross": {"kind": "fill", "geometry": {"outline": SQUARE}, "params": {"pattern": "cross", "underlay": []}},
+    "run_motif_scallop": {"kind": "run", "geometry": {"nodes": [c(0, 0), s(15, 8), c(30, 0)]}, "params": {"style": "motif", "motif": "scallop"}},
     "fill_donut": {
         "kind": "fill",
         "geometry": {"outline": SQUARE, "holes": [[c(7, 7), c(13, 7), c(13, 13), c(7, 13)]]},
         "params": {"angle_deg": 0, "underlay": ["edge"]},
+    },
+    # QA phase 4: every stitch type and its main variants.
+    "run_triple": {"kind": "run", "geometry": {"nodes": [c(0, 0), s(15, 8), c(30, 0)]}, "params": {"style": "triple"}},
+    "run_motif_wave": {"kind": "run", "geometry": {"nodes": [c(0, 0), c(30, 0)]}, "params": {"style": "motif", "motif": "wave"}},
+    "run_motif_zigzag": {"kind": "run", "geometry": {"nodes": [c(0, 0), c(30, 0)]}, "params": {"style": "motif", "motif": "zigzag"}},
+    "run_motif_blanket_closed": {"kind": "run", "geometry": {"nodes": SQUARE, "closed": True},
+                                 "params": {"style": "motif", "motif": "blanket"}},
+    "satin_edge_zigzag_underlay": {
+        "kind": "satin",
+        "geometry": {"rail_a": [c(0, 0), s(15, 6), c(30, 0)], "rail_b": [c(0, 6), s(15, 12), c(30, 6)]},
+        "params": {"underlay": ["edge", "zigzag"]},
+    },
+    "satin_ribbon_auto_comp_widen": {
+        "kind": "satin",
+        "geometry": {"nodes": [c(0, 0), s(15, 8), c(30, 0)], "width_mm": 6},
+        "params": {"underlay": "auto", "underlay_level": "heavy", "comp_by_width": True, "auto_widen": True},
+    },
+    "satin_ribbon_split": {
+        "kind": "satin",
+        "geometry": {"nodes": [c(0, 0), c(30, 0)], "width_mm": 10},
+        "params": {"underlay": ["center", "edge", "zigzag"], "split_mm": 4},
+    },
+    "fill_random_reverse": {"kind": "fill", "geometry": {"outline": SQUARE}, "params": {"random_pct": 30, "reverse": True}},
+    "fill_heavy_auto_underlay": {"kind": "fill", "geometry": {"outline": SQUARE},
+                                 "params": {"underlay": "auto", "underlay_level": "heavy"}},
+    "fill_cross_with_underlay": {"kind": "fill", "geometry": {"outline": SQUARE}, "params": {"pattern": "cross"}},
+    "fill_stipple_with_underlay": {"kind": "fill", "geometry": {"outline": SQUARE}, "params": {"pattern": "stipple"}},
+    "fill_bowtie": {"kind": "fill", "geometry": {"outline": [c(0, 0), c(20, 20), c(20, 0), c(0, 20)]}, "params": {}},
+    "applique_square": {"kind": "applique", "geometry": {"outline": SQUARE}, "params": {}},
+    "applique_with_hole_run_tack": {
+        "kind": "applique",
+        "geometry": {"outline": SQUARE, "holes": [[c(7, 7), c(13, 7), c(13, 13), c(7, 13)]]},
+        "params": {"tack": "run", "cover_width_mm": 2.5},
     },
 }
 
@@ -297,6 +351,9 @@ def _digest(recs):
 def test_snapshot(name):
     got = _digest(generate(SNAPSHOT_CASES[name])[0])
     stored = json.loads(SNAPSHOTS.read_text()) if SNAPSHOTS.exists() else {}
+    if name not in stored and os.environ.get("CI") and not os.environ.get("UPDATE_SNAPSHOTS"):
+        # CI checks what's committed: a case without its recorded entry protects nothing (QA).
+        pytest.fail(f"no snapshot recorded for {name}: run the tests locally, review and commit snapshots/digitize.json")
     if os.environ.get("UPDATE_SNAPSHOTS") or name not in stored:
         stored[name] = got
         SNAPSHOTS.parent.mkdir(exist_ok=True)
@@ -352,4 +409,267 @@ def test_satin_split_breaks_long_stitches():
     a, b = [c(0, 0), c(30, 0)], [c(0, 9), c(30, 9)]
     recs, _ = satin(a, b, SatinParams(underlay=(), pull_comp_mm=0, split_mm=4))
     st = [r for r in recs if r[2] == STITCH]
-    assert max(math.dist(p[:2], q[:2]) for p, q in zip(st, st[1:])) <= 4 * 1.2
+    assert max(math.dist(p[:2], q[:2]) for p, q in zip(st, st[1:])) <= 4 + 1e-9
+
+
+# ---------------------------------------------------------------- satin ribbon (centre line + width)
+
+
+def test_ribbon_is_square_to_a_straight_line_and_as_wide_as_asked():
+    pairs = ribbon_pairs([c(0, 0), c(20, 0)], 4, 0.4)
+    assert len(pairs) == 51
+    for a, b in pairs:
+        assert a[0] == pytest.approx(b[0])  # straight across
+        assert math.dist(a, b) == pytest.approx(4)
+        assert (a[1] + b[1]) / 2 == pytest.approx(0)  # centred on the line
+
+
+def test_ribbon_keeps_its_width_round_a_curve_and_its_edges_never_cross():
+    nodes = [c(0, 0), s(10, 8), s(20, 0), c(30, 8)]
+    pairs = ribbon_pairs(nodes, 3, 0.4)
+    widths = [math.dist(a, b) for a, b in pairs]
+    assert min(widths) == pytest.approx(3, abs=0.05)
+    assert max(widths) < 3 * 2.0 + 1e-6  # the miter limit
+    # Consecutive stitches never swap sides.
+    for (a0, b0), (a1, b1) in zip(pairs, pairs[1:]):
+        assert math.dist(a0, a1) < math.dist(a0, b1)
+
+
+def test_ribbon_corner_is_mitred_and_closed_ribbon_meets_itself():
+    pairs = ribbon_pairs([c(0, 0), c(20, 0), c(20, 20), c(0, 20)], 2, 0.4, closed=True)
+    assert [*pairs[0][0], *pairs[0][1]] == pytest.approx([*pairs[-1][0], *pairs[-1][1]])
+    corner = min(pairs, key=lambda ab: math.dist(((ab[0][0] + ab[1][0]) / 2, (ab[0][1] + ab[1][1]) / 2), (20, 0)))
+    assert math.dist(*corner) == pytest.approx(2 * math.sqrt(2), abs=0.01)  # 90°: √2 wider along the diagonal
+
+
+def test_ribbon_validates_width_and_points():
+    with pytest.raises(DigitizeError, match="width"):
+        ribbon_pairs([c(0, 0), c(10, 0)], 20, 0.4)
+    with pytest.raises(DigitizeError, match="two points"):
+        ribbon_pairs([c(0, 0)], 3, 0.4)
+
+
+def test_generate_dispatches_ribbon_and_column_satins():
+    ribbon = generate({"kind": "satin", "geometry": {"nodes": [c(0, 0), c(20, 0)], "width_mm": 3}, "params": {"underlay": []}})[0]
+    column = generate({"kind": "satin", "geometry": {"rail_a": [c(0, -1.5), c(20, -1.5)], "rail_b": [c(0, 1.5), c(20, 1.5)]},
+                       "params": {"underlay": []}})[0]
+    ys = {round(y, 3) for _, y in pts(ribbon)[3:-3]}
+    assert ys == {-1.6, 1.6}  # each side out by half the 0.2 mm default compensation
+    assert len(pts(ribbon)) == len(pts(column))
+
+
+def test_scaling_a_ribbon_scales_its_width():
+    from threadline_engine.digitize.stitches import transform_geometry
+    from threadline_engine.layout import Transform
+
+    obj = {"kind": "satin", "geometry": {"nodes": [c(0, 0), c(20, 0)], "width_mm": 3}}
+    t = Transform.from_dict({"scale_x": 2, "scale_y": 2})
+    assert transform_geometry(obj, t, (10, 0))["geometry"]["width_mm"] == pytest.approx(6)
+
+
+# ---------------------------------------------------------------- QA phase 4 (fills, satins, applique)
+
+
+def _longest(recs):
+    st = [r for r in recs if r[2] == STITCH]
+    return max(math.dist(a[:2], b[:2]) for a, b in zip(st, st[1:]))
+
+
+def test_qa_hole_cutting_a_shape_in_two_sews_both_pieces():
+    bar = [c(0, 0), c(30, 0), c(30, 10), c(0, 10)]
+    cut = [c(10, -1), c(20, -1), c(20, 11), c(10, 11)]
+    recs, _ = generate({"kind": "fill", "geometry": {"outline": bar, "holes": [cut]}, "params": {}})
+    xs = [x for x, _ in pts(recs)]
+    assert min(xs) < 1 and max(xs) > 29 and not any(10.5 < x < 19.5 for x in xs)
+
+
+def test_qa_underlay_reaches_every_lobe_and_hole_edge():
+    neck = [c(0, 0), c(10, 0), c(10, 4.5), c(15, 4.5), c(15, 0), c(25, 0), c(25, 10), c(15, 10), c(15, 5.5),
+            c(10, 5.5), c(10, 10), c(0, 10)]
+    with_ul, _ = fill(neck, [], FillParams(angle_deg=0))
+    bare, _ = fill(neck, [], FillParams(angle_deg=0, underlay=()))
+    right = lambda recs: sum(1 for x, _ in pts(recs) if x > 15)  # noqa: E731
+    assert right(with_ul) - right(bare) > 30  # the lobe behind the 1 mm neck gets its underlay
+    hole = [c(7, 7), c(13, 7), c(13, 13), c(7, 13)]
+    edged, _ = fill(SQUARE, [hole], FillParams(angle_deg=0, underlay=("edge",)))
+    plain, _ = fill(SQUARE, [hole], FillParams(angle_deg=0, underlay=()))
+    rim = Polygon([(7, 7), (13, 7), (13, 13), (7, 13)]).exterior
+    near = lambda recs: sum(1 for p in pts(recs) if abs(rim.distance(SPoint(p)) - 0.5) < 0.05)  # noqa: E731
+    assert near(edged) - near(plain) >= 8  # an edge run round the hole
+
+
+def test_qa_travel_keeps_to_the_shape_round_notches():
+    comb = [c(0, 0), c(13.5, 0)]
+    for i in range(4, -1, -1):
+        comb += [c(i * 3 + 1.5, 20), c(i * 3, 20)]
+        if i:
+            comb += [c(i * 3, 4), c(i * 3 - 1.5, 4)]
+    # Rows reach 0.1 mm past the edge (pull compensation) and a row's step round a notch corner
+    # cuts it by about 0.1 more; travel used to cut across notches up to 0.47 mm outside.
+    allowed = fill_polygon(comb).buffer(0.25)
+    for angle in range(0, 180, 15):
+        recs, _ = fill(comb, [], FillParams(angle_deg=angle))
+        for a, b in zip(recs, recs[1:]):
+            if a[2] == b[2] == STITCH:
+                seg = [a[:2], b[:2]]
+                assert all(allowed.covers(SPoint(seg[0][0] + (seg[1][0] - seg[0][0]) * t, seg[0][1] + (seg[1][1] - seg[0][1]) * t))
+                           for t in (0, 0.25, 0.5, 0.75, 1)), (angle, seg)
+
+
+def test_qa_wobbly_outline_fills_quickly():
+    import random
+    import time
+
+    rnd = random.Random(7)
+    nodes = [[30 * (1 + 0.1 * rnd.uniform(-1, 1)) * math.cos(2 * math.pi * i / 250),
+              30 * (1 + 0.1 * rnd.uniform(-1, 1)) * math.sin(2 * math.pi * i / 250), "s"] for i in range(250)]
+    t = time.perf_counter()
+    generate({"kind": "fill", "geometry": {"outline": nodes}, "params": {}})
+    assert time.perf_counter() - t < 6  # was 8.7 s; now about 2 s
+
+
+@pytest.mark.parametrize("spacing", [0.2, 0.25, 0.3])
+def test_qa_dense_rows_reach_both_edges(spacing):
+    recs, _ = fill([c(0, 0), c(20, 0), c(20, 20), c(0, 20)], [], FillParams(angle_deg=0, spacing_mm=spacing, pull_comp_mm=0, underlay=()))
+    rows = {}
+    for x, y in pts(recs):
+        rows.setdefault(round(y, 3), []).append(x)
+    assert all(min(r) < 0.01 and max(r) > 19.99 for r in rows.values())
+
+
+def test_qa_dense_satin_gets_denser_not_sparser():
+    counts = [len(pts(generate({"kind": "satin", "geometry": {"nodes": [c(0, 0), c(30, 0)], "width_mm": 3},
+                                "params": {"spacing_mm": sp, "underlay": [], "tie_in": False, "tie_off": False}})[0]))
+              for sp in (0.4, 0.32, 0.29, 0.25, 0.2)]
+    assert counts == sorted(counts) and counts[-1] >= 290
+
+
+@pytest.mark.parametrize("pattern", ["tatami", "contour", "cross", "stipple", "wave"])
+def test_qa_no_second_needle_drop_in_the_same_hole(pattern):
+    recs, _ = fill([c(0, 0), c(30, 0), c(30, 30), c(0, 30)], [], FillParams(pattern=pattern))
+    p = pts(recs)
+    assert not [1 for a, b in zip(p, p[1:]) if a == b]
+
+
+def test_qa_gradient_skips_the_cross_hatch_so_it_fades_out():
+    shape = [c(0, 0), c(40, 0), c(40, 40), c(0, 40)]
+    full, _ = fill(shape, [], FillParams(pattern="gradient", angle_deg=0, gradient_to_mm=3.0, underlay=("edge", "tatami")))
+    edge, _ = fill(shape, [], FillParams(pattern="gradient", angle_deg=0, gradient_to_mm=3.0, underlay=("edge",)))
+    assert full == edge
+
+
+def test_qa_cross_hatch_stays_inside_a_shape_with_zero_width_spikes():
+    from shapely.geometry import LineString
+    from shapely.ops import unary_union
+
+    def stroke(a):
+        r = math.radians(a)
+        return LineString([(-7 * math.cos(r), -7 * math.sin(r)), (7 * math.cos(r), 7 * math.sin(r))]).buffer(0.6, cap_style=2)
+
+    g = unary_union([stroke(30), stroke(120)])
+    outline = [c(x, y) for x, y in list(g.exterior.coords)[:-1]]
+    poly = fill_polygon(outline)
+    recs, _ = fill(outline, [], FillParams(angle_deg=0))
+    assert max(poly.distance(SPoint(p)) for p in pts(recs)) < 0.15  # was 3.1 mm
+
+
+def test_qa_bad_or_absurd_fill_settings_are_refused_clearly():
+    for key, val in (("angle_deg", float("nan")), ("angle_deg", float("inf")), ("pull_comp_mm", float("nan")),
+                     ("pull_comp_mm", -1), ("pull_comp_mm", 5), ("spacing_mm", "x")):
+        with pytest.raises(DigitizeError):
+            generate({"kind": "fill", "geometry": {"outline": SQUARE}, "params": {key: val}})
+    assert generate({"kind": "fill", "geometry": {"outline": SQUARE}, "params": {"angle_deg": None}})[0]  # null: the default
+    with pytest.raises(DigitizeError, match="bigger than any hoop"):
+        generate({"kind": "fill", "geometry": {"outline": [c(0, 0), c(5000, 0), c(5000, 5000), c(0, 5000)]}, "params": {}})
+    with pytest.raises(DigitizeError, match="tack-down"):
+        generate({"kind": "applique", "geometry": {"outline": SQUARE}, "params": {"tack_width_mm": 100}})
+
+
+def test_qa_heavy_fabric_gets_a_firmer_fill_base():
+    assert FillParams.from_dict({"underlay": "auto", "underlay_level": "heavy"}).underlay_spacing_mm == 1.5
+    assert FillParams.from_dict({"underlay": "auto", "underlay_level": "normal"}).underlay_spacing_mm == 2.0
+    heavy, _ = generate({"kind": "fill", "geometry": {"outline": SQUARE}, "params": {"underlay": "auto", "underlay_level": "heavy"}})
+    normal, _ = generate({"kind": "fill", "geometry": {"outline": SQUARE}, "params": {"underlay": "auto", "underlay_level": "normal"}})
+    assert len(heavy) > len(normal)
+
+
+@pytest.mark.parametrize("width,split", [(12, 7), (8, 4), (12, 4), (9, 3)])
+def test_qa_split_satin_pieces_never_exceed_the_longest_setting(width, split):
+    for underlay in ([], ["center", "edge", "zigzag"]):
+        recs, _ = generate({"kind": "satin", "geometry": {"nodes": [c(0, 0), c(30, 0)], "width_mm": width},
+                            "params": {"underlay": underlay, "pull_comp_mm": 0, "split_mm": split, "tie_in": False, "tie_off": False}})
+        assert _longest(recs) <= split + 1e-9
+
+
+def test_qa_satin_warns_from_7_mm_unless_split():
+    def warnings(w, **p):
+        return generate({"kind": "satin", "geometry": {"nodes": [c(0, 0), c(30, 0)], "width_mm": w}, "params": {"underlay": [], **p}})[1]
+
+    assert not warnings(6.5)
+    assert any("Split long stitches" in x for x in warnings(8))
+    assert not warnings(8, split_mm=7)
+
+
+def test_qa_satin_tighter_than_its_width_warns():
+    loop = [s(3, 0), s(0, 3), s(-3, 0), s(0, -3)]
+    _, w = generate({"kind": "satin", "geometry": {"nodes": loop, "width_mm": 6, "closed": True}, "params": {}})
+    assert any("curves more tightly" in x for x in w)
+    for nodes, closed in (([c(0, 0), c(20, 0), c(20, 20), c(0, 20)], True), ([c(0, 0), s(10, 6), s(20, 0), c(30, 6)], False)):
+        _, w = generate({"kind": "satin", "geometry": {"nodes": nodes, "width_mm": 2.5, "closed": closed}, "params": {}})
+        assert not any("curves more tightly" in x for x in w)
+
+
+def test_qa_reversed_satin_rails_are_named_as_such():
+    _, w = generate({"kind": "satin", "geometry": {"rail_a": [c(0, 0), c(30, 0)], "rail_b": [c(30, 4), c(0, 4)]}, "params": {}})
+    assert any("cross each other" in x for x in w)
+    _, ok = generate({"kind": "satin", "geometry": {"rail_a": A, "rail_b": B}, "params": {}})
+    assert not ok
+
+
+def test_qa_ribbon_miter_is_limited_at_a_hairpin():
+    pairs = ribbon_pairs([c(0, 0), c(10, 0), c(0, 0.5)], 2, 0.4)
+    assert max(math.dist(a, b) for a, b in pairs) <= 2 * 2.0 + 1e-6
+
+
+def test_qa_a_line_shorter_than_a_stitch_says_so():
+    _, w = generate({"kind": "run", "geometry": {"nodes": [c(0, 0), c(0.2, 0)]}, "params": {}})
+    assert any("single needle drop" in x for x in w)
+    assert not generate({"kind": "run", "geometry": {"nodes": [c(0, 0), c(10, 0)]}, "params": {}})[1]
+
+
+def test_qa_applique_border_spacing_is_what_was_asked():
+    for sp in (0.4, 0.6, 1.0):
+        recs, _ = generate({"kind": "applique", "geometry": {"outline": [c(0, 0), c(30, 0), c(30, 30), c(0, 30)]},
+                            "params": {"spacing_mm": sp, "placement": False, "tack": "run", "tie_in": False}})
+        stop = [i for i, r in enumerate(recs) if r[2] == 3][0]
+        n = sum(1 for r in recs[stop + 1:] if r[2] == STITCH)
+        assert 120 / (n / 2) == pytest.approx(sp, rel=0.05)  # was 0.33 for 0.4 and 0.98 for 1.0
+
+
+def test_qa_wide_applique_border_is_split():
+    recs, _ = generate({"kind": "applique", "geometry": {"outline": [c(0, 0), c(40, 0), c(40, 40), c(0, 40)]},
+                        "params": {"cover_width_mm": 8}})
+    assert _longest(recs) <= 7.0 + 1e-6  # was 11.5 mm
+
+
+def test_qa_self_crossing_applique_sews_and_cuts_every_lobe():
+    from threadline_engine import layout as L
+
+    bow = [c(0, 0), c(20, 20), c(20, 0), c(0, 20)]
+    recs, _ = generate({"kind": "applique", "geometry": {"outline": bow}, "params": {}})
+    xs = [x for x, _ in pts(recs)]
+    assert min(xs) < 1 and max(xs) > 19
+    svg, _ = L.applique_svg({"items": [{"id": "a", "kind": "applique", "geometry": {"outline": bow}, "params": {}}]})
+    assert svg.count(" Z") == 2
+
+
+def test_qa_no_object_can_ask_for_millions_of_stitches():
+    with pytest.raises(DigitizeError, match="far more than any design"):
+        generate({"kind": "fill", "geometry": {"outline": [c(0, 0), c(900, 0), c(900, 900), c(0, 900)]},
+                  "params": {"spacing_mm": 0.2, "stitch_mm": 1}})
+    for g in ({"kind": "run", "geometry": {"nodes": [c(0, 0), c(1e7, 0)]}},
+              {"kind": "satin", "geometry": {"nodes": [c(0, 0), c(5000, 0)], "width_mm": 3}}):
+        with pytest.raises(DigitizeError, match="bigger than any hoop"):
+            generate({**g, "params": {}})
+    with pytest.raises(DigitizeError, match="isn't a number"):
+        generate({"kind": "run", "geometry": {"nodes": [c(0, 0), [None, 1, "c"]]}, "params": {}})

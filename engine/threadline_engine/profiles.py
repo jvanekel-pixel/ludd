@@ -7,6 +7,7 @@ Built-ins live here; users can add or override profiles as JSON files in
 from __future__ import annotations
 
 import json
+import math
 from typing import Any
 
 from .storage import data_dir
@@ -60,14 +61,32 @@ BUILTIN_MACHINES: list[dict[str, Any]] = [
 REQUIRED = {"id", "name", "formats", "hoops", "cuts"}
 
 
+def _positive(v: Any) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and v > 0
+
+
 def _validate(p: dict[str, Any], source: str) -> dict[str, Any]:
+    """The profile with defaults filled in, or ProfileError in plain words (schemas/machine.schema.json)."""
+    if not isinstance(p, dict):
+        raise ProfileError(f"{source}: not a machine profile")
     missing = REQUIRED - p.keys()
     if missing:
         raise ProfileError(f"{source}: missing {', '.join(sorted(missing))}")
+    if not isinstance(p.get("id"), str) or not p["id"] or not isinstance(p.get("name"), str):
+        raise ProfileError(f"{source}: id and name must be text")
     if p["cuts"] not in ("trim", "color_change", "none"):
         raise ProfileError(f"{source}: cuts must be trim, color_change or none")
-    if not p["hoops"] or not all({"id", "width_mm", "height_mm"} <= h.keys() for h in p["hoops"]):
+    if not isinstance(p["formats"], list) or not p["formats"] or not all(isinstance(f, str) and f for f in p["formats"]):
+        raise ProfileError(f"{source}: formats must list at least one file type, like \"pes\"")
+    if not isinstance(p["hoops"], list) or not p["hoops"] or not all(
+            isinstance(h, dict) and {"id", "width_mm", "height_mm"} <= h.keys() for h in p["hoops"]):
         raise ProfileError(f"{source}: each hoop needs id, width_mm, height_mm")
+    for h in p["hoops"]:
+        if not all(_positive(h[k]) for k in ("width_mm", "height_mm")):
+            raise ProfileError(f"{source}: hoop {h['id']}: width_mm and height_mm must be numbers above 0")
+    for k in ("max_stitch_mm", "max_stitches", "max_colors"):
+        if p.get(k) is not None and not _positive(p[k]):
+            raise ProfileError(f"{source}: {k} must be a number above 0, or null for no limit")
     return {
         "brand": "",
         "needles": 1,
@@ -87,8 +106,9 @@ def list_machines() -> list[dict[str, Any]]:
     if d.is_dir():
         for f in sorted(d.glob("*.json")):
             try:
-                p = _validate(json.loads(f.read_text(encoding="utf-8")), f.name)
-            except (OSError, json.JSONDecodeError, ProfileError):
+                # utf-8-sig: Notepad may save a byte-order mark at the start.
+                p = _validate(json.loads(f.read_text(encoding="utf-8-sig")), f.name)
+            except (OSError, ValueError, TypeError, AttributeError, ProfileError):
                 continue  # a broken user file shouldn't hide the others
             by_id[p["id"]] = p | {"builtin": False}
     return list(by_id.values())

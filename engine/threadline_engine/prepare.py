@@ -15,6 +15,7 @@ from . import profiles
 
 M = pe.COMMAND_MASK
 TIE_MM = 0.7  # length of each lock stitch
+PES_MAX_STEPS = 255  # a PES file's thread list (its PEC block) holds at most this many colour steps
 
 
 @dataclass
@@ -167,6 +168,16 @@ def _stitch_bounds(pattern: pe.EmbPattern) -> tuple[float, float, float, float]:
 def check(pattern: pe.EmbPattern, opts: Options, ext: str | None, stops_added: int) -> list[dict[str, str]]:
     """Warnings for exporting `pattern` to `ext` for the chosen machine. level: error | warning | info."""
     warnings: list[dict[str, str]] = []
+    stitches = sum(1 for *_, c in pattern.stitches if c & M == pe.STITCH)
+    if not stitches:
+        warnings.append({"level": "error", "code": "empty", "message": "There's nothing to sew: this design has no stitches."})
+        return warnings
+    # What the file format itself can hold, whatever the machine.
+    steps = 1 + sum(1 for *_, c in pattern.stitches if c & M in (pe.COLOR_CHANGE, pe.STOP))
+    if ext == "pes" and steps > PES_MAX_STEPS:
+        warnings.append({"level": "error", "code": "max_colors", "message": (
+            f"The design has {steps} color steps (colors plus stops); a PES file holds at most {PES_MAX_STEPS}."
+            + (" Use a longer minimum jump to add fewer cut-stops." if stops_added else ""))})
     if not opts.machine:
         return warnings
     machine = profiles.get_machine(opts.machine)
@@ -190,13 +201,11 @@ def check(pattern: pe.EmbPattern, opts: Options, ext: str | None, stops_added: i
         warnings.append({"level": "warning", "code": "format", "message": (
             f"The {name} reads {', '.join(f.upper() for f in machine['formats'])}, not {ext.upper()}.")})
 
-    stitches = sum(1 for *_, c in pattern.stitches if c & M == pe.STITCH)
     if machine["max_stitches"] and stitches > machine["max_stitches"]:
         warnings.append({"level": "error", "code": "max_stitches", "message": (
             f"{stitches:,} stitches is more than the {name} accepts ({machine['max_stitches']:,}).")})
 
-    steps = 1 + sum(1 for *_, c in pattern.stitches if c & M in (pe.COLOR_CHANGE, pe.STOP))
-    if machine["max_colors"] and steps > machine["max_colors"]:
+    if machine["max_colors"] and steps > machine["max_colors"] and not any(w["code"] == "max_colors" for w in warnings):
         warnings.append({"level": "error", "code": "max_colors", "message": (
             f"The design has {steps} color steps (color changes plus stops); the {name} accepts "
             f"{machine['max_colors']}." + (" Use a longer minimum jump to add fewer cut-stops." if stops_added else ""))})
@@ -207,6 +216,15 @@ def check(pattern: pe.EmbPattern, opts: Options, ext: str | None, stops_added: i
             warnings.append({"level": "info", "code": "trims_ignored", "message": (
                 f"The {name} only cuts at color changes, so it will skip this design's {trims} trims and leave "
                 "jump threads to snip by hand. Turn on cut-stops to have it cut them.")})
+    if machine["cuts"] == "color_change" and not opts.cut_stops.include_untrimmed:
+        # Cut-stops only cut the jumps the design marks for trimming; say so if longer ones aren't.
+        loose = sum(1 for *_, has_trim, a, b in travels(pattern.stitches)
+                    if not has_trim and math.hypot(b[0] - a[0], b[1] - a[1]) / 10 >= opts.cut_stops.min_jump_mm)
+        if loose:
+            warnings.append({"level": "info", "code": "untrimmed_jumps", "message": (
+                f"{loose} jump{'s' if loose > 1 else ''} of {opts.cut_stops.min_jump_mm:g} mm or more {'aren' if loose > 1 else 'isn'}'t "
+                "marked for trimming, so the machine won't cut there. Snip them by hand, or tick "
+                "“Also cut jumps the design doesn't mark” under More options.")})
     if stops_added:
         warnings.append({"level": "info", "code": "stops_added", "message": (
             f"Added {stops_added} cut-stops. The machine will stop, tie off and cut at each one; "

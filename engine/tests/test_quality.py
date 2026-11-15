@@ -133,3 +133,19 @@ def test_a_border_over_a_fill_edge_is_not_a_hotspot():
     border = {"id": "b", "kind": "satin", "params": {},
               "geometry": {"rail_a": [[-2, -2, "c"], [42, -2, "c"]], "rail_b": [[-2, 2, "c"], [42, 2, "c"]]}}
     assert "dense" not in codes({"items": [fill_item("f", sq(0, 0, 40, 30)), border]})
+
+
+def test_qa_a_stitch_right_at_the_7_mm_limit_is_not_loose():
+    """QA: satin-look letters sew 7.0 mm stitches; float noise and the 0.1 mm grid made them 'long'."""
+    def long_check(length):
+        p = pe.EmbPattern()
+        x = 0.0
+        for _ in range(5):
+            p.add_stitch_absolute(pe.STITCH, x * 10, 0)
+            x += length
+        return [c for c in quality.check(p)["checks"] if c["code"] == "long"]
+
+    assert not long_check(7.000000000000012)
+    assert not long_check(7.1)  # rounded onto the machine's 0.1 mm grid
+    found = long_check(7.5)
+    assert found and "Split long stitches" in found[0]["fix"]

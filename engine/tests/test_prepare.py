@@ -1,5 +1,6 @@
 """Cut-stops, recoloring and machine checks."""
 
+import codecs
 import json
 import math
 
@@ -211,3 +212,67 @@ def test_ties_never_land_far_from_the_stitch():
     pts = [(x, y) for x, y, c in p.stitches if c & M == pe.STITCH]
     steps = [math.hypot(b[0] - a[0], b[1] - a[1]) for a, b in zip(pts, pts[1:])]
     assert max(steps) <= 300 + 1e-6  # only the original travel is long
+
+
+# ---------------------------------------------------------------- phase 4 (QA medium and low findings)
+
+def _codes(warnings):
+    return [w["code"] for w in warnings]
+
+
+def test_qa4_empty_design_is_an_error_in_the_preview():
+    p = pe.EmbPattern()
+    p.add_thread(pe.EmbThread("#ff0000", "R"))
+    p.move_abs(10, 10)
+    p.end()
+    _, report = prepare(p, Options(), "pes")
+    assert _codes(report["warnings"]) == ["empty"]
+
+
+def test_qa4_pes_colour_step_limit_is_checked_for_any_machine():
+    p = pe.EmbPattern()
+    p.add_thread(pe.EmbThread("#ff0000", "R"))
+    for i in range(300):
+        p.stitch_abs(i * 5, 0)
+        p.stitch_abs(i * 5 + 3, 0)
+        p.add_stitch_absolute(pe.STOP, i * 5 + 3, 0)
+    p.end()
+    _, report = prepare(p, Options(), "pes")
+    assert "max_colors" in _codes(report["warnings"])
+    _, report = prepare(p, Options(), "jef")
+    assert "max_colors" not in _codes(report["warnings"])
+
+
+def test_qa4_long_jumps_not_marked_for_trimming_are_mentioned_for_the_pe550d():
+    plain = two_islands(trim=False)  # a 30 mm jump with no trim
+    _, report = prepare(plain, Options(machine="brother-pe550d", cut_stops=CutStops(enabled=True)), "pes")
+    assert report["stops_added"] == 0 and "untrimmed_jumps" in _codes(report["warnings"])
+    _, report = prepare(plain, Options(machine="brother-pe550d", cut_stops=CutStops(enabled=True, include_untrimmed=True)), "pes")
+    assert report["stops_added"] == 1 and "untrimmed_jumps" not in _codes(report["warnings"])
+
+
+@pytest.mark.parametrize("bad", [
+    {"hoops": [{"id": "h", "width_mm": "100", "height_mm": 100}]},
+    {"hoops": [{"id": "h", "width_mm": 0, "height_mm": 100}]},
+    {"max_colors": "8"},
+    {"formats": []},
+    {"formats": "pes"},
+    {"hoops": ["x"]},
+])
+def test_qa4_machine_profiles_with_wrong_types_are_skipped(isolated_data_dir, bad):
+    d = isolated_data_dir / "machines"
+    d.mkdir(parents=True, exist_ok=True)
+    prof = {"id": "bad", "name": "X", "formats": ["pes"], "cuts": "color_change",
+            "hoops": [{"id": "h", "width_mm": 100, "height_mm": 100}], **bad}
+    (d / "bad.json").write_text(json.dumps(prof), encoding="utf-8")
+    (d / "list.json").write_text("[1, 2]", encoding="utf-8")
+    ids = [m["id"] for m in profiles.list_machines()]
+    assert "bad" not in ids and "brother-pe550d" in ids
+
+
+def test_qa4_a_profile_saved_with_a_byte_order_mark_is_read(isolated_data_dir):
+    d = isolated_data_dir / "machines"
+    d.mkdir(parents=True, exist_ok=True)
+    prof = {"id": "bom", "name": "BOM", "formats": ["pes"], "cuts": "trim", "hoops": [{"id": "h", "width_mm": 100, "height_mm": 100}]}
+    (d / "bom.json").write_bytes(codecs.BOM_UTF8 + json.dumps(prof).encode("utf-8"))
+    assert "bom" in [m["id"] for m in profiles.list_machines()]

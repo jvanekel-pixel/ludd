@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import csv
 import io
-import json
 import math
 import re
 from pathlib import Path
@@ -17,7 +16,7 @@ from typing import Any
 from pyembroidery.EmbThreadJef import get_thread_set as _jef_threads
 from pyembroidery.EmbThreadPec import get_thread_set as _pec_threads
 
-from .storage import data_dir
+from .storage import data_dir, read_json, write_json
 
 
 class ThreadError(Exception):
@@ -28,6 +27,8 @@ class ThreadError(Exception):
 
 
 def hex_to_rgb(h: str) -> tuple[int, int, int]:
+    if not isinstance(h, str):
+        raise ThreadError(f"Not a hex color: {h!r}"[:60])
     h = h.strip().lstrip("#")
     if len(h) == 3:
         h = "".join(c * 2 for c in h)
@@ -143,6 +144,36 @@ def _slug(name: str) -> str:
     return s or "chart"
 
 
+def _usable(c: Any) -> bool:
+    """A chart file that is the right shape (a broken or hand-edited file is skipped, never
+    allowed to take the other charts down)."""
+    return (isinstance(c, dict) and isinstance(c.get("id"), str) and isinstance(c.get("name"), str)
+            and isinstance(c.get("threads"), list)
+            and all(isinstance(t, dict) and isinstance(t.get("color"), str) for t in c["threads"]))
+
+
+def _read_chart(f: Path) -> dict[str, Any] | None:
+    try:
+        c = read_json(f)
+    except (OSError, ValueError, RecursionError):
+        return None
+    if not _usable(c):
+        return None
+    c.setdefault("brand", "")
+    c.setdefault("builtin", False)
+    return c
+
+
+_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,200}")
+
+
+def _check_id(chart_id: Any) -> str:
+    """Chart ids are file names: only the ones LUDD makes (lower-case letters, digits, dashes)."""
+    if not isinstance(chart_id, str) or not _ID.fullmatch(chart_id):
+        raise ThreadError(f"Unknown thread chart: {str(chart_id)[:40]}")
+    return chart_id
+
+
 def _summary(c: dict[str, Any]) -> dict[str, Any]:
     return {k: c[k] for k in ("id", "name", "brand", "builtin")} | {"count": len(c["threads"]), "mine": bool(c.get("mine"))}
 
@@ -155,10 +186,9 @@ def list_charts() -> list[dict[str, Any]]:
         for f in sorted(d.glob("*.json")):
             if f.stem == MY_THREADS:
                 continue
-            try:
-                charts.append(json.loads(f.read_text(encoding="utf-8")))
-            except (OSError, json.JSONDecodeError):
-                continue
+            c = _read_chart(f)
+            if c is not None:
+                charts.append(c)
     return [_summary(c) for c in charts]
 
 
@@ -167,10 +197,13 @@ def get_chart(chart_id: str) -> dict[str, Any]:
         return my_threads()
     if chart_id in BUILTIN_CHARTS:
         return BUILTIN_CHARTS[chart_id]
-    f = _charts_dir() / f"{chart_id}.json"
+    f = _charts_dir() / f"{_check_id(chart_id)}.json"
     if not f.is_file():
         raise ThreadError(f"Unknown thread chart: {chart_id}")
-    return json.loads(f.read_text(encoding="utf-8"))
+    c = _read_chart(f)
+    if c is None:
+        raise ThreadError(f"The thread chart file {f.name} is damaged; import the chart again")
+    return c
 
 
 def _column_kind(header: str) -> str | None:
@@ -253,16 +286,19 @@ def import_csv(path: str, name: str, brand: str = "") -> dict[str, Any]:
     if chart_id in BUILTIN_CHARTS or chart_id == MY_THREADS:
         chart_id += "-custom"
     chart = {"id": chart_id, "name": name, "brand": brand.strip() or name, "builtin": False, "threads": threads}
-    d = _charts_dir()
-    d.mkdir(parents=True, exist_ok=True)
-    (d / f"{chart_id}.json").write_text(json.dumps(chart, indent=1), encoding="utf-8")
+    try:
+        write_json(_charts_dir() / f"{chart_id}.json", chart)
+    except OSError as exc:
+        raise ThreadError(f"Couldn't save the chart: {exc.strerror or exc}") from exc
     return _summary(chart)
 
 
 def delete_chart(chart_id: str) -> None:
     if chart_id in BUILTIN_CHARTS:
         raise ThreadError("Built-in charts can't be deleted")
-    f = _charts_dir() / f"{chart_id}.json"
+    if chart_id == MY_THREADS:
+        raise ThreadError("My threads can't be deleted; remove spools from it instead")
+    f = _charts_dir() / f"{_check_id(chart_id)}.json"
     if f.is_file():
         f.unlink()
 
@@ -295,7 +331,14 @@ def my_threads() -> dict[str, Any]:
     """The user's own spools, from any brand or none. Created empty on first use."""
     f = _my_path()
     if f.is_file():
-        return json.loads(f.read_text(encoding="utf-8"))
+        c = _read_chart(f)
+        if c is not None:
+            return {**c, "id": MY_THREADS, "mine": True}
+        # Damaged (a crash mid-write in an older version): keep it aside, start a fresh list.
+        try:
+            f.replace(f.with_name(f"{MY_THREADS}.damaged.json.bak"))
+        except OSError:
+            pass
     return {"id": MY_THREADS, "name": "My threads", "brand": "", "builtin": False, "mine": True, "threads": []}
 
 
@@ -305,9 +348,10 @@ def _key(t: dict[str, str]) -> tuple[str, str]:
 
 
 def _save_my(chart: dict[str, Any]) -> dict[str, Any]:
-    d = _charts_dir()
-    d.mkdir(parents=True, exist_ok=True)
-    _my_path().write_text(json.dumps(chart, indent=1), encoding="utf-8")
+    try:
+        write_json(_my_path(), chart)
+    except OSError as exc:
+        raise ThreadError(f"Couldn't save My threads: {exc.strerror or exc}") from exc
     return chart
 
 
@@ -316,6 +360,8 @@ def my_add(spools: list[dict[str, str]]) -> dict[str, Any]:
     chart = my_threads()
     have = {_key(t) for t in chart["threads"]}
     for s in spools:
+        if not isinstance(s, dict) or "color" not in s:
+            raise ThreadError("A spool needs a color")
         t = {
             "code": str(s.get("code", "")).strip(),
             "name": str(s.get("name", "")).strip(),

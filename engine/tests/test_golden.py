@@ -1,7 +1,8 @@
-"""Golden round-trip tests on real designs in fixtures/.
+"""Golden round-trip tests on real designs.
 
-fixtures/ holds the user's own (often purchased) designs and is not committed,
-so these tests skip when it's empty (e.g. in CI).
+Always on the committed samples/ (PES and JEF, the owner's formats), so CI tests them too;
+plus fixtures/, the user's own (often purchased) designs, which isn't committed and is used
+when present.
 """
 
 from pathlib import Path
@@ -10,11 +11,17 @@ import pytest
 
 from threadline_engine import design
 
-FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
+ROOT = Path(__file__).resolve().parents[2]
+FIXTURES = ROOT / "fixtures"
+SAMPLES = ROOT / "samples"
 READABLE = {f["ext"] for f in design.formats()["read"]}
-FILES = sorted(p for p in FIXTURES.glob("*") if p.suffix.lower().lstrip(".") in READABLE) if FIXTURES.is_dir() else []
 
-pytestmark = pytest.mark.skipif(not FILES, reason="no fixture designs in fixtures/")
+
+def designs_in(folder: Path, exts: set[str]) -> list[Path]:
+    return sorted(p for p in folder.glob("*") if p.suffix.lower().lstrip(".") in exts) if folder.is_dir() else []
+
+
+FILES = designs_in(SAMPLES, {"pes", "jef"}) + designs_in(FIXTURES, READABLE)
 
 # Known pyembroidery JEF quirk: a STOP may be written as a color change (BMOFACE.PES: final stop).
 # On Janome machines both pause the machine; we accept it but keep the total of the two the same.
@@ -23,6 +30,15 @@ pytestmark = pytest.mark.skipif(not FILES, reason="no fixture designs in fixture
 def stitch_points(d):
     r = d["records"]
     return [(x, y) for x, y, k in zip(r["x"], r["y"], r["kind"]) if k == design.STITCH]
+
+
+def shifted(points, like):
+    """`points` moved so their bounds start where `like`'s do (positions are whole 0.1 mm)."""
+    b = like["info"]["bounds_mm"]
+    if not points:
+        return points
+    dx, dy = b[0] - min(x for x, _ in points), b[1] - min(y for _, y in points)
+    return [(round(x + dx, 1), round(y + dy, 1)) for x, y in points]
 
 
 def real_trims(d):
@@ -39,7 +55,13 @@ def real_trims(d):
     return n
 
 
-@pytest.mark.parametrize("path", FILES, ids=lambda p: p.name)
+def test_committed_samples_are_tested():
+    """CI has no fixtures/: the PES and JEF round trips must still run there (QA: they all skipped)."""
+    kinds = {p.suffix.lower() for p in FILES if p.parent == SAMPLES}
+    assert {".pes", ".jef"} <= kinds
+
+
+@pytest.mark.parametrize("path", FILES, ids=lambda p: f"{p.parent.name}/{p.name}")
 def test_opens(path):
     d = design.open_design(str(path))
     assert d["info"]["stitches"] > 0
@@ -48,15 +70,21 @@ def test_opens(path):
 
 
 @pytest.mark.parametrize("ext", ["pes", "jef", "dst"])
-@pytest.mark.parametrize("path", FILES, ids=lambda p: p.name)
+@pytest.mark.parametrize("path", FILES, ids=lambda p: f"{p.parent.name}/{p.name}")
 def test_roundtrip(path, ext, tmp_path):
     src = design.open_design(str(path))
     out = tmp_path / f"out.{ext}"
     design.export(str(path), str(out))
     back = design.open_design(str(out))
 
-    assert stitch_points(back) == stitch_points(src)
-    assert back["info"]["bounds_mm"] == src["info"]["bounds_mm"]
+    if ext in ("jef", "pes"):
+        # JEF puts the design's centre on the hoop centre, PES its top-left corner at (0, 0) (as
+        # Brother machines read it): the same stitches, moved as a whole.
+        assert shifted(stitch_points(back), src) == stitch_points(src)
+        assert (back["info"]["width_mm"], back["info"]["height_mm"]) == (src["info"]["width_mm"], src["info"]["height_mm"])
+    else:
+        assert stitch_points(back) == stitch_points(src)
+        assert back["info"]["bounds_mm"] == src["info"]["bounds_mm"]
 
     if ext == "pes":
         assert real_trims(back) == real_trims(src)
@@ -68,3 +96,22 @@ def test_roundtrip(path, ext, tmp_path):
         assert pauses(back) == pauses(src)
         # A stop turned color change also cuts, so it may absorb the trim at the same spot.
         assert real_trims(back) >= real_trims(src) - (src["info"]["stops"] - back["info"]["stops"])
+
+
+def test_pes_files_start_at_the_top_left_corner_like_embrilliance(tmp_path):
+    """Brother machines read a PES design from its top-left corner: written centred on (0, 0), the
+    PE550D showed it shifted up and left by half its size, mostly outside the hoop. Embrilliance's
+    files (the fixtures) run from (0, 0); LUDD's must too, whatever the design's position."""
+    import pyembroidery as pe
+
+    for f in sorted(FIXTURES.glob("*.PES")):
+        assert pe.read(str(f)).extents()[:2] == (0, 0), f.name
+    p = pe.EmbPattern()
+    p.add_thread(pe.EmbThread("#ff0000", "Red"))
+    for x, y in [(-300, -200), (300, -200), (300, 250), (-300, 250)]:
+        p.add_stitch_absolute(pe.STITCH, x, y)
+    p.end()
+    out = tmp_path / "corner.pes"
+    design.write(p, out)
+    back = pe.read(str(out))
+    assert back.extents() == (0, 0, 600, 450)

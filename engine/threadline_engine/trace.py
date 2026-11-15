@@ -21,7 +21,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from PIL import Image, ImageOps
+from PIL import Image
 
 from . import kept
 
@@ -70,14 +70,60 @@ def _normalise(a: np.ndarray) -> np.ndarray:
     return np.clip((a - lo) / (hi - lo), 0, 1).astype(np.float32)
 
 
-def analyse(img: Image.Image) -> Maps:
-    img = img.convert("RGBA")
-    # Transparent areas count as white paper.
-    bg = Image.new("RGBA", img.size, (255, 255, 255, 255))
-    gray = Image.alpha_composite(bg, img).convert("L")
-    scale = min(1.0, MAX_SIDE_PX / max(gray.size))
+# EXIF orientation -> how to turn the decoded picture so it shows as on screen (as ImageOps.exif_transpose).
+_ORIENT = {
+    2: Image.Transpose.FLIP_LEFT_RIGHT, 3: Image.Transpose.ROTATE_180, 4: Image.Transpose.FLIP_TOP_BOTTOM,
+    5: Image.Transpose.TRANSPOSE, 6: Image.Transpose.ROTATE_270, 7: Image.Transpose.TRANSVERSE, 8: Image.Transpose.ROTATE_90,
+}
+
+
+def flatten(img: Image.Image, max_side: int) -> Image.Image:
+    """A picture as 8-bit RGB on white paper (transparent counts as paper), at most max_side
+    pixels on its long side. Made small early, so a big scan doesn't need gigabytes; 16-bit
+    greyscale keeps its mid-tones (a plain convert clips them to white)."""
+    if img.mode.startswith("I"):  # 16-bit (or 32-bit integer) greyscale
+        a = np.asarray(img).astype(np.int64)
+        if img.mode.startswith("I;16") or a.max(initial=0) > 255:
+            a = a // 257
+        img = Image.fromarray(np.clip(a, 0, 255).astype(np.uint8), "L")
+    elif img.mode == "F":
+        img = Image.fromarray(np.clip(np.asarray(img), 0, 255).astype(np.uint8), "L")
+    if img.mode not in ("L", "LA", "RGB", "RGBA"):
+        img = img.convert("RGBA")
+    factor = int(max(img.size) // max_side)
+    if factor >= 2:
+        img = img.reduce(factor)  # box average: fast, and much less memory than a full-size convert
+    if img.mode != "RGB":
+        img = img.convert("RGBA")
+        bg = Image.new("RGBA", img.size, (255, 255, 255, 255))
+        img = Image.alpha_composite(bg, img).convert("RGB")
+    scale = min(1.0, max_side / max(img.size))
     if scale < 1:
-        gray = gray.resize((max(1, round(gray.width * scale)), max(1, round(gray.height * scale))), Image.LANCZOS)
+        img = img.resize((max(1, round(img.width * scale)), max(1, round(img.height * scale))), Image.LANCZOS)
+    return img
+
+
+def open_picture(p: Path, max_side: int) -> Image.Image:
+    """Read a picture for tracing: turned the way it shows on screen, flattened (see flatten).
+    Any picture that can't be read gives a TraceError in plain words."""
+    try:
+        with Image.open(p) as im:
+            if im.format == "JPEG":
+                im.draft("RGB", (max_side, max_side))  # decode a big JPEG at a smaller size straight away
+            orient = im.getexif().get(0x0112)
+            out = flatten(im, max_side)
+            out.load()  # (it may still be the opened file itself)
+    except Image.DecompressionBombError as exc:
+        raise TraceError(f"{p.name} is too big to trace. Save a smaller copy of it (under about 100 megapixels) and add that.") from exc
+    except (OSError, ValueError, SyntaxError) as exc:
+        raise TraceError(f"Couldn't read {p.name} for tracing") from exc
+    if orient in _ORIENT:
+        out = out.transpose(_ORIENT[orient])
+    return out
+
+
+def analyse(img: Image.Image) -> Maps:
+    gray = flatten(img, MAX_SIDE_PX).convert("L")
     g = np.asarray(gray, dtype=np.float32) / 255.0
     smooth = _box_blur(_box_blur(g, 1), 1)
     darkness = _normalise(1.0 - smooth)
@@ -98,7 +144,7 @@ def analyse(img: Image.Image) -> Maps:
 
 
 def prepare(path: str) -> Maps:
-    p = Path(kept.readable(path))
+    p = Path(kept.readable(path, as_added=True))
     try:
         mtime = p.stat().st_mtime
     except OSError as exc:
@@ -106,12 +152,8 @@ def prepare(path: str) -> Maps:
     hit = _cache.get(path)
     if hit and hit[0] == mtime:
         return hit[1]
-    try:
-        with Image.open(p) as im:
-            # Phone photos: turn the picture the way it's shown on screen.
-            maps = analyse(ImageOps.exif_transpose(im))
-    except OSError as exc:
-        raise TraceError(f"Couldn't read {p.name} for tracing") from exc
+    # Phone photos: turned the way they're shown on screen.
+    maps = analyse(open_picture(p, MAX_SIDE_PX))
     if len(_cache) > 8:
         _cache.pop(next(iter(_cache)))
     _cache[path] = (mtime, maps)

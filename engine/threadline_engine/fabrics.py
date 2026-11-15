@@ -10,6 +10,7 @@ by stitch-outs (docs/stitchout-log.md).
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 DEFAULT_FABRIC = "woven"
@@ -36,11 +37,13 @@ FABRICS: list[dict[str, Any]] = [
         "id": "fleece", "name": "Fleece or sweatshirt", "examples": "Hoodies, sweatshirts, blankets",
         "density": 0.95, "pull_comp_mm": 0.35, "underlay": "heavy",
         "stabilizer": "Cut-away", "topping": "Water-soluble topping, so stitches sit on top of the pile",
+        "knockdown": True,
     },
     {
         "id": "towel", "name": "Towel or terry", "examples": "Towels, bathrobes, bibs",
         "density": 1.1, "pull_comp_mm": 0.3, "underlay": "heavy",
         "stabilizer": "Tear-away or wash-away", "topping": "Water-soluble topping, so stitches don't sink into the loops",
+        "knockdown": True,
     },
     {
         "id": "stretch", "name": "Stretchy sportswear", "examples": "Leggings, performance shirts, swimwear",
@@ -69,7 +72,12 @@ def apply(obj: dict[str, Any], fabric_id: str | None) -> dict[str, Any]:
     f = get(fabric_id)
     p = dict(obj.get("params") or {})
     base = float(p.get("spacing_mm", 0.4))
-    p["spacing_mm"] = round(min(max(base / f["density"], 0.2), 3.0), 3)
+    # Kept within what each stitch type accepts (satin 0.15-3 mm, fill 0.2-5 mm).
+    lo, hi = (0.15, 3.0) if kind == "satin" else (0.2, 5.0)
+    if math.isfinite(base) and base > 0:
+        p["spacing_mm"] = round(min(max(base / f["density"], lo), hi), 3)
+    # (0, negative or not a number: left as it is, so the stitch type says what's wrong instead of
+    # quietly sewing at the densest setting.)
     if p.get("pull_comp_mm") is None:
         p["pull_comp_mm"] = f["pull_comp_mm"]
         p["comp_by_width"] = kind == "satin"  # wider columns pull in more
@@ -86,4 +94,6 @@ def advice(fabric_id: str | None) -> str:
     text = f"Stabilizer: {f['stabilizer']}."
     if f["topping"]:
         text += f" Topping: {f['topping']}."
+    if f.get("knockdown"):
+        text += " For small lettering or detail, turn on Knockdown stitches (Ctrl+Shift+N) to flatten the pile first."
     return text

@@ -7,6 +7,9 @@ license = "GPL-3.0-or-later"
 dependencies = [
     "fonttools>=4.66.1",
     "numpy>=2.5.4",
+    # AI tracing (optional). There's no ONNX Runtime for Intel Macs: LUDD runs there without it.
+    "onnxruntime>=1.31.0; sys_platform != 'darwin' or platform_machine != 'x86_64'",
+    "opencv-python-headless>=5.0.0.93",
     "pillow>=12.3.0",
     "pyembroidery>=1.5.1",
     "shapely>=2.2.0",

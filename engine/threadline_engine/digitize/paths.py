@@ -133,3 +133,26 @@ def resample(poly: Sequence[Point], step: float, keep: Sequence[int] = ()) -> li
 
 def corner_indices(nodes: Sequence[Node], node_index: Sequence[int]) -> list[int]:
     return [node_index[i] for i, nd in enumerate(nodes) if not _smooth(nd)]
+
+
+def sharp_points(poly: Sequence[Point], min_turn_deg: float = 25.0, tol: float = 0.1) -> list[int]:
+    """Indices of the points where a dense line (a ring from shapely, a travel route) turns
+    sharply, so resample() can keep them and its stitches don't cut across corners. Wiggles and
+    small round-offs under `tol` mm are smoothed over first, so a tight round corner made of many
+    tiny steps still counts as one corner, while a smooth curve has none."""
+    if len(poly) < 3:
+        return []
+    from shapely.geometry import LineString  # (local: the rest of this module is plain Python)
+
+    first: dict[tuple[float, float], int] = {}
+    for i, p in enumerate(poly):
+        first.setdefault((float(p[0]), float(p[1])), i)
+    simple = [(float(x), float(y)) for x, y in LineString(poly).simplify(tol).coords]
+    out = []
+    for a, b, c in zip(simple, simple[1:], simple[2:]):
+        t1 = math.atan2(b[1] - a[1], b[0] - a[0])
+        t2 = math.atan2(c[1] - b[1], c[0] - b[0])
+        turn = abs((t2 - t1 + math.pi) % (2 * math.pi) - math.pi)
+        if math.degrees(turn) > min_turn_deg and b in first:
+            out.append(first[b])
+    return sorted(set(out))

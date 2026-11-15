@@ -238,6 +238,21 @@ def test_advisor_summary_numbers():
     assert f["size_mm"] == [40, 30] and f["widest_mm"] == pytest.approx(30, abs=0.5)
 
 
+
+def test_qa_c10_advisor_handles_satin_ribbons():
+    """A satin drawn with the Satin tool (a centre line and a width) used to crash the advisor."""
+    ribbon = {"id": "r", "kind": "satin", "geometry": {"nodes": [[0, 0, "c"], [30, 0, "c"], [30, 20, "c"]], "width_mm": 5},
+              "params": {"spacing_mm": 0.4}, "thread": {"color": "#000000"}}
+    s = advisor.summarize(ribbon)
+    assert s["column_width_mm"]["typical"] == pytest.approx(5, abs=0.2)
+    assert s["length_mm"] == pytest.approx(50, abs=3)
+    assert s["size_mm"][0] == pytest.approx(32.5, abs=0.5)  # square ends; the corner adds half the width
+    png = advisor.render_crop(ribbon, [])
+    assert Image.open(io.BytesIO(png)).size[0] > 16
+    req, objs = advisor.build_request({"items": [ribbon]}, [], ["r"])
+    assert [o["id"] for o in objs] == ["r"]
+
+
 # ---------------------------------------------------------------- Help
 
 
@@ -286,3 +301,61 @@ def test_background_methods_answer_without_blocking():
 def test_rpc_methods_registered():
     for m in ("ai.settings", "ai.save_settings", "ai.set_key", "ai.test", "ai.advisor_preview", "ai.advise", "help.search", "help.ask"):
         assert m in methods.dispatcher._methods
+
+
+# ---------------------------------------------------------------- QA phase 4
+
+
+def test_qa_settings_of_the_wrong_kind_are_refused_or_ignored():
+    with pytest.raises(settings.AISettingsError, match="right form"):
+        settings.save({"cloud": "openai"})
+    settings._file().parent.mkdir(parents=True, exist_ok=True)
+    settings._file().write_text(json.dumps({"mode": "local", "features": True, "cloud": {"price_in": "lots", "model": 5},
+                                            "local": {"model": "llava"}}), encoding="utf-8")
+    s = settings.load()
+    assert s["features"] == settings.DEFAULTS["features"] and s["cloud"]["price_in"] is None
+    assert s["cloud"]["model"] == settings.DEFAULTS["cloud"]["model"] and s["local"]["model"] == "llava"
+    assert isinstance(providers.current(), providers.Ollama)  # every AI call works again
+    assert settings.save({"cloud": {"price_in": 3, "price_out": 15.5}})["cloud"]["price_out"] == 15.5
+
+
+def test_qa_a_cloud_address_must_be_https_unless_on_this_computer():
+    with pytest.raises(settings.AISettingsError, match="https"):
+        settings.save({"cloud": {"base_url": "http://api.example.invalid/v1"}})
+    assert settings.save({"cloud": {"base_url": "http://localhost:8080/v1"}})["cloud"]["base_url"].startswith("http://localhost")
+    with pytest.raises(settings.AISettingsError):
+        settings.save({"local": {"url": "http://"}})
+
+
+def test_qa_a_model_on_another_machine_is_shown_before_sending():
+    req = Request(system="s", text="hello")
+    here = providers.estimate(req, providers.Ollama("http://127.0.0.1:11434", "llava"))
+    assert here["cloud"] is False and here["host"] == "127.0.0.1"
+    there = providers.estimate(req, providers.Ollama("http://192.168.1.20:11434", "llava"))
+    assert there["cloud"] is True and there["host"] == "192.168.1.20" and there["cost_usd_max"] is None
+    assert providers.estimate(req, providers.Anthropic("k", "m"))["host"] == "api.anthropic.com"
+
+
+def test_qa_settings_say_how_the_key_is_kept():
+    import sys
+
+    assert settings.public()["key_protection"] == ("windows" if sys.platform == "win32" else "file")
+    with pytest.raises(settings.AISettingsError):
+        settings.set_key(12345)
+
+
+def test_advisor_crops_show_the_shapes_around_each_one():
+    """Each shape's picture also shows its neighbours (in their thread colors), so the model sees
+    how the design fits together, not one shape alone."""
+
+    def square(id_, x0, color):
+        pts = [[x0, 0, "l"], [x0 + 10, 0, "l"], [x0 + 10, 10, "l"], [x0, 10, "l"]]
+        return {"id": id_, "kind": "fill", "geometry": {"outline": pts}, "params": {}, "thread": {"color": color}}
+
+    a, b = square("a", 0, "#ff0000"), square("b", 11, "#00ff00")
+    alone = Image.open(io.BytesIO(advisor.render_crop(a, [])))
+    together = Image.open(io.BytesIO(advisor.render_crop(a, [], [a, b])))
+    import numpy as np
+
+    green = lambda im: int(np.all(np.asarray(im.convert("RGB")) == (0, 255, 0), axis=-1).sum())  # noqa: E731
+    assert green(alone) == 0 and green(together) > 50

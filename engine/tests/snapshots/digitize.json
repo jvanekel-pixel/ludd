@@ -1,16 +1,100 @@
 {
+ "applique_square": {
+  "jumps": 2,
+  "records": 589,
+  "sha1": "bc52fd097ebe6b6e0a5447bbdbec949dfeb816e4",
+  "stitches": 585,
+  "trims": 0
+ },
+ "applique_with_hole_run_tack": {
+  "jumps": 5,
+  "records": 655,
+  "sha1": "bbcfa4c5cb6f1bc6695b9b2b36408de145f35af8",
+  "stitches": 648,
+  "trims": 0
+ },
+ "fill_bowtie": {
+  "jumps": 1,
+  "records": 373,
+  "sha1": "a0127ebb2fc8286db0791e9277ab410038dfa8eb",
+  "stitches": 371,
+  "trims": 1
+ },
+ "fill_contour": {
+  "jumps": 0,
+  "records": 99,
+  "sha1": "d6d1e941fefaca32dcf243603570f9c0794dc3b7",
+  "stitches": 99,
+  "trims": 0
+ },
+ "fill_cross": {
+  "jumps": 0,
+  "records": 141,
+  "sha1": "93b02bcd1309cea3228e348e7afc1b58953668a3",
+  "stitches": 141,
+  "trims": 0
+ },
+ "fill_cross_with_underlay": {
+  "jumps": 0,
+  "records": 174,
+  "sha1": "95e7ac2aaf5645b2e713f45310f824674144f5ad",
+  "stitches": 174,
+  "trims": 0
+ },
  "fill_donut": {
   "jumps": 0,
-  "records": 450,
-  "sha1": "0859143e3a251b05145e7b6f697dd96a011777bf",
-  "stitches": 450,
+  "records": 465,
+  "sha1": "012a86be26516fabdc312742e3a77c91952deafe",
+  "stitches": 465,
+  "trims": 0
+ },
+ "fill_gradient": {
+  "jumps": 0,
+  "records": 197,
+  "sha1": "cb2be07edf4ca66fca7bb29545e8b8fda1202f82",
+  "stitches": 197,
+  "trims": 0
+ },
+ "fill_heavy_auto_underlay": {
+  "jumps": 0,
+  "records": 588,
+  "sha1": "ad6e5b4d4a03b6a2f2a01da2db5543ef0a2006a9",
+  "stitches": 588,
+  "trims": 0
+ },
+ "fill_random_reverse": {
+  "jumps": 0,
+  "records": 668,
+  "sha1": "5e859a9d845dd53d576fc1582cf9272d99d5e0b6",
+  "stitches": 668,
   "trims": 0
  },
  "fill_square_45": {
   "jumps": 0,
-  "records": 559,
-  "sha1": "4b6ef29ed1ecac152c30cc7d7a0b4f3e59a7c819",
-  "stitches": 559,
+  "records": 558,
+  "sha1": "fd0514235a6821a9955199619af3bc52b5d2b8bb",
+  "stitches": 558,
+  "trims": 0
+ },
+ "fill_stipple": {
+  "jumps": 0,
+  "records": 84,
+  "sha1": "5df2c3bc32a075116fa5f587b3793029afd67b2e",
+  "stitches": 84,
+  "trims": 0
+ },
+ "fill_stipple_with_underlay": {
+  "jumps": 0,
+  "records": 118,
+  "sha1": "5ae0bd700c24860225f1a3e0cae6e443105e2ae2",
+  "stitches": 118,
+  "trims": 0
+ },
+ "fill_wave": {
+  "jumps": 0,
+  "records": 656,
+  "sha1": "ea066c9443da65d62249b9227a416776a2e06a49",
+  "stitches": 656,
   "trims": 0
  },
  "run_bean": {
@@ -20,6 +104,34 @@
   "stitches": 32,
   "trims": 0
  },
+ "run_motif_blanket_closed": {
+  "jumps": 0,
+  "records": 93,
+  "sha1": "70eff2ee7238f4094e43b7e172d6ac061f60f97a",
+  "stitches": 93,
+  "trims": 0
+ },
+ "run_motif_scallop": {
+  "jumps": 0,
+  "records": 77,
+  "sha1": "67ab03a4b8f65ef02580920cc84cb5de1af2d2a2",
+  "stitches": 77,
+  "trims": 0
+ },
+ "run_motif_wave": {
+  "jumps": 0,
+  "records": 69,
+  "sha1": "f75d082529acf224a0f11f3db028e55c25943a3d",
+  "stitches": 69,
+  "trims": 0
+ },
+ "run_motif_zigzag": {
+  "jumps": 0,
+  "records": 37,
+  "sha1": "2e2a71f4d6b5500d2ad79382b618f28e26f7abda",
+  "stitches": 37,
+  "trims": 0
+ },
  "run_single": {
   "jumps": 0,
   "records": 19,
@@ -27,11 +139,53 @@
   "stitches": 19,
   "trims": 0
  },
+ "run_triple": {
+  "jumps": 0,
+  "records": 47,
+  "sha1": "894992e3c0d35b268ddc677c3931782e0a09c17d",
+  "stitches": 47,
+  "trims": 0
+ },
  "satin_curved": {
   "jumps": 0,
   "records": 233,
   "sha1": "95926f8d8a8c7cf64d0ae01de7b8e71840b9b61c",
   "stitches": 233,
+  "trims": 0
+ },
+ "satin_edge_zigzag_underlay": {
+  "jumps": 0,
+  "records": 234,
+  "sha1": "1396f7e9399269740f5a5fad6ab41fbc8f5297b4",
+  "stitches": 234,
+  "trims": 0
+ },
+ "satin_ribbon_auto_comp_widen": {
+  "jumps": 0,
+  "records": 269,
+  "sha1": "cdaabf35b1c077cf191bc2edcfd864ed9c37d593",
+  "stitches": 269,
+  "trims": 0
+ },
+ "satin_ribbon_closed_square": {
+  "jumps": 0,
+  "records": 406,
+  "sha1": "4c8604164dcbbd6e41657ace1733ed17caaece0e",
+  "stitches": 406,
+  "trims": 0
+ },
+ "satin_ribbon_s_curve": {
+  "jumps": 0,
+  "records": 208,
+  "sha1": "f1abeaf069052da4481630dc33f78f0a4f40d07a",
+  "stitches": 208,
+  "trims": 0
+ },
+ "satin_ribbon_split": {
+  "jumps": 0,
+  "records": 531,
+  "sha1": "d81e1c99b243afaabf72d03fa4f0d9cc10a40843",
+  "stitches": 531,
   "trims": 0
  }
 }

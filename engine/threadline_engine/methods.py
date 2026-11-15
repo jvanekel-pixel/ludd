@@ -5,7 +5,7 @@ from __future__ import annotations
 import platform
 import sys
 
-from . import __version__, design, fabrics, lettering, profiles, project, threads, trace
+from . import __version__, autotrace, design, fabrics, lettering, profiles, project, threads, trace
 from . import layout as layout_module
 from .rpc import Dispatcher
 
@@ -24,6 +24,14 @@ def engine_info() -> dict[str, str]:
         "python": platform.python_version(),
         "platform": sys.platform,
     }
+
+
+@dispatcher.method("engine.shutdown")
+def engine_shutdown() -> bool:
+    """Stop after answering. The app asks this when it quits, so the packaged engine exits by itself
+    and deletes its unpacked files (being killed leaves them in the temp folder)."""
+    dispatcher.stopping = True
+    return True
 
 
 @dispatcher.method("formats.list")
@@ -104,13 +112,17 @@ def layout_preview_export(layout: dict, options: dict | None = None, ext: str | 
 
 
 @dispatcher.method("layout.export")
-def layout_export(layout: dict, dest: str, options: dict | None = None) -> dict:
-    return layout_module.export(layout, dest, options)
+def layout_export(layout: dict, dest: str, options: dict | None = None, keep_existing: bool = False) -> dict:
+    return layout_module.export(layout, dest, options, keep_existing)
 
 
-@dispatcher.method("layout.check")
+@dispatcher.method("layout.check", background=True)
 def layout_check(layout: dict, heatmap: bool = False) -> dict:
-    return layout_module.check(layout, heatmap)
+    """Off the main loop, so an edit's render never waits for the checks: only the render (which
+    uses the shared caches, and is usually already cached) takes the lock."""
+    with dispatcher.lock:
+        r = layout_module.render(layout)
+    return layout_module.check(layout, heatmap, rendered=r)
 
 
 @dispatcher.method("layout.split_plan")
@@ -164,8 +176,8 @@ def project_restore() -> dict:
 
 
 @dispatcher.method("project.discard_recovery")
-def project_discard_recovery() -> None:
-    project.discard_recovery()
+def project_discard_recovery(keep: bool = False) -> None:
+    project.discard_recovery(keep)
 
 
 @dispatcher.method("trace.info")
@@ -178,6 +190,121 @@ def trace_suggest(
     path: str, placement: dict, points: list, step_mm: float = 3.0, mode: str = "auto", closed: bool = False, satin: bool = False
 ) -> dict:
     return trace.suggest(path, placement, points, step_mm, mode, closed, satin)
+
+
+@dispatcher.method("shape.offset")
+def shape_offset(layout: dict, ids: list, distance_mm: float, spacing: float = 3.0, holes: bool = False) -> dict:
+    from . import shapeops
+
+    return shapeops.offset(layout, ids, distance_mm, spacing, holes)
+
+
+@dispatcher.method("shape.split")
+def shape_split(obj: dict, a: list, b: list, spacing: float = 3.0) -> dict:
+    from . import shapeops
+
+    return shapeops.split(obj, tuple(a), tuple(b), spacing)
+
+
+@dispatcher.method("shape.cut_out")
+def shape_cut_out(target: dict, cutters: list, spacing: float = 3.0) -> dict:
+    from . import shapeops
+
+    return shapeops.cut_out(target, cutters, spacing)
+
+
+@dispatcher.method("shape.satin_fill")
+def shape_satin_fill(outline: list, way: int = 0, tips: list | None = None) -> dict:
+    """Fill a closed shape with one satin that turns with it (its two sides, split at its tips;
+    `tips`: the two tips chosen by hand)."""
+    from .digitize.satinfill import satin_fill
+
+    return satin_fill(outline, way, tips)
+
+
+@dispatcher.method("shape.merge")
+def shape_merge(objs: list, spacing: float = 3.0) -> dict:
+    from . import shapeops
+
+    return shapeops.merge(objs, spacing)
+
+
+@dispatcher.method("library.scan", background=True)
+def library_scan(folder: str, recursive: bool = True, query: str = "") -> dict:
+    from . import library
+
+    return library.scan(folder, recursive, query)
+
+
+@dispatcher.method("layout.optimize_jumps")
+def layout_optimize_jumps(layout: dict) -> dict:
+    """Where each piece starts and ends, so jumps between same-thread pieces are shortest."""
+    from .jumps import optimize_jumps
+
+    return optimize_jumps(layout)
+
+
+@dispatcher.method("text.to_shapes")
+def text_to_shapes(item: dict) -> dict:
+    """Lettering as drawn shapes, one per letter part, to edit like any other shape."""
+    return layout_module.text_to_shapes(item)
+
+
+@dispatcher.method("text.letter_frame")
+def text_letter_frame(item: dict, at: list) -> list:
+    """A point on the design (mm) in a text's own unturned frame, where its letters' chosen starts
+    and ends are kept."""
+    t = layout_module.Transform.from_dict(item.get("transform"))
+    from .jumps import _unturn
+
+    return list(_unturn(t, (float(at[0]) - t.x, float(at[1]) - t.y)))
+
+
+@dispatcher.method("shape.set_end")
+def shape_set_end(obj: dict, which: str, at: list) -> dict:
+    """Drag a drawn piece's start (green dot) or end (red dot) to `at`: the piece, changed to suit."""
+    from .jumps import set_end
+
+    return set_end(obj, which, at)
+
+
+@dispatcher.method("layout.optimize_order")
+def layout_optimize_order(layout: dict) -> dict:
+    return layout_module.optimize_order(layout)
+
+
+@dispatcher.method("trace.digitize_all", background=True)
+def trace_digitize_all(path: str, placement: dict, spacing_mm: float = 3.0, spread: int = 5, outlines: bool = True,
+                       skip_background: bool = True) -> dict:
+    return autotrace.digitize_all(path, placement, spacing_mm, spread, outlines, skip_background)
+
+
+@dispatcher.method("trace.region", background=True)
+def trace_region(path: str, placement: dict, at: list, spacing_mm: float = 3.0, add: list | None = None,
+                 subtract: list | None = None, spread: int = 5, use_ai: bool = False, taken: list | None = None) -> dict:
+    return autotrace.region(path, placement, at, spacing_mm, add, subtract, spread, use_ai, taken)
+
+
+# AI tracing model (optional): only downloaded when the user presses Download in Settings.
+@dispatcher.method("ai.trace_model")
+def ai_trace_model() -> dict:
+    from .ai import segment
+
+    return segment.status()
+
+
+@dispatcher.method("ai.trace_model_download", background=True)
+def ai_trace_model_download() -> dict:
+    from .ai import segment
+
+    return segment.download()
+
+
+@dispatcher.method("ai.trace_model_remove")
+def ai_trace_model_remove() -> dict:
+    from .ai import segment
+
+    return segment.remove()
 
 
 @dispatcher.method("fonts.list")

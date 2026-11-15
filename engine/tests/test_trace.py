@@ -158,3 +158,44 @@ def test_placement_round_trip_with_rotation():
 def test_missing_picture_is_a_clear_error(tmp_path):
     with pytest.raises(trace.TraceError, match="not found"):
         trace.suggest(str(tmp_path / "nope.png"), PLACE, [[0, 0]])
+
+
+# ---------------------------------------------------------------- reading pictures (shared with Auto-trace)
+
+
+def test_16_bit_greyscale_keeps_its_mid_tones(tmp_path):
+    a = Image.new("L", (400, 300), 255)
+    ImageDraw.Draw(a).ellipse((50, 40, 250, 240), fill=120)
+    a.save(tmp_path / "g8.png")
+    Image.fromarray(np.asarray(a, dtype=np.uint16) * 257).save(tmp_path / "g16.png")
+    assert Image.open(tmp_path / "g16.png").mode.startswith("I")
+    g8 = np.asarray(trace.open_picture(tmp_path / "g8.png", 1600))
+    g16 = np.asarray(trace.open_picture(tmp_path / "g16.png", 1600))
+    assert np.abs(g8.astype(int) - g16.astype(int)).max() <= 1
+    m8, m16 = trace.prepare(str(tmp_path / "g8.png")), trace.prepare(str(tmp_path / "g16.png"))
+    assert np.allclose(m8.darkness, m16.darkness, atol=0.02)
+
+
+def test_big_pictures_are_made_small_early_and_turned_like_on_screen(tmp_path):
+    img = Image.new("RGB", (4000, 1000), "white")
+    ImageDraw.Draw(img).rectangle((0, 0, 999, 999), fill="black")  # black on the left
+    exif = Image.Exif()
+    exif[0x0112] = 6  # shown turned 90 degrees clockwise
+    img.save(tmp_path / "big.jpg", exif=exif)
+    out = trace.open_picture(tmp_path / "big.jpg", 1600)
+    assert out.mode == "RGB" and out.size == (400, 1600)
+    a = np.asarray(out.convert("L"))
+    assert a[:300].mean() < 40 and a[500:].mean() > 220  # the black end is now at the top
+
+
+def test_a_too_big_picture_is_a_plain_error(tmp_path, monkeypatch):
+    Image.new("RGB", (100, 100), "white").save(tmp_path / "huge.png")
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 1000)  # 10,000 px is "too big" for this test
+    with pytest.raises(trace.TraceError, match="too big to trace"):
+        trace.open_picture(tmp_path / "huge.png", 1600)
+
+
+def test_an_unreadable_file_is_a_plain_error(tmp_path):
+    (tmp_path / "bad.png").write_bytes(b"\x89PNG\r\n\x1a\nnot really")
+    with pytest.raises(trace.TraceError, match="Couldn't read"):
+        trace.suggest(str(tmp_path / "bad.png"), PLACE, [[0, 0]])

@@ -1,0 +1,85 @@
+{
+ "basting_box_round_two_squares": {
+  "jumps": 2,
+  "records": 803,
+  "sha1": "0a291694ee543431dea5e0f9aa6fb83ca3344e31",
+  "stitches": 797,
+  "threads": [
+   "#9e9e9e",
+   "#cc2222"
+  ],
+  "trims": 2
+ },
+ "knockdown_under_a_square": {
+  "jumps": 0,
+  "records": 789,
+  "sha1": "e246875657e55b190bdf274cfe0fc347cba5fbae",
+  "stitches": 787,
+  "threads": [
+   "#f2efe8",
+   "#cc2222"
+  ],
+  "trims": 0
+ },
+ "knockdown_under_text": {
+  "jumps": 1,
+  "records": 489,
+  "sha1": "657f7d2d83f506dbd4f0f966e1b2dbb9fe18f070",
+  "stitches": 485,
+  "threads": [
+   "#f2efe8",
+   "#cc2222"
+  ],
+  "trims": 1
+ },
+ "lettering_fill_line": {
+  "jumps": 1,
+  "records": 353,
+  "sha1": "838816a45ce996e8e89cb363f2ea3a14c46b136a",
+  "stitches": 350,
+  "threads": [
+   "#cc2222"
+  ],
+  "trims": 1
+ },
+ "lettering_monogram": {
+  "jumps": 2,
+  "records": 349,
+  "sha1": "53acb107f00bd42d75fd5ab5f4ed44d1f907b4c0",
+  "stitches": 344,
+  "threads": [
+   "#cc2222"
+  ],
+  "trims": 2
+ },
+ "lettering_on_a_drawn_line": {
+  "jumps": 1,
+  "records": 294,
+  "sha1": "ebc8a2fff187bc48153ae4658573095e1c3986a7",
+  "stitches": 292,
+  "threads": [
+   "#cc2222"
+  ],
+  "trims": 0
+ },
+ "lettering_satin_arc_up": {
+  "jumps": 4,
+  "records": 516,
+  "sha1": "643823d792a0571533dcbf8f089b6846a40c325f",
+  "stitches": 507,
+  "threads": [
+   "#cc2222"
+  ],
+  "trims": 4
+ },
+ "lettering_satin_line": {
+  "jumps": 2,
+  "records": 430,
+  "sha1": "5c5ca1f0243f3fc3b5c80b5523cb7ee15d240458",
+  "stitches": 427,
+  "threads": [
+   "#cc2222"
+  ],
+  "trims": 0
+ }
+}

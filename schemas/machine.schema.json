@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://threadline.app/schemas/machine.schema.json",
-  "title": "Threadline machine profile",
-  "description": "Save as <data dir>/machines/<id>.json (Windows: %APPDATA%\\Threadline\\machines). A profile with a built-in's id replaces it.",
+  "title": "LUDD machine profile",
+  "description": "Save as <data dir>/machines/<id>.json (Windows: %APPDATA%\\Ludd\\machines). A profile with a built-in's id replaces it.",
   "type": "object",
   "required": ["id", "name", "formats", "hoops", "cuts"],
   "properties": {

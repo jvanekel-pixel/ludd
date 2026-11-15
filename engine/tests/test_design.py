@@ -79,8 +79,14 @@ def test_export_roundtrips_stitch_positions(pes_file, tmp_path, ext):
     pts = lambda r: [(x, y) for x, y, k in zip(r["x"], r["y"], r["kind"]) if k == design.STITCH]  # noqa: E731
     pa, pb = pts(a), pts(b)
     assert len(pa) == len(pb)
-    # VP3 re-centres the design and can round by one machine unit (0.1 mm).
+    # VP3 re-centres the design and can round by one machine unit (0.1 mm). JEF is written centred
+    # on the hoop (its header assumes so): the same stitches, moved as a whole.
     tol = 0.1 if ext == "vp3" else 0.0
+    if ext == "jef":
+        xs = [p[0] for p in pb]
+        assert abs(min(xs) + max(xs)) <= 0.1 + 1e-9  # centred
+        dx, dy = pb[0][0] - pa[0][0], pb[0][1] - pa[0][1]
+        pb = [(x - dx, y - dy) for x, y in pb]
     assert max(max(abs(p[0] - q[0]), abs(p[1] - q[1])) for p, q in zip(pa, pb)) <= tol + 1e-9
 
 
@@ -151,3 +157,122 @@ def test_convert_folder(tmp_path, pes_file):
     dests = sorted(c["dest"] for c in again["converted"])
     assert dests == sorted([str(dest / "sample (1).jef"), str(dest / "sub" / "inner.jef")])
     assert design.open_design(str(dest / "sub" / "inner.jef"))["info"]["stitches"] == 44
+
+
+# ---------------------------------------------------------------- phase 4 (QA medium and low findings)
+
+import os  # noqa: E402
+
+M = pe.COMMAND_MASK
+
+
+def _many_colours(n):
+    p = pe.EmbPattern()
+    for i in range(n):
+        p.add_thread(pe.EmbThread("#%06x" % ((i * 977 + 13) & 0xFFFFFF), f"T{i}"))
+    for i in range(n):
+        p.stitch_abs(i * 5, 0)
+        p.stitch_abs(i * 5 + 3, 3)
+        if i < n - 1:
+            p.color_change()
+    p.end()
+    return p
+
+
+def test_qa4_a_failed_save_leaves_the_old_file_alone(tmp_path, monkeypatch):
+    good = tmp_path / "keep.pes"
+    design.write(_many_colours(3), good)
+    before = good.read_bytes()
+
+    def broken(pattern, filename, settings=None):
+        with open(filename, "wb") as f:
+            f.write(b"half a fi")
+        raise RuntimeError("disk on fire")
+
+    monkeypatch.setattr(design.pe, "write", broken)
+    with pytest.raises(design.DesignError, match="disk on fire"):
+        design.write(_many_colours(3), good)
+    assert good.read_bytes() == before
+    assert [f.name for f in tmp_path.iterdir()] == ["keep.pes"]  # no half-written temp file left
+
+
+def test_qa4_pes_over_255_colour_steps_says_so_before_writing(tmp_path):
+    design.write(_many_colours(255), tmp_path / "ok.pes")
+    with pytest.raises(design.DesignError, match="at most 255 color steps"):
+        design.write(_many_colours(256), tmp_path / "many.pes")
+    assert not (tmp_path / "many.pes").exists()
+
+
+def test_qa4_accented_thread_names_keep_the_pes_thread_table_readable(tmp_path):
+    p = pe.EmbPattern()
+    names = ["Grün", "Café au lait", "Plain", "Blue"]
+    cols = ["#ff0000", "#00ff00", "#0000ff", "#ffff00"]
+    for n, c in zip(names, cols):
+        p.add_thread(pe.EmbThread(c, n, "1001", brand="Madeira"))
+    for i in range(4):
+        p.stitch_abs(i * 50, 0)
+        p.stitch_abs(i * 50 + 30, 0)
+        if i < 3:
+            p.color_change()
+    p.end()
+    design.write(p, tmp_path / "u.pes")
+    back = pe.read(str(tmp_path / "u.pes"))
+    assert [t.hex_color() for t in back.threadlist] == cols
+    assert [t.description for t in back.threadlist] == ["Grun", "Cafe au lait", "Plain", "Blue"]
+    assert p.threadlist[0].description == "Grün"  # the design itself is unchanged
+
+
+def test_qa4_long_stitches_are_sewn_in_pieces_not_jumped(tmp_path):
+    p = pe.EmbPattern()
+    p.add_thread(pe.EmbThread("#ff0000", "R"))
+    p.stitch_abs(0, 0)
+    p.stitch_abs(144, 0)  # 14.4 mm: longer than JEF's 12.7 mm
+    p.stitch_abs(0, 0)
+    p.end()
+    design.write(p, tmp_path / "long.jef")
+    back = pe.read(str(tmp_path / "long.jef"), {"trims": True})
+    kinds = [c & M for *_, c in back.stitches if c & M != pe.END]
+    assert pe.JUMP not in kinds[1:] and pe.TRIM not in kinds
+    assert kinds.count(pe.STITCH) >= 5
+
+
+def test_qa4_jef_is_centred_on_the_hoop(tmp_path):
+    p = pe.EmbPattern()
+    p.add_thread(pe.EmbThread("#ff0000", "R"))
+    for x in range(0, 501, 50):
+        p.stitch_abs(x, 200)
+    p.end()
+    design.write(p, tmp_path / "c.jef")
+    xs = [x for x, y, c in pe.read(str(tmp_path / "c.jef")).stitches if c & M == pe.STITCH]
+    assert min(xs) == -max(xs) == -250
+
+
+def test_qa4_nothing_to_sew_is_refused_before_touching_the_file(tmp_path):
+    p = pe.EmbPattern()
+    p.add_thread(pe.EmbThread("#ff0000", "R"))
+    p.move_abs(100, 100)
+    p.end()
+    for ext in ("pes", "jef"):
+        with pytest.raises(design.DesignError, match="nothing to sew"):
+            design.write(p, tmp_path / f"e.{ext}")
+        assert not (tmp_path / f"e.{ext}").exists()
+
+
+def test_qa4_plain_messages_for_odd_file_names(tmp_path):
+    with pytest.raises(design.DesignError, match="for example noext.pes"):
+        design.write(make_pattern(), tmp_path / "noext")
+    with pytest.raises(design.DesignError, match="Choose a name ending in .pes"):
+        design.write(make_pattern(), tmp_path / "x.qqq")
+    if os.name == "nt":
+        with pytest.raises(design.DesignError, match="Windows keeps"):
+            design.write(make_pattern(), tmp_path / "CON.pes")
+
+
+def test_qa4_batch_convert_into_the_source_folder_converts(tmp_path):
+    src = tmp_path / "in"
+    src.mkdir()
+    pe.write(make_pattern(), str(src / "a.pes"))
+    r = design.convert_folder(str(src), str(src), "jef")
+    assert len(r["converted"]) == 1 and (src / "a.jef").exists()
+    r = design.convert_folder(str(src), str(tmp_path), "jef")  # a folder that holds the source
+    assert len(r["converted"]) >= 1

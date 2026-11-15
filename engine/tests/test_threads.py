@@ -116,3 +116,62 @@ def test_my_threads_add_match_remove():
 
     threads.my_remove([{"brand": "", "code": "", "color": "#1e2a5a"}, {"brand": "Janome", "code": janome[0]["code"]}])
     assert [t["code"] for t in threads.my_threads()["threads"]] == [janome[1]["code"]]
+
+
+# ---------------------------------------------------------------- QA phase 4: user files
+
+
+def test_qa_a_broken_user_file_never_takes_the_charts_down(isolated_data_dir):
+    d = isolated_data_dir / "threads"
+    d.mkdir(parents=True)
+    (d / "my-threads.json").write_text('{"id": "my-threads", "name": "My thr', encoding="utf-8")  # cut short
+    (d / "list.json").write_text("[]", encoding="utf-8")
+    (d / "nothreads.json").write_text('{"id": "x", "name": "X"}', encoding="utf-8")
+    (d / "latin.json").write_bytes(b'{"id": "\xff"}')
+    (d / "bom.json").write_bytes(b"\xef\xbb\xbf" + b'{"id": "bom", "name": "BOM", "brand": "B", "threads": []}')
+    ids = [c["id"] for c in threads.list_charts()]
+    assert ids[0] == "my-threads" and "janome" in ids and "bom" in ids
+    assert threads.my_threads()["threads"] == []  # a fresh list; the damaged one is kept aside
+    assert (d / "my-threads.damaged.json.bak").exists()
+    threads.my_add([{"code": "1", "color": "#ff0000"}])
+    assert len(threads.my_threads()["threads"]) == 1
+
+
+def test_qa_user_files_are_written_whole_or_not_at_all(isolated_data_dir, monkeypatch):
+    threads.my_add([{"code": "1", "color": "#ff0000"}])
+    import json as _json
+
+    def boom(*a, **k):
+        raise OSError(28, "No space left on device")
+
+    with monkeypatch.context() as m:
+        m.setattr(_json, "dump", boom)
+        with pytest.raises(threads.ThreadError, match="Couldn't save"):
+            threads.my_add([{"code": "2", "color": "#00ff00"}])
+    assert [t["code"] for t in threads.my_threads()["threads"]] == ["1"]
+    assert not [p for p in (isolated_data_dir / "threads").iterdir() if p.suffix == ".tmp"]
+
+
+def test_qa_chart_ids_cant_reach_outside_the_charts_folder(isolated_data_dir, tmp_path):
+    precious = tmp_path / "precious.json"
+    precious.write_text('{"keep": "me"}')
+    (isolated_data_dir / "threads").mkdir(parents=True)
+    for bad in ("../../precious", "..\\precious", "/etc/x", "", None, 5):
+        with pytest.raises(threads.ThreadError):
+            threads.get_chart(bad)
+        with pytest.raises(threads.ThreadError):
+            threads.delete_chart(bad)
+    assert precious.exists()
+    threads.my_add([{"code": "1", "color": "#ff0000"}])
+    with pytest.raises(threads.ThreadError, match="My threads"):
+        threads.delete_chart("my-threads")
+    assert threads.my_threads()["threads"]
+
+
+def test_qa_bad_spools_and_colors_get_a_plain_message():
+    with pytest.raises(threads.ThreadError):
+        threads.my_add([{"code": "1"}])
+    with pytest.raises(threads.ThreadError):
+        threads.my_add(["red"])
+    with pytest.raises(threads.ThreadError):
+        threads.match([None], "janome")
