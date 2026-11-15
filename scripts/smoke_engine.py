@@ -120,4 +120,6 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         raise SystemExit(__doc__)
     exe = Path(sys.argv[1])
-    smoke([str(exe.resolve()) if exe.exists() else sys.argv[1], *sys.argv[2:]])  # extra words: e.g. `python -m threadline_engine` to try it from source
+    # abspath, not resolve(): a virtual environment's python is a symlink on Linux and macOS, and following it
+    # runs the real interpreter outside the environment (no OpenCV, no engine libraries).
+    smoke([os.path.abspath(exe) if exe.exists() else sys.argv[1], *sys.argv[2:]])  # extra words: e.g. `python -m threadline_engine` to try it from source
