@@ -1,5 +1,8 @@
 # Dependabot opens pull requests for updates. Nothing is merged on its own; CI runs on each one.
 # Actions are pinned by commit SHA (with the version in a comment); Dependabot keeps those current.
+#
+# Each group holds only minor and patch updates. A major version arrives as its own pull request, so a
+# big jump (TypeScript, Vite, Vitest, ...) is never mixed in with safe ones.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -9,6 +12,13 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      # 1.0 renames options release.yml uses (includeUpdaterJson), changes the update file names that the
+      # latest.json job reads, and rewrites the draft release's name and text. Move to it by hand, together
+      # with release.yml, and check a draft release.
+      - dependency-name: tauri-apps/tauri-action
+        update-types: [version-update:semver-major]
   - package-ecosystem: npm
     directory: /
     schedule:
@@ -16,6 +26,11 @@ updates:
     groups:
       npm:
         patterns: ["*"]
+        update-types: [minor, patch]
+    ignore:
+      # CI and the release build run Node 22, so keep the Node type definitions on a matching major.
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
   - package-ecosystem: cargo
     directory: /apps/desktop/src-tauri
     schedule:
@@ -23,6 +38,7 @@ updates:
     groups:
       cargo:
         patterns: ["*"]
+        update-types: [minor, patch]
   - package-ecosystem: uv
     directory: /engine
     schedule:
@@ -30,3 +46,4 @@ updates:
     groups:
       python:
         patterns: ["*"]
+        update-types: [minor, patch]
