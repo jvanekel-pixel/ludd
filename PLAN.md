@@ -26,9 +26,9 @@ Why it matters: about 100 modified and 70 new files sit uncommitted, so until th
 - [x] QA phase 4 (Medium/Low) fixed area by area (docs/qa-phase4/)
 - [x] Knowledge base for the help agent (docs/LUDD-KNOWLEDGE-BASE.md)
 - [x] Owner approves committing the uncommitted working tree; commit in logical groups (5 local commits, not pushed)
-- [ ] Owner decides the 20 open items listed in docs/QA-RESPONSE.md
+- [x] Owner decides the 20 open items listed in docs/QA-RESPONSE.md (decided 2026-11-14; applied in ed160f1)
 - [ ] Run the second QA pass using docs/QA-PROMPT.md and fix what it finds
-- [ ] Push to GitHub and confirm CI is green on Windows, both Macs and Linux
+- [x] Push to GitHub and confirm CI is green on Windows, both Macs and Linux (green at 46b0de4, incl. the Windows installer job)
 - [ ] Tag v1.0.1, check the draft release's `latest.json` URLs, owner publishes
 
 ## Phase 3: Stitch-Out Verification on the PE550D
@@ -54,4 +54,4 @@ Why it matters: after the core is verified, only owner-chosen backlog items shou
 - [ ] Guided first-design tutorial and contextual hints / F1 help per tool
 - [ ] Push compensation along stitch direction (after a patent check)
 - [ ] Stitch time and thread usage estimate
-- [ ] Write the project, fabric and thread-chart JSON Schemas, or drop the promise from AGENTS.md (decision item 11)
+- [ ] Write the project, fabric and thread-chart JSON Schemas (optional: AGENTS.md no longer promises them, decision item 11)

@@ -38,11 +38,21 @@ def tiny_png(path: Path, size: int = 40) -> None:
 class Engine:
     def __init__(self, command: list[str], data_dir: str) -> None:
         env = dict(os.environ, THREADLINE_DATA_DIR=data_dir)
+        # The engine's own messages go to a file so a failure can say why (they used to be thrown away).
+        self.err_path = Path(data_dir) / "engine-stderr.txt"
+        self.err = open(self.err_path, "wb")
         self.p = subprocess.Popen(
-            command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self.err,
             env=env, text=True, encoding="utf-8",
         )
         self.next_id = 0
+
+    def why(self) -> str:
+        """What the engine said on its way out, and whether it is still running."""
+        self.err.flush()
+        text = self.err_path.read_text(encoding="utf-8", errors="replace").strip()
+        state = "still running" if self.p.poll() is None else f"exited with code {self.p.returncode}"
+        return f"engine {state}; its messages: {text[-1500:] or '(none)'}"
 
     def call(self, method: str, timeout: float = 120, **params):
         self.next_id += 1
@@ -52,12 +62,18 @@ class Engine:
         self.p.stdin.flush()
         reply: dict = {}
 
+        stray: list[str] = []
+
         def read() -> None:
             while True:
                 line = self.p.stdout.readline()
                 if not line:
                     return
-                msg = json.loads(line)
+                try:
+                    msg = json.loads(line)
+                except ValueError:
+                    stray.append(line.rstrip()[:200])  # not an answer: note it and keep reading
+                    continue
                 if msg.get("id") == rid:
                     reply.update(msg)
                     return
@@ -66,7 +82,8 @@ class Engine:
         t.start()
         t.join(timeout)
         if not reply:
-            raise SystemExit(f"smoke: no answer to {method} within {timeout:.0f} s")
+            gone = "the engine closed its output" if not t.is_alive() else f"nothing came back within {timeout:.0f} s"
+            raise SystemExit(f"smoke: no answer to {method}: {gone}. {self.why()}. Stray output: {stray[:5] or 'none'}")
         if "error" in reply:
             raise SystemExit(f"smoke: {method} failed: {reply['error']}")
         return reply["result"]
@@ -95,6 +112,7 @@ def smoke(command: list[str]) -> None:
         finally:
             if eng.p.poll() is None:
                 eng.p.kill()
+            eng.err.close()  # Windows can't delete the scratch folder while this is open
     print("smoke: ok")
 
 
@@ -102,4 +120,6 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         raise SystemExit(__doc__)
     exe = Path(sys.argv[1])
-    smoke([str(exe.resolve()) if exe.exists() else sys.argv[1], *sys.argv[2:]])  # extra words: e.g. `python -m threadline_engine` to try it from source
+    # abspath, not resolve(): a virtual environment's python is a symlink on Linux and macOS, and following it
+    # runs the real interpreter outside the environment (no OpenCV, no engine libraries).
+    smoke([os.path.abspath(exe) if exe.exists() else sys.argv[1], *sys.argv[2:]])  # extra words: e.g. `python -m threadline_engine` to try it from source
