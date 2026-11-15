@@ -1,10 +1,5 @@
 # Embroidery Studio: Research & Build Plan
 
-|  |  |  |
-| --- | --- | --- |
-|  |  |  |
-|  |  |  |
-
 Oct 11, 2026 · @Copper
 
 ## Summary
@@ -118,7 +113,9 @@ These are the rules Claude Code should check every feature against.
 
 Use a Tauri desktop shell with a React UI, and a Python engine running beside it. You already know React, and the embroidery ecosystem (file formats, geometry, the best open-source stitch algorithms) lives in Python.
 
-&#91;embedded content: architecture · app, engine, files, optional AI\]
+*(Diagram in the original plan: the app (Tauri shell and React UI) talks to the Python engine,
+which reads and writes files; the optional AI box sits beside the engine and can only send it
+proposals.)*
 
 The UI only draws and sends commands; all stitch math, file I/O and Trace Assist run in the engine. AI can only hand the engine proposals, and the whole AI box can be switched off. Trace Assist is highlighted because it's the differentiator, and it lives in the engine, not the AI box.
 
@@ -127,12 +124,12 @@ The UI only draws and sends commands; all stitch math, file I/O and Trace Assist
 | App shell | Tauri 2 (Rust) | Small installers for Windows, Mac and Linux, built-in auto-updater, runs a bundled sidecar process |
 | UI | React + TypeScript + Vite | Your existing skills |
 | Canvas | PixiJS (WebGL) for stitches; SVG overlay for paths and handles | Smooth pan and zoom on 100k+ stitch designs |
-| State and undo | Zustand + Immer, command pattern | Every edit is an undoable command |
+| State and undo | Zustand (plain immutable updates; Immer wasn't needed), command pattern | Every edit is an undoable command |
 | Engine | Python 3.12 sidecar, JSON-RPC over stdio | Stitch generation, file I/O, vision |
 | File I/O | [pyembroidery](https://github.com/EmbroidePy/pyembroidery) (MIT) | Reads 40+ formats; writes PES, DST, EXP, JEF, VP3, U01, PEC, XXX, TBF; handles stop, trim, needle set and sequins |
-| Geometry | Shapely 2, numpy, networkx | Offsets, clipping, fill routing |
-| Vision | OpenCV ([Intelligent Scissors](https://docs.opencv.org/4.x/df/d6b/classcv_1_1segmentation_1_1IntelligentScissorsMB.html), edges, color reduction), [vtracer](https://github.com/visioncortex/vtracer) (MIT) | Trace Assist, magic wand, vector tracing |
-| ML runtime (optional download) | ONNX Runtime with CUDA, DirectML or CPU; SAM 2.1 tiny (Apache-2.0) | Click-to-region on photos |
+| Geometry | Shapely 2, numpy (networkx was planned but not needed) | Offsets, clipping, fill routing |
+| Vision | OpenCV (edges, color reduction, region growing; as built, vtracer and Intelligent Scissors weren't used) | Trace Assist, Auto-trace, whole-picture digitizing |
+| ML runtime (optional download) | ONNX Runtime on the CPU (bundled except on Intel Macs, where it has no build); MobileSAM (Apache-2.0), downloaded only when asked | AI guesses in Auto-trace for photos |
 | AI providers (optional) | Ollama on localhost; Anthropic or any OpenAI-compatible API with the user's own key | Stitch Advisor, help assistant |
 | Packaging and CI | PyInstaller-frozen engine bundled as a Tauri sidecar; GitHub Actions matrix builds | One installer per OS on every release |
 
@@ -210,14 +207,15 @@ AI is a settings switch with three positions, off by default. Users who want it 
 
 Eleven milestones take you from an empty repo to a v1.0 installer. Each one ends with something you can use and a check you can run yourself; hand Claude Code one at a time.
 
-&#91;embedded content: roadmap · 4 phases, 11 milestones, a gate after each phase\]
+*(Diagram in the original plan: the eleven milestones in four phases, with a check after each
+phase.)*
 
 Phases are in order, not to scale. Each diamond is the check that must pass before the next phase starts.
 
 1. **M0 Scaffold.** Tauri + React app, Python engine sidecar answering a ping, CI building a Windows installer.
    - Done when: the installer runs on your PC and the status bar shows "Engine connected".
 2. **M1 Viewer and converter.** Open any format pyembroidery reads; render stitches in thread colors; info panel (size in mm, stitch count, colors, trims, stops); stitch player with scrubbing; export to other formats; batch-convert a folder.
-   - Done when: 20 files from your own library open correctly, and a converted file stitches on your machine.
+   - Done when: 20 files from your own library open correctly, and a converted file stitches on your machine. (As run: the owner's library gave 11 readable PES files plus Embrilliance `.be` files, which are proprietary; the stitch-out is queued in stitchout-log.md.)
 3. **M2 Machines, hoops, threads.** Machine profile for your machine first; hoop overlay with out-of-hoop warning; thread chart import from CSV; recolor and match to a brand. **Cut-stops** (added Oct 11, 2026): for machines that only cut at color changes (the PE550D), export can turn trims and long jumps into same-color stops so the machine ties off and cuts; tie-in stitches on resume; the export screen shows how many stops it adds.
    - Done when: picking your machine shows its hoops, exports respect its limits, and a cut-stop export stitches on the PE550D with the jump threads cut.
 4. **M3 Edit existing designs.** Move, rotate, mirror, scale (warn past ±20%); merge designs; color sort and merge; delete a color block; insert stop or trim; jumps to trims; basting box; print 1:1 template and run sheet. Also (added Oct 11, 2026): a zoom-adaptive grid centred on the hoop, inches by default, covering the whole canvas.
@@ -243,37 +241,37 @@ These are the features beyond M0–M10, sorted by phase and then value. Change t
 
 | Feature | Seen in | Value | Effort | Phase |
 | --- | --- | --- | --- | --- |
-| Motif run and motif fill, with custom motifs | StitchArtist, Hatch Digitizer | High | M | v1.x |
-| Stipple fill | StitchArtist L1 | High | S | v1.x |
+| Motif run and motif fill, with custom motifs | StitchArtist, Hatch Digitizer | High | M | v1.x: partly shipped in 1.0.1 (motif lines; no motif fill or custom motifs) |
+| Stipple fill | StitchArtist L1 | High | S | v1.x: shipped in 1.0.1 |
 | Push compensation along the stitch direction | Described as missing in patent background | High | M | v1.x |
-| Auto sequence optimizer (fewer trims, jumps, color changes) | All three | High | M | v1.x |
-| Design library with thumbnails, search and OS thumbnails | Embrilliance Thumbnailer, Hatch Design Explorer | High | M | v1.x |
+| Auto sequence optimizer (fewer trims, jumps, color changes) | All three | High | M | v1.x: partly shipped in 1.0.1 (fewer jumps & trims, shortest order, sort colors) |
+| Design library with thumbnails, search and OS thumbnails | Embrilliance Thumbnailer, Hatch Design Explorer | High | M | v1.x: partly shipped in 1.0.1 (Browse designs; no OS thumbnails) |
 | Thread inventory and shopping list | Not in the three | High | S | v1.x |
 | SVG, DXF and PDF import | StitchArtist L2, Hatch 4 DXF | High | M | v1.x |
 | Guided first-design tutorial | Hatch Academy | High | M | v1.x |
 | Contextual hints panel and F1 help for the tool in use | Hatch Hints Docker | High | M | v1.x |
-| Gradient and feathered fills | StitchArtist L2 | Medium | M | v1.x |
+| Gradient and feathered fills | StitchArtist L2 | Medium | M | v1.x: partly shipped in 1.0.1 (gradient) |
 | Monogram templates and ornaments | Hatch Personalizer | Medium | M | v1.x |
 | Stitch time and thread usage estimate | Wilcom Estimator | Medium | S | v1.x |
 | Command palette and custom shortcuts | Hatch 4 added shortcuts | Medium | S | v1.x |
 | Multi-color blending in one object | Hatch Multi Blend, Wilcom | Medium | L | v2 |
-| Contour, spiral and maze fills | StitchArtist L2, Wilcom Elements | Medium | M | v2 |
+| Contour, spiral and maze fills | StitchArtist L2, Wilcom Elements | Medium | M | v2: partly shipped in 1.0.1 (contour) |
 | Fill embossing and carving lines | StitchArtist L2–3, Hatch Digitizer | Medium | M | v2 |
 | 3D foam satin with auto underlay and caps | StitchArtist L2, Hatch Digitizer | Medium | M | v2 |
 | Patch edge (faux merrow) and patch workflow | StitchArtist L3, PatchArtist | Medium | M | v2 |
 | Freestanding lace background | StitchArtist L1 | Medium | M | v2 |
 | Cap frame center-out sequencing | Embrilliance lettering | Medium | S | v2 |
 | Multi-needle color-to-needle assignment | Commercial software | Medium | M | v2 |
-| Realistic preview and garment mock-up export | Embrilliance Enthusiast PNG export | Medium | M | v2 |
+| Realistic preview and garment mock-up export | Embrilliance Enthusiast PNG export | Medium | M | v2: partly shipped in 1.0.1 (garment preview; no export) |
 | Python plugin and scripting API | Not in the three | Medium | M | v2 |
 | Translations | All three | Medium | M | v2 |
 | Eyelets, candlewicking, French knots | StitchArtist L2–3 | Low | S | v2 |
-| Cross stitch fill | StitchArtist, Hatch add-on, Ink/Stitch 3.3 | Low | S | v2 |
+| Cross stitch fill | StitchArtist, Hatch add-on, Ink/Stitch 3.3 | Low | S | v2: shipped in 1.0.1 |
 | Hand-stitch randomized effect | Hatch Digitizer, Wilcom | Low | S | v2 |
 | Custom tie-in and tie-off shapes | Described as missing in patent background | Low | S | v2 |
 | Keyboard design collections (alphabet mapping) | Hatch, Embrilliance AlphaTricks | Low | M | v2 |
 | Photo stitch with an editable result | Hatch Digitizer, Wilcom | Medium | L | Later |
-| Auto-digitize to editable draft objects | Hatch Composer | Medium | L | Later |
+| Auto-digitize to editable draft objects | Hatch Composer | Medium | L | Later: shipped in 1.0.1 (whole-picture auto-digitize) |
 | Continuous underlay across neighboring objects | Described as missing in patent background | Medium | L | Later |
 | Sequins and beading | Wilcom Elements | Low | L | Later |
 | Wireless send to Brother Wi-Fi machines | Hatch 4 | Low | L | Later |

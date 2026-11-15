@@ -28,6 +28,7 @@ import websockets
 from pypdf import PdfWriter
 
 ROOT = Path(__file__).resolve().parent.parent
+VERSION = json.loads((ROOT / "apps" / "desktop" / "package.json").read_text(encoding="utf-8"))["version"]
 SRC = ROOT / "docs" / "USER-MANUAL.md"
 OUT = ROOT / "docs" / "LUDD-User-Manual.pdf"
 REPO = "https://github.com/jvanekel-pixel/ludd/blob/main/docs/"
@@ -87,7 +88,7 @@ body {{ background: {INK}; color: {BONE}; -webkit-print-color-adjust: exact; pri
 </style></head><body>
 {mark(BONE, INK, LIME, 230)}
 <div class="word">LUDD</div>
-<div class="sub">User manual · Version 1.0</div>
+<div class="sub">User manual · Version {VERSION}</div>
 <div class="rule"></div>
 <div class="tag">Break the machine. Free the stitch.</div>
 <div class="foot">Free <b>+</b> open-source embroidery</div>
@@ -153,7 +154,7 @@ td:last-child {{ white-space: normal; }}
 .note {{ background: {INK}; color: {BONE}; border-radius: 8px; padding: 0.16in 0.2in; margin-top: 0.15in; }}
 .note b {{ color: {LIME}; }}
 </style></head><body>
-<div class="brand">{mark(INK, "#FFFFFF", INK, 54)}<div><div class="w">LUDD</div><div class="s">User manual · Version 1.0</div></div></div>
+<div class="brand">{mark(INK, "#FFFFFF", INK, 54)}<div><div class="w">LUDD</div><div class="s">User manual · Version {VERSION}</div></div></div>
 <div class="intro">{intro}</div>
 <div class="note"><b>Esc</b> lets go of whatever you're in the middle of. <b>F1</b> opens Help, which searches this manual inside the app, offline.</div>
 <div class="toc-title">Contents</div>

@@ -3,16 +3,22 @@
 *Break the machine. Free the stitch.*
 
 **Free, open-source embroidery software** for Windows, Mac and Linux. Open designs and change them,
-draw your own, add lettering, and save them for your machine (PES, JEF and 40+ formats). No
-account, no sign-in, no subscription, and it works offline.
+draw your own, add lettering, and save them for your machine. It opens 40 embroidery formats and
+saves PES, JEF, DST, EXP, VP3 and four more. No account, no sign-in, no subscription, and it works
+offline.
 
 ![The sample designs that come with LUDD](docs/images/samples.png)
 
 **[Download LUDD](https://github.com/jvanekel-pixel/ludd/releases/latest)** · [User guide](docs/USER-GUIDE.md) · [What's new](docs/CHANGELOG.md)
 
 - Open, recolor, resize and combine designs; print a real-size template.
-- Draw running stitch, satin and fill; trace pictures with **Trace Assist** (press Tab for the next point).
-- Lettering from any installed font, on lines, arches and circles; monograms.
+- Draw running stitch, satin ribbons and fills (tatami, gradient, wave, contour, stipple,
+  cross-stitch), motif lines, outlines and offsets; cut with a knife, merge shapes.
+- Trace pictures with **Auto-trace** (Shift+A): click a shape and LUDD finds its outline, or turn
+  the whole picture into shapes at once (Alt+A). Optional AI tracing that runs on your computer.
+- Lettering from any installed font, on lines, arches and circles; monograms; one file per name.
+- Fewer jumps and trims, the shortest sewing order, stitch editing of placed designs, a design
+  browser, color sets and a garment preview.
 - Save for your machine with checks first; have machines that only cut at color changes (like the
   Brother PE550D) cut jump threads too.
 - Fabric presets with stabilizer advice, quality checks that explain themselves, a density map.
@@ -29,7 +35,7 @@ The plan behind it: [docs/PLAN.md](docs/PLAN.md). Releasing: [docs/RELEASING.md]
 
 - Node 20+ with corepack (`corepack enable` once, to get `pnpm`)
 - [uv](https://docs.astral.sh/uv/) (fetches Python 3.12 for the engine)
-- Rust via [rustup](https://rustup.rs/), plus the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS (on Windows: Microsoft C++ Build Tools and WebView2)
+- Rust 1.90 or newer via [rustup](https://rustup.rs/), plus the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your OS (on Windows: Microsoft C++ Build Tools and WebView2)
 
 ### Run
 
@@ -71,7 +77,8 @@ LUDD uses Embrilliance's keys where they exist. The full list is in [docs/USER-M
 | Switch between drawing and Select | D |
 | Place a curve point / straight point / sharp corner | click / Ctrl+click / Shift+click |
 | Finish a shape / undo a point / cancel | Enter or right-click / Backspace / Esc |
-| Trace Assist: take the suggested point / keep going | Tab / Shift+Tab |
+| Auto-trace / next guess / use it | Shift+A / Tab / Enter |
+| Auto-digitize the whole picture | Alt+A |
 | Select several / select all / group / ungroup | Shift+click / Ctrl+A / Ctrl+G / Ctrl+U |
 | Copy / cut / paste | Ctrl+C / Ctrl+X / Ctrl+V |
 | Turn 90° / mirror | R / Alt+H, Alt+V |

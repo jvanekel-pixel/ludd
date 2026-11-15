@@ -6,10 +6,12 @@ account, no sign-in and no subscription.
 
 | Your computer | File |
 | --- | --- |
-| Windows 10 or 11 | `LUDD_..._x64-setup.exe` |
+| Windows 10 or 11 (64-bit) | `LUDD_..._x64-setup.exe` |
 | Mac with Apple chip (M1 or later) | `LUDD_..._aarch64.dmg` |
 | Mac with Intel chip | `LUDD_..._x64.dmg` |
 | Linux | `LUDD_..._amd64.AppImage` or `.deb` |
+
+Needs macOS 14 Sonoma or newer on a Mac, and glibc 2.35 or newer (Ubuntu 22.04 and later) on Linux.
 
 The installers aren't code-signed yet. On Windows, if you see **"Windows protected your PC"**,
 click **More info → Run anyway**. On a Mac, use **System Settings → Privacy & Security → Open
@@ -17,11 +19,15 @@ Anyway**. Step-by-step help: [user guide](https://github.com/jvanekel-pixel/ludd
 
 ### What it does
 
-- **Open, view and change designs** in 40+ formats; recolor to your own threads; resize, turn,
-  mirror, combine; print a real-size template.
-- **Draw your own**: running stitch, satin and fill with automatic underlay and pull compensation;
-  trace a picture with **Trace Assist** (press Tab to accept the next point).
-- **Lettering** from any font on your computer, on a line, arch or circle; monograms.
+- **Open, view and change designs** in 40 formats; recolor to your own threads; resize, turn,
+  mirror, combine; edit stitches; print a real-size template.
+- **Draw your own**: running stitch, satin ribbons and fills (tatami, gradient, wave, contour,
+  stipple, cross-stitch) with automatic underlay and pull compensation; motif lines, outlines,
+  knife and merge.
+- **Auto-trace** a picture: click a shape and LUDD finds its outline, or turn the whole picture
+  into shapes at once. Optional AI tracing runs on your own computer.
+- **Lettering** from any font on your computer, on a line you draw, an arch or a circle;
+  monograms; one machine file per name.
 - **Save for your machine** with checks first. For machines that only cut at color changes (such
   as the Brother PE550D), LUDD can make the machine cut jump threads for you.
 - **Fabric presets** with stabilizer advice, **quality checks** that explain themselves, and a

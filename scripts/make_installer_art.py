@@ -1,7 +1,8 @@
 """Make the Windows installer's pictures from the LUDD mark (apps/desktop/src-tauri/installer/).
 
 Run from the repo root (Windows, with Microsoft Edge installed):
-    uv run --no-project --with pillow python scripts/make_installer_art.py
+    uv run --no-project --with pillow --with markdown --with websockets --with pypdf python scripts/make_installer_art.py
+(It borrows the fonts, mark and colours from make_manual_pdf.py, so that script's libraries are needed too.)
 
 - sidebar.bmp (164 x 314): the welcome and finish pages: the mark and wordmark on ink.
 - header.bmp (150 x 57): the top right of the other pages: the mark and wordmark on white.
