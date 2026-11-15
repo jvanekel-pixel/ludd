@@ -296,9 +296,13 @@ def test_qa_members_must_match_their_hash_and_a_bad_cache_copy_is_replaced(tmp_p
     assert open(p["layout"]["items"][0]["path"], "rb").read() == real
 
 
+# Not a word that can turn up in a path: macOS temp folders start with /private/, which once matched.
+SECRET_WORDS = "top-secret-9f3a-contents"
+
+
 def test_qa_a_project_names_no_file_outside_itself(tmp_path):
     secret = tmp_path / "secret.txt"
-    secret.write_text("private")
+    secret.write_text(SECRET_WORDS)
     hostile = {**GOOD, "layout": {"items": [
         {"id": "a", "path": str(secret)},
         {"id": "t", "kind": "text", "text": "Hi", "font": {"path": str(secret), "family": "Arial", "style": "Regular"}},
@@ -308,7 +312,7 @@ def test_qa_a_project_names_no_file_outside_itself(tmp_path):
     assert p["images"] == []
     out = project.save(str(tmp_path / "resaved"), p)
     with zipfile.ZipFile(out["path"]) as z:
-        assert not any(b"private" in z.read(n) for n in z.namelist())
+        assert not any(SECRET_WORDS.encode() in z.read(n) for n in z.namelist())
 
 
 def test_qa_fonts_travel_with_the_project_without_the_users_folder_name(tmp_path, files):

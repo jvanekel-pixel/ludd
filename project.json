@@ -30,9 +30,9 @@
   },
   "phase": 2,
   "status": "active",
-  "nextAction": "With the owner's OK, push main and confirm CI is green on Windows, both Macs and Linux",
-  "blockedOnHuman": "Decide the 20 open items in docs/QA-RESPONSE.md; approve pushing to GitHub",
-  "lastSessionAt": "2026-11-15T02:06:12Z",
+  "nextAction": "Confirm the first CI run on GitHub is green on Windows, both Macs and Linux; check the model download checksums once; then the second QA pass",
+  "blockedOnHuman": null,
+  "lastSessionAt": "2026-11-15T02:40:06Z",
   "health": {
     "tests": "passing",
     "build": "passing",

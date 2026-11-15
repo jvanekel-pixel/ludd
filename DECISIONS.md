@@ -63,3 +63,33 @@ Durable log so future sessions do not re-litigate these. Newest decisions go bel
 
 ### D-012: Machine testing deferred (2026-10-11)
 - Decision: no stitch-outs until the owner says the software is about 95% done; tests are queued in `docs/stitchout-log.md`.
+
+### D-013: AI tracing model is pinned and checksummed (2026-11-14)
+- Decision: the MobileSAM download comes from one fixed upstream revision, and each file is checked against its SHA-256 before it is kept.
+- Why: a moving `main` branch could change or be tampered with, and the app runs the downloaded model.
+- Alternatives rejected: keep fetching `main`; bundle the 45 MB model in the installer.
+- Revisit if: upstream publishes a better model (update `REVISION` and the checksums in `ai/segment.py`).
+
+### D-014: GitHub Actions pinned by commit SHA, Dependabot monthly (2026-11-14)
+- Decision: every workflow action uses a full commit SHA with the version in a comment; Dependabot opens grouped monthly update PRs (actions, npm, cargo, uv).
+- Why: the repo is public and builds the signed releases.
+- Alternatives rejected: version tags only.
+- Revisit if: Dependabot PRs become noise.
+
+### D-015: US spelling in the app and docs (2026-11-14)
+- Decision: Center, Millimeters, Licenses, color everywhere users read; code comments and internal names are left alone.
+- Why: the body text was already US; the UK labels were the odd ones out.
+- Alternatives rejected: UK spelling throughout.
+- Revisit if: the app is localized.
+
+### D-016: A pinned shape stays put (2026-11-14)
+- Decision: pin blocks arrow keys, R, Alt+H/V and resize handles for shapes, and the arrows for pictures, with a note saying why.
+- Why: pin means "can't be moved by accident"; moving it by keyboard broke that.
+- Alternatives rejected: pin blocks dragging only.
+- Revisit if: users want to nudge a pinned shape without unpinning.
+
+### D-017: Open QA items kept as they are (2026-11-14)
+- Decision: autosave stays off while the Recover banner is unanswered; wide satins only warn; pen-tool curve overshoot stays; the 400,000-stitch fill limit stays; crafted .vp3/.hus memory use is documented (L-024), not guarded; JEF codes wait for a Janome stitch-out. Full table in docs/QA-RESPONSE.md.
+- Why: each fix would change existing designs, add a large mechanism, or needs hardware we don't have.
+- Alternatives rejected: change defaults now.
+- Revisit if: a user hits one of them in practice.
