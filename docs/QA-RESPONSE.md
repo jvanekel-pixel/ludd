@@ -63,27 +63,31 @@ Tests at the end of phase 4: engine `CI=1 uv run pytest` and the UI's vitest sui
 (see the final run in the docs notes); new tests are named `test_qa_*` / `test_qa4_*` and
 `*.qa.test.ts`.
 
-### Waiting for the owner's decision
-1. **Autosave while the Recover banner is unanswered**: it stays off until you choose; keeping it on needs a second recovery slot.
-2. **AI tracing model download**: pin it to a fixed upstream version with checksums (needs looking up online once).
-3. **Whole picture**: add a progress bar and a Cancel button (needs a way to stop the engine mid-job).
-4. **Wide satins**: turn Split long stitches on by default over 7 mm? (They warn now; changing the default changes existing designs.)
-5. **Pen-tool curves** overshoot a little where points are unevenly spaced; fixing it changes every curve in every design.
-6. **Very large fills** (over 400,000 stitches, e.g. a 1 m square) are now refused: is that limit right?
-7. **Motif lines** flip sides with the drawing direction: add a "which side" option?
-8. **Crafted .vp3/.hus files** can make the file reader use gigabytes; a real guard means reading files in a separate, memory-limited process.
-9. **JEF hoop code and stop codes** need a stitch-out on a Janome (queued in stitchout-log.md).
-10. **Basting box**: add a margin control (it now only comes in to fit the hoop)?
-11. **Schemas**: write the project, fabric and thread-chart schemas CLAUDE.md promises (and fix machine.schema.json's Threadline name and folder), or change CLAUDE.md.
-12. **CLAUDE.md** is out of date: networkx isn't used, onnxruntime is optional only on Intel Macs, and the design area follows dark mode unless "Always show the design on light fabric" is ticked.
-13. **GitHub Actions**: pin actions by commit SHA and add Dependabot (needs looking up online).
-14. **Lettering**: multi-line text (line breaks now become spaces); a thin-stroke font warning; letters on sharp V-shaped lines can touch.
-15. **Spelling**: the UI mixes UK labels (Centre, Millimetres, Licences) with US text; pick one.
-16. **Pinned shapes** still move with the arrow keys, R and Alt+H/V (pinned pictures don't); should pin block those too?
-17. **Design browser**: keep thumbnails on disk between sessions and add a Refresh button?
-18. **AI send preview**: also show LUDD's fixed instructions to the AI?
-19. **UI tests**: add a browser-like test environment (jsdom) so panels and the canvas can be tested.
-20. **Old root `LUDD-User-Manual.pdf`** (git-ignored, version 1.0): delete it; `docs/LUDD-User-Manual.pdf` is the current one.
+### Decisions on the 20 open items (owner, 2026-11-14)
+| # | Item | Decision | Done |
+|---|---|---|---|
+| 1 | Autosave while the Recover banner is unanswered | Keep it off | no change |
+| 2 | AI tracing model download | Pin the revision and check SHA-256 | Done: `ai/segment.py` (`REVISION`, `FILES`), tests in test_autotrace.py |
+| 3 | Whole picture progress bar and Cancel | Backlog | BACKLOG.md |
+| 4 | Wide satins | No new default; keep the warning | no change |
+| 5 | Pen-tool curve overshoot | Leave | no change |
+| 6 | 400,000-stitch fill limit | Keep | no change |
+| 7 | Motif "which side" option | Backlog | BACKLOG.md |
+| 8 | Crafted .vp3/.hus memory use | Accept the risk, document it | L-024 in the knowledge base; guard on the backlog |
+| 9 | JEF hoop and stop codes | Stay queued for a Janome stitch-out | stitchout-log.md |
+| 10 | Basting box margin | Backlog | BACKLOG.md |
+| 11 | Schemas | Change the docs, not write the schemas | AGENTS.md; writing them is on the backlog |
+| 12 | AGENTS.md / CLAUDE.md out of date | Fix now | Done: AGENTS.md (CLAUDE.md imports it) |
+| 13 | GitHub Actions | Pin by SHA, add Dependabot | Done: `.github/workflows/*.yml`, `.github/dependabot.yml` |
+| 14 | Lettering (multi-line, thin-stroke warning, V-shaped lines) | Backlog | BACKLOG.md |
+| 15 | Spelling | US | Done: app labels (Center, Millimeters, Licenses, same-color), docs and Help text |
+| 16 | Pinned shapes and the arrow keys, R, Alt+H/V | Pin blocks them | Done: `editSelection`, `nudge` in actions.ts; test in actions.qa.test.ts |
+| 17 | Design browser | Refresh button now; thumbnails on disk later | Done: Refresh in FeatureDialogs.tsx |
+| 18 | AI send preview | Also show LUDD's fixed instructions | Done: `instructions` in the estimate, AIPanels.tsx; test in test_ai.py and AIPanels.dom.test.tsx |
+| 19 | UI tests | Add jsdom | Done: jsdom dev dependency; `*.dom.test.tsx` files (AIPanels.dom.test.tsx is the first) |
+| 20 | Old root `LUDD-User-Manual.pdf` | Delete | Done (it was git-ignored) |
+
+To check on the first real run: the pinned GitHub Actions and Dependabot (the first CI run on GitHub), and the model download checksum (press Download in Settings → AI tracing once on a real connection).
 
 ### Small handed-over code fixes (done by the lead after the docs pass)
 - Shift+comma (machine speed) now works: Shift with punctuation is matched by the physical key (`commands.ts`, test in commands.test.ts).

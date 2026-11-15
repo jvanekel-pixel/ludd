@@ -3,27 +3,34 @@
 Parked ideas, tech debt and nice-to-haves. Do not build these without the owner pulling them into `PLAN.md`. The full feature backlog with value/effort is in docs/PLAN.md ("Prioritized backlog").
 
 ## Tech debt and cleanup
-- [ ] AGENTS.md (old CLAUDE.md) layout line still lists networkx, which is unused, and says onnxruntime is optional without noting it is bundled except on Intel Macs (QA-RESPONSE item 12)
-- [ ] `schemas/` only has `machine.schema.json`; the project, fabric and thread-chart schemas promised in the rules do not exist (item 11)
+- [x] AGENTS.md (old CLAUDE.md) layout line still lists networkx, which is unused, and says onnxruntime is optional without noting it is bundled except on Intel Macs (QA-RESPONSE item 12) (done 2026-11-14)
+- [x] `schemas/` only has `machine.schema.json`: AGENTS.md now says so (item 11, 2026-11-14)
+- [ ] Write the project, fabric and thread-chart JSON Schemas (and generate types from them) if they are wanted
 - [ ] Offset limit message is in mm when units are inches
-- [ ] UI mixes UK labels (Centre, Millimetres) with US text; pick one (item 15)
-- [ ] Add a jsdom-style test environment so panels and the canvas can be tested (item 19)
-- [ ] Pin GitHub Actions by commit SHA and add Dependabot (item 13)
+- [x] UI mixes UK labels (Centre, Millimetres) with US text; pick one (item 15) (done: US spelling)
+- [x] Add a jsdom-style test environment so panels and the canvas can be tested (item 19) (done: `*.dom.test.tsx` files run in jsdom)
+- [x] Pin GitHub Actions by commit SHA and add Dependabot (item 13) (done)
 - [ ] Vite build warns about chunks over 500 kB; consider code-splitting
-- [ ] Delete the old git-ignored root `LUDD-User-Manual.pdf` (version 1.0); `docs/LUDD-User-Manual.pdf` is current (item 20)
+- [x] Delete the old git-ignored root `LUDD-User-Manual.pdf` (version 1.0); `docs/LUDD-User-Manual.pdf` is current (item 20) (done)
 - [ ] Clean the root of brand source PDFs/PNGs, research notes and the CSV (all git-ignored) into one folder
 - [ ] Working tree shows LF to CRLF warnings; decide on `.gitattributes` line-ending policy
 
 ## Nice-to-haves from the QA decision list
 - [ ] Progress bar and Cancel for whole-picture auto-digitize (item 3)
-- [ ] Pin AI tracing model download to a fixed version with checksums (item 2)
+- [x] Pin AI tracing model download to a fixed version with checksums (item 2) (done: revision + SHA-256)
 - [ ] "Which side" option for motif lines (item 7)
 - [ ] Basting box margin control (item 10)
 - [ ] Multi-line lettering and a thin-stroke font warning (item 14)
-- [ ] Keep design-browser thumbnails on disk, add Refresh (item 17)
-- [ ] Show LUDD's fixed instructions in the AI send preview (item 18)
+- [x] Design browser Refresh button (item 17, done)
+- [ ] Keep design-browser thumbnails on disk between sessions (item 17, decided: later)
+- [x] Show LUDD's fixed instructions in the AI send preview (item 18) (done)
 - [ ] Second Recover slot so autosave can stay on while the Recover banner is unanswered (item 1)
-- [ ] Should pinned shapes also block arrow-key, R and Alt+H/V moves? (item 16)
+- [x] Should pinned shapes also block arrow-key, R and Alt+H/V moves? (item 16) (decided yes, done)
+
+## Decided to keep as is (QA decisions, 2026-11-14)
+- Autosave stays off while the Recover banner is unanswered (item 1); wide satins keep warning only, no new default (item 4); pen-tool curve overshoot left alone (item 5); the 400,000-stitch fill limit stays (item 6).
+- [ ] Memory guard for crafted .vp3/.hus files: read files in a separate memory-limited process (item 8; documented as L-024)
+- JEF hoop and stop codes wait for a Janome stitch-out (item 9, queued in stitchout-log.md).
 
 ## From docs/PLAN.md backlog (not yet started)
 - [ ] Thread inventory and shopping list

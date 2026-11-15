@@ -25,6 +25,8 @@ export type AIEstimate = {
   cloud: boolean;
   /** Where it goes (api.anthropic.com, 192.168.1.20...). */
   host?: string;
+  /** LUDD's fixed instructions to the model (sent with every request). */
+  instructions?: string;
   text: string;
   images: { bytes: number; data_url: string }[];
   tokens_in: number;

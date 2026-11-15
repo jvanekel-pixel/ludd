@@ -56,7 +56,7 @@ so you can find a command and learn its key in one go:
 
 - **A shape**: Change thread…, Cut, Copy, Duplicate, Remove, Add points, Cut a hole, Set the stitch
   angle, Knife, Add a satin border, Outline / offset, Sew first / earlier / later / last, turn and
-  mirror, Centre in the hoop, Repeat, Pin, Rename, Zoom to it and the Stitch Advisor.
+  mirror, Center in the hoop, Repeat, Pin, Rename, Zoom to it and the Stitch Advisor.
 - **Several shapes** (Shift+click them first): also Group, Merge, Cut out and Put the text on the line.
 - **Lettering**: also Change the words and One file per name. **A stitch file**: Edit stitches.
 - **A picture**: Auto-trace, Auto-digitize the whole picture, Pin / unpin (a pinned picture lets
@@ -147,7 +147,7 @@ checks), so you rarely need to open one just to look.
   nothing to sew are left out, and files already in the folder are never replaced ("name (1) 1 of
   2").
 - The **stabilizer advice** for your fabric is shown at the bottom.
-- **PES files saved by LUDD before 13 October 2026** put the design off-centre, so on a Brother
+- **PES files saved by LUDD before 13 October 2026** put the design off-center, so on a Brother
   machine it loaded shifted up and left, mostly off the hoop, and couldn't be moved back. Open the
   project (or the file) and **Save for machine** again; files saved now are placed like
   Embrilliance's.
@@ -156,13 +156,14 @@ checks), so you rarely need to open one just to look.
   saving.
 
 ### Printing
-**⋯ → Print template & thread list** (Ctrl+P): a real-size template with centre lines (for placing
+**⋯ → Print template & thread list** (Ctrl+P): a real-size template with center lines (for placing
 the design on fabric), and a thread list with stitch counts, a tick box per color and the
 stabilizer to use. Print at 100% ("Actual size") and check the ruler bars.
 
 ### Browse designs
 **⋯ → Browse designs** (Ctrl+Alt+B): every design in a folder (and its subfolders) as a picture,
-with its size, stitch count and colors. **Choose folder…** once; LUDD remembers it. It shows
+with its size, stitch count and colors. **Choose folder…** once; LUDD remembers it. **Refresh** looks through the folder again for new,
+changed or removed designs. It shows
 the newest 600; type part of a name to find one (in a bigger folder this searches the whole
 folder). Click a design to open it, or **+ Add** to place it in the design you have open. The
 pictures are kept while LUDD is open, so going back to the folder is quick; choose the folder
@@ -196,10 +197,10 @@ does. Existing files are never replaced.
 | **N** | Stitches on/off | Hides the stitches and shows your drawn shapes' outlines. |
 | **Shift+N** | See-through stitches | Draws the thread faint, so you can see the picture you're working over (also the **◐ See-through stitches** button next to the zoom). Press again for solid thread. |
 | **B** | Pictures on/off | Hides or shows the pictures you're tracing. |
-| **J** | Trims, jumps and stops | Grey lines where the thread is cut, orange where a thread is left across the fabric, red marks at trims and stops. |
+| **J** | Trims, jumps and stops | Gray lines where the thread is cut, orange where a thread is left across the fabric, red marks at trims and stops. |
 | **E** | Crosshairs | Lines across the whole design through the pointer, to line things up. |
 | **G** / **H** | Grid / hoop | The grid (inches or mm) and the hoop outline. |
-| **U** | Units | Inches or millimetres. |
+| **U** | Units | Inches or millimeters. |
 | **Alt+D** | Density map | Colors the design where thread piles up: yellow-green (two layers), orange (the limit), red (too much). Also a tick box beside Checks. |
 
 The design sits on **light fabric**, in dark mode too, so threads and shadows look as they'll sew; untick **Always show the design on light fabric** in Settings for a dark design area.
@@ -330,7 +331,7 @@ Drawing a satin along the edge of a shape you've already made (a fill, an appliq
 line)? After a couple of clicks along the edge, LUDD notices, shows a faint satin along it, and says
 **Tab fits the satin**. Press **Tab** and the satin follows the edge exactly, round every corner and
 curve. Not quite right? Press **Tab** again for the next way:
-1. all the way round, centred on the edge (the classic satin border);
+1. all the way round, centered on the edge (the classic satin border);
 2. all the way round, just outside the edge (it frames the shape and covers its edge);
 3. only from your first click to your last, along the edge, the way you were going.
 
@@ -380,7 +381,8 @@ The colors come from the picture; **Order & colors → Match…** swaps them for
 
 **AI tracing (optional).** For photos and shaded art, get the AI tracing model in **Settings → AI
 tracing**: a small model (MobileSAM, about 45 MB, Apache-2.0 license) that runs on your computer. LUDD
-asks before downloading it and sends nothing anywhere. With it, Auto-trace's first guesses are
+asks before downloading it and sends nothing anywhere. The download is a fixed version, checked
+against its checksum before it is kept. With it, Auto-trace's first guesses are
 the AI's (marked "AI guess", with how sure it is); Shift+click and Alt+click tell it "this too"
 and "not this". The first click on a new picture takes a second or two while it reads the
 picture, after that well under a second. The **AI** tick box in the bar turns it off for a
@@ -441,7 +443,8 @@ but off unless you turn it on (Ctrl+Shift+A or Settings).
 ### Pinning
 **📌 Pin** stops something being dragged by accident. Pin designs and shapes from the 📌 in the
 **Order & colors** list or **⋯ → Pin in place** at the top of the panel (Ctrl+L); pictures from the
-📌 in the **Pictures** list or at the top of the panel. A pinned picture also lets clicks through. Click the pin again to unpin.
+📌 in the **Pictures** list or at the top of the panel. A pinned picture also lets clicks through. A pinned design or shape
+also ignores the arrow keys, R, Alt+H / Alt+V and the resize handles (a note tells you it's pinned). Click the pin again to unpin.
 
 ### Outlines & offsets
 **⋯ → Outline / offset…** (Ctrl+Shift+K, with something selected) puts a ring around whatever is
@@ -541,7 +544,7 @@ ones; shapes already drawn keep theirs.
 | Setting | Fill | Satin | Line | What it does |
 | --- | --- | --- | --- | --- |
 | **Stitch as** | Line · Satin · Fill · Applique | Line · Satin · Fill · Applique | Line · Satin · Fill · Applique | Switch a shape between a running stitch line, a satin ribbon, a fill and an applique (fill and applique need a closed shape). |
-| **Underlay** | Auto · Edge · Cross-hatch | Auto · Centre · Edge · Zigzag | | The foundation sewn first so the top stitches sit flat. **Auto**: for a fill, an edge run on light fabrics and an edge run plus cross-hatch on the others (closer on knit, fleece, towel and stretch); for a satin, it goes by the fabric and the satin's width. |
+| **Underlay** | Auto · Edge · Cross-hatch | Auto · Center · Edge · Zigzag | | The foundation sewn first so the top stitches sit flat. **Auto**: for a fill, an edge run on light fabrics and an edge run plus cross-hatch on the others (closer on knit, fleece, towel and stretch); for a satin, it goes by the fabric and the satin's width. |
 | **Density** | ✓ | ✓ | | **Light / Normal / Dense** for a quick choice, then a **Lighter ↔ Denser** slider with its number right under it (e.g. **0.40 mm between rows · 2.5 rows per mm**, or rows per inch when you work in inches; it changes as you drag), and the exact **Spacing** to type, all in view. A value between the presets leaves none of them lit. |
 | **Angle** | ✓ | | | Direction of the rows (0–179°). **Draw the angle (I)** sets it with a line. |
 | **Length** | ✓ | | ✓ | Stitch length (up to 7 mm for fills). |
@@ -661,8 +664,8 @@ and says so.
 
 **Text on a line of your own**: draw a **Line** where the text should go (any curve), select the
 line and the lettering (Shift+click both), then **⋯ → Put the text on the line** (in the panel's
-⋯, or Ctrl+Alt+L). The letters stand on the line, centred on it and upright whichever way you
-drew it; on a closed shape they stand outside it, centred at the top. The line itself is used up.
+⋯, or Ctrl+Alt+L). The letters stand on the line, centered on it and upright whichever way you
+drew it; on a closed shape they stand outside it, centered at the top. The line itself is used up.
 Putting text on a line lets go of its turn and mirror (its size stays, as letter height), and
 turning it afterwards pivots on the line. Its Shape then reads **On your line**; pick Straight,
 Arch and so on to put it back. If the text is longer than the line, the extra letters bunch up at
@@ -791,7 +794,7 @@ since you can't change its stitches. The same checks appear in Save for machine.
 - **Look**: Automatic (follows your computer), Light or Dark; **Always show the design on light
   fabric**.
 - **My machine** and hoop.
-- **Measurements**: inches or millimetres.
+- **Measurements**: inches or millimeters.
 - **Workspace**: show the hoop, show the grid, realistic thread, Trace Assist.
 - **AI tracing**: get (or remove) the optional AI tracing model for Auto-trace, turn its guesses
   on or off, and **Forget which Auto-trace guesses I usually pick**.
@@ -799,7 +802,7 @@ since you can't change its stitches. The same checks appear in Save for machine.
 - **Updates**: tell me when a new version is out (asks GitHub when LUDD starts, never before
   you've answered the welcome card; nothing about you is sent), **Check now**, and the version you
   have.
-- **About**: LUDD's own licence (GPL-3.0-or-later) and **Licences…**, the licences of the free
+- **About**: LUDD's own license (GPL-3.0-or-later) and **Licenses…**, the licenses of the free
   software and fonts LUDD is built with (also in `THIRD-PARTY-NOTICES.txt` in the install folder).
 
 ---
@@ -815,7 +818,8 @@ and never sends your pictures anywhere. See [Auto-trace](#auto-trace-shifta).
 - **Off**: nothing is sent anywhere.
 - **On this computer**: uses **Ollama**, a free program that runs AI models on your own PC (a
   graphics card with 8 GB helps). Install it, then `ollama pull qwen2.5vl:7b`. If its address
-  points at another computer, LUDD treats it like the cloud and shows what will be sent first.
+  points at another computer, LUDD treats it like the cloud and shows what will be sent first (the text,
+  any pictures, and, under its own heading, LUDD's fixed instructions to the AI).
 - **Cloud**: Anthropic, or any OpenAI-compatible service, with your own account and key (the
   address must start with `https://`). On Windows your key is stored encrypted for your Windows
   account; on a Mac or Linux, in a file only your user account can read. **Before anything is
@@ -898,7 +902,7 @@ Shortcuts are also shown in every menu and on every button's tooltip.
 | Change thread of the selected shape or text | Alt+T |
 | Sew earlier / later | Ctrl+[ / Ctrl+] |
 | Sew first / last | Ctrl+Shift+[ / Ctrl+Shift+] |
-| Centre in the hoop | Ctrl+Shift+M |
+| Center in the hoop | Ctrl+Shift+M |
 | Change the words of the selected lettering | Ctrl+Alt+W |
 | Menu for the thing under the mouse | Right-click |
 | Add a satin border to a fill | Shift+B |
@@ -989,7 +993,7 @@ Shortcuts are also shown in every menu and on every button's tooltip.
 | Trims, jumps and stops | J |
 | Grid / hoop | G / H |
 | Measure | M |
-| Inches or millimetres | U |
+| Inches or millimeters | U |
 | Density map | Alt+D |
 
 ### Stitch-out

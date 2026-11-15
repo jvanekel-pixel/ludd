@@ -122,7 +122,7 @@ export function printHtml(d: Design, hoop: Hoop | null, machineName: string | nu
       hoop ? ` · ${esc(hoop.name)} hoop` : ""
     }${machineName ? ` · ${esc(machineName)}` : ""}</p>
     ${templateSvg(d, hoop)}
-    <p class="note">Red lines cross at the design centre: line them up with the marks on your fabric. Print at 100% (“Actual size”). Check the bars below measure correctly:</p>
+    <p class="note">Red lines cross at the design center: line them up with the marks on your fabric. Print at 100% (“Actual size”). Check the bars below measure correctly:</p>
     ${checkBars()}
   </section>
   <section class="page">

@@ -43,8 +43,8 @@ Work one milestone at a time. Stop at its acceptance criteria and explain how to
 ## Layout
 - apps/desktop: Tauri 2 + React + TypeScript + Vite; PixiJS canvas, SVG overlay for handles
 - engine/: Python 3.12 sidecar, JSON-RPC 2.0 over stdio
-  - deps: pyembroidery, shapely, numpy, networkx, opencv-python-headless; onnxruntime optional
-- schemas/: JSON Schemas for project, machine, fabric, thread chart (source of truth; generate TS and Python types)
+  - deps: pyembroidery, shapely, numpy, opencv-python-headless; onnxruntime is bundled everywhere except Intel Macs, which have no wheels (AI tracing is simply unavailable there)
+- schemas/: JSON Schemas (source of truth). Only `machine.schema.json` exists so far; project, fabric and thread-chart schemas are on the backlog, and until then the TypeScript types in `design/types.ts` and the engine's own validation are the reference
 - fixtures/: real design files for golden tests
 - docs/: PLAN.md, CHANGELOG.md, stitchout-log.md, LUDD-KNOWLEDGE-BASE.md (the help agent's source; instructions in LUDD-HELP-AGENT-INSTRUCTIONS.md)
 
@@ -60,7 +60,7 @@ Work one milestone at a time. Stop at its acceptance criteria and explain how to
 - Every engine function gets a pytest; every stitch type gets snapshot tests.
 - Formats: PES (the user's Brother machine) is primary; JEF must also export correctly. Golden tests cover both.
 - Name and brand (Oct 11, 2026): the app is **LUDD** (formerly Threadline). Internal identifiers (`threadline_engine`, the `threadline-engine` sidecar, `THREADLINE_DATA_DIR`, npm package names) stay. Old `.thl` projects, `.tlfont` stitch fonts and the old `Threadline` data folder must keep working.
-- Brand: ink #121114, bone #EEE9DF, techno yellow #C8FF2E, greys #B5AEA3 / #8E877D. Wordmark Archivo 900 at 62% width; secondary Space Mono uppercase (both bundled, OFL). Mark: `components/Logo.tsx`; app icon source `src-tauri/icons/icon.svg`. Colors come from CSS tokens in `styles.css`; light and dark mode follow the system unless chosen in Settings. The canvas fabric stays light in both.
+- Brand: ink #121114, bone #EEE9DF, techno yellow #C8FF2E, greys #B5AEA3 / #8E877D. Wordmark Archivo 900 at 62% width; secondary Space Mono uppercase (both bundled, OFL). Mark: `components/Logo.tsx`; app icon source `src-tauri/icons/icon.svg`. Colors come from CSS tokens in `styles.css`; light and dark mode follow the system unless chosen in Settings. The canvas fabric stays light in both by default (Settings: "Always show the design on light fabric", ticked); unticking it makes the design area follow dark mode.
 - Esc lets go of one thing per press, newest first: anything registered with `holdEscape` (drags, open lists), then a focused field (its old value comes back), then the Escape commands in `COMMANDS` order.
 - License: GPL-3.0-or-later (decided Oct 11, 2026). Code may be adapted from GPL-compatible projects such as Ink/Stitch; credit the source in a comment and keep their copyright notices.
 

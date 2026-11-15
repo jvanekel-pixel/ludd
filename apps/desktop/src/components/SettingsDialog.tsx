@@ -65,7 +65,7 @@ export function SettingsDialog() {
             Inches
           </button>
           <button role="radio" aria-checked={units === "mm"} aria-pressed={units === "mm"} onClick={() => st.setUnits("mm")}>
-            Millimetres
+            Millimeters
           </button>
         </div>
 
@@ -108,14 +108,14 @@ export function SettingsDialog() {
 
         <h3>About</h3>
         <p className="hint">
-          LUDD is free software (GPL-3.0-or-later). It is built with other free software, each under its own licence.
+          LUDD is free software (GPL-3.0-or-later). It is built with other free software, each under its own license.
         </p>
         {isTauri() ? (
           <div className="btn-row">
-            <button onClick={() => setLicences(true)}>Licences…</button>
+            <button onClick={() => setLicences(true)}>Licenses…</button>
           </div>
         ) : (
-          <p className="hint">The licences are listed in the installed app.</p>
+          <p className="hint">The licenses are listed in the installed app.</p>
         )}
 
         <div className="actions">
@@ -153,7 +153,7 @@ function LicencesDialog({ open, onClose }: { open: boolean; onClose: () => void 
       }}
       aria-labelledby="licences-title"
     >
-      <h2 id="licences-title">Licences</h2>
+      <h2 id="licences-title">Licenses</h2>
       <pre className="licences-text">{text ?? "Loading…"}</pre>
       <div className="actions">
         <button className="primary" onClick={onClose}>

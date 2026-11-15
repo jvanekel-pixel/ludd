@@ -89,12 +89,12 @@ design when you accept them.
 - Your threads, settings, stitch fonts and crash-recovery copy are kept in your user folder
   (Windows: `%APPDATA%\Ludd`), with private copies of the pictures and designs you add (deleted
   after 90 days unused).
-- The licences of the software LUDD includes: Settings → About → **Licences…**.
+- The licenses of the software LUDD includes: Settings → About → **Licenses…**.
 
 ## Problems?
 
-**A PES file loads off-centre on my Brother machine.** PES files saved by LUDD before 13 October 2026
-were placed off-centre. Save the design for the machine again with the current LUDD.
+**A PES file loads off-center on my Brother machine.** PES files saved by LUDD before 13 October 2026
+were placed off-center. Save the design for the machine again with the current LUDD.
 
 - **The status bar says "Engine disconnected".** LUDD restarts it by itself; if it can't, click
   **Restart engine** in the status bar (your work stays on screen; save it). If it keeps

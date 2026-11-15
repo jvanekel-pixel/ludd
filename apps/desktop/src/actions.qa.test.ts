@@ -120,3 +120,31 @@ describe("QA C18: holding an arrow key doesn't flood the engine or the undo hist
     expect((moved.geometry as { outline: number[][] }).outline[0][0]).toBeCloseTo(30); // 30 nudges of 1 mm, none lost
   });
 });
+
+describe("QA decision 16: a pinned shape ignores the arrow keys, R and Alt+H/V", () => {
+  const run = (id: string) => A.COMMANDS.find((c) => c.id === id)!.run();
+  const setup = (locked: boolean) => {
+    const d = docWith("a");
+    const start = { ...d, layout: { ...d.layout, items: [{ ...d.layout.items[0], ...(locked ? { locked: true } : {}) } as ObjectItem] } };
+    useStore.setState({ engine: fakeEngine() as never, history: { past: [], present: start, future: [] }, savedDoc: start, notice: null });
+    useStore.getState().select("a");
+    return start;
+  };
+
+  it("leaves a pinned shape alone and says why", async () => {
+    const start = setup(true);
+    for (const id of ["arrange.right", "arrange.downBig", "arrange.rotateCw", "arrange.mirrorX", "arrange.mirrorY"]) run(id);
+    await new Promise((r) => setTimeout(r, 50));
+    const s = useStore.getState();
+    expect(s.history.present).toBe(start);
+    expect(s.history.past.length).toBe(0);
+    expect(s.notice?.text).toMatch(/pinned/);
+  });
+
+  it("still moves, turns and mirrors a shape that isn't pinned", async () => {
+    const start = setup(false);
+    run("arrange.right");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(useStore.getState().history.present).not.toBe(start);
+  });
+});

@@ -173,7 +173,7 @@ def _gaps(pattern: pe.EmbPattern, item_of: list[int], names: dict[int, str]) -> 
                 out.append(_check(
                     f"gap_{a}_{b}", "warning", f"{names[a]} and {names[b]} almost touch",
                     "Stitches pull the fabric in, so shapes that only just meet can open a thin line of bare fabric between them.",
-                    "Make them overlap by about half a millimetre, or move them apart on purpose.",
+                    "Make them overlap by about half a millimeter, or move them apart on purpose.",
                     [round(pa.x, 2), round(pa.y, 2)], a))
     return out
 

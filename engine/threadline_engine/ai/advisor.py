@@ -194,7 +194,7 @@ def build_request(layout: dict[str, Any], images: list[dict[str, Any]], ids: lis
         f"Fabric: {fabric['name']}.\n"
         f"There are {len(objs)} shapes, in the current sewing order. Picture 1 shows shape 1, and so on:"
         " the red line is the shape's outline (over the picture being traced, if there is one); the shapes"
-        " around it are drawn in their thread colors (grey lines over a picture), so you can see how they fit together.\n\n"
+        " around it are drawn in their thread colors (gray lines over a picture), so you can see how they fit together.\n\n"
         + "\n".join(f"Shape {n + 1}: {json.dumps(s)}" for n, s in enumerate(summaries))
     )
     req = Request(system=SYSTEM, text=text, images=[render_crop(o, images, all_objs) for o in objs], json_out=True, max_tokens=1500)

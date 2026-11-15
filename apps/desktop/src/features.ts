@@ -361,7 +361,7 @@ export async function optimizeJumps() {
       LONG_MS,
     );
     const ids = Object.keys(r.changes);
-    if (!ids.length || r.after_mm >= r.before_mm - 0.5) return info("The jumps between same-colour pieces are already as short as this can make them.");
+    if (!ids.length || r.after_mm >= r.before_mm - 0.5) return info("The jumps between same-color pieces are already as short as this can make them.");
     const now = currentLayout();
     if (!now) return;
     const next: Layout = {
@@ -373,7 +373,7 @@ export async function optimizeJumps() {
       }),
     };
     if (await commit(next)) {
-      info(`Jumps between same-colour pieces: ${Math.round(r.before_mm)} mm → ${Math.round(r.after_mm)} mm (${ids.length} piece${ids.length === 1 ? "" : "s"} now start or end somewhere else). Ctrl+Z undoes it.`);
+      info(`Jumps between same-color pieces: ${Math.round(r.before_mm)} mm → ${Math.round(r.after_mm)} mm (${ids.length} piece${ids.length === 1 ? "" : "s"} now start or end somewhere else). Ctrl+Z undoes it.`);
     }
   } catch (err) {
     fail(err);

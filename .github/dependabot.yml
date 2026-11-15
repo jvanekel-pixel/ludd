@@ -1,0 +1,32 @@
+# Dependabot opens pull requests for updates. Nothing is merged on its own; CI runs on each one.
+# Actions are pinned by commit SHA (with the version in a comment); Dependabot keeps those current.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      npm:
+        patterns: ["*"]
+  - package-ecosystem: cargo
+    directory: /apps/desktop/src-tauri
+    schedule:
+      interval: monthly
+    groups:
+      cargo:
+        patterns: ["*"]
+  - package-ecosystem: uv
+    directory: /engine
+    schedule:
+      interval: monthly
+    groups:
+      python:
+        patterns: ["*"]

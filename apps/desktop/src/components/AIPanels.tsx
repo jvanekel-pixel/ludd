@@ -42,6 +42,12 @@ export function SendPreview() {
             <summary>The text that will be sent</summary>
             <pre className="send-text">{e.text}</pre>
           </details>
+          {e.instructions && (
+            <details className="more">
+              <summary>LUDD's fixed instructions to the AI (sent with it)</summary>
+              <pre className="send-text">{e.instructions}</pre>
+            </details>
+          )}
           <div className="actions">
             <button onClick={() => done(false)}>Cancel</button>
             <button className="primary" onClick={() => done(true)}>

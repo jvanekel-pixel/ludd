@@ -2,6 +2,16 @@
 
 ## 1.0.1 (Oct 11, 2026)
 
+### QA decisions (2026-11-14)
+- **Pinned shapes** also ignore the arrow keys, R and Alt+H/V (a note says it's pinned); pinned pictures ignore the arrows with the same note.
+- **Browse designs** has a **Refresh** button.
+- **The AI send preview** also shows LUDD's fixed instructions to the AI.
+- **The AI tracing model download** is pinned to one upstream revision and each file is checked against its SHA-256; an older download that doesn't match is fetched again.
+- **Spelling**: the app and its docs use US spelling (Center in the hoop, Millimeters, Licenses, color).
+- **Repository**: GitHub Actions are pinned by commit SHA, and Dependabot proposes monthly updates.
+- **Tests**: panels can now be tested in a browser-like page (jsdom); name the file `*.dom.test.tsx`.
+- **Docs**: AGENTS.md matches the app (networkx, onnxruntime, schemas, light fabric). Decisions on the 20 open QA items are in docs/QA-RESPONSE.md.
+
 ### Self-audit fixes (2026-10-13)
 A review of the whole app after the changes above; fixed:
 - **Satins**: a start point off the satin (left behind when its points were moved) no longer sews a line across bare fabric; a dragged start now lands on the satin's nearest stitch. Moving a satin's tips or turning it another way (Shift+W) drops the old start and end, which no longer fit.

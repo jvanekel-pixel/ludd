@@ -732,11 +732,15 @@ function objectBox(o: ObjectItem): [number, number, number, number] | null {
   return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
 }
 
+const PINNED_STAYS_PUT = "That's pinned (📌), so it stays put. Unpin it to move, turn or resize it.";
+
 /** Turn, mirror, resize or move everything selected, as one. */
 export function editSelection(op: TogetherOp, merge: Merge = false) {
   const l = currentLayout();
   const ids = selectionIds();
   if (!l || !ids.length) return;
+  // A pinned shape stays where it is: no arrow keys, R, Alt+H/V or resizing until it is unpinned.
+  if (ids.some((id) => l.items.find((it) => it.id === id)?.locked)) return info(PINNED_STAYS_PUT);
   if (ids.length === 1 && !op.move) {
     // One item turns, flips and grows about its own centre.
     const id = ids[0];
@@ -2070,7 +2074,8 @@ const nudge = (dx: number, dy: number) => () => {
   const s = useStore.getState();
   const img = currentDoc()?.images.find((im) => im.id === s.selectedId);
   if (img) {
-    if (!img.locked) setPicture(img.id, { x: img.x + dx, y: img.y + dy });
+    if (img.locked) return info(PINNED_STAYS_PUT);
+    setPicture(img.id, { x: img.x + dx, y: img.y + dy });
     return;
   }
   // Tapping or holding an arrow key is one move: one undo step, renders as fast as the engine goes.
@@ -2342,7 +2347,7 @@ export const COMMANDS: Command[] = [
   { id: "arrange.later", title: "Sew later", shortcut: "Mod+]", run: () => sewAt(1), enabled: () => canMoveInOrder(1) },
   { id: "arrange.first", title: "Sew first", shortcut: "Mod+Shift+[", run: () => sewAt("first"), enabled: () => canMoveInOrder(-1) },
   { id: "arrange.last", title: "Sew last", shortcut: "Mod+Shift+]", run: () => sewAt("last"), enabled: () => canMoveInOrder(1) },
-  { id: "arrange.centre", title: "Centre in the hoop", shortcut: "Mod+Shift+M", run: centreSelection, enabled: () => hasTarget() && !!selectionGeometry(selectionIds()).box },
+  { id: "arrange.centre", title: "Center in the hoop", shortcut: "Mod+Shift+M", run: centreSelection, enabled: () => hasTarget() && !!selectionGeometry(selectionIds()).box },
   // With several selected, the thread chosen goes to all of them.
   { id: "object.thread", title: "Change thread…", shortcut: "Alt+T", run: () => useContextMenu.setState({ threadFor: selectionIds().find(recolorable) ?? selectionIds()[0] ?? null }), enabled: () => hasTarget() && (selectionIds().some(recolorable) || (selectionIds().length > 1 && selectionIds().some(singleColorFile))) },
   { id: "text.toShapes", title: "Break the lettering into shapes", shortcut: "Mod+Alt+X", run: () => void textToShapes(), enabled: () => hasTarget() && currentLayout()?.items.find((it) => it.id === targetId())?.kind === "text" },
@@ -2370,7 +2375,7 @@ export const COMMANDS: Command[] = [
   { id: "view.realistic", title: "Realistic thread (3D)", shortcut: "T", run: () => useStore.getState().toggleRealistic() },
   { id: "view.hoop", title: "Show hoop", shortcut: "H", run: () => useStore.getState().toggleHoop() },
   { id: "view.grid", title: "Show grid", shortcut: "G", run: () => useStore.getState().toggleGrid() },
-  { id: "view.units", title: "Measure in millimetres", shortcut: "U", run: () => useStore.getState().toggleUnits() },
+  { id: "view.units", title: "Measure in millimeters", shortcut: "U", run: () => useStore.getState().toggleUnits() },
   { id: "view.zoomIn", title: "Zoom in", shortcut: "=", run: () => useStore.getState().requestZoom("in"), enabled: hasDoc },
   { id: "view.zoomInPlus", title: "Zoom in", shortcut: "Shift++", run: () => useStore.getState().requestZoom("in"), enabled: hasDoc },
   { id: "view.zoomInPad", title: "Zoom in", shortcut: "+", run: () => useStore.getState().requestZoom("in"), enabled: hasDoc },

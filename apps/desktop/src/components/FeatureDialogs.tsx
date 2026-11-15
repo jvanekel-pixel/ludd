@@ -170,6 +170,9 @@ export function BrowseDialog() {
         <span className="browse-folder" title={folder}>
           {folder || "No folder chosen yet"}
         </span>
+        <button disabled={!folder || busy} onClick={() => void scan(folder)} title="Look through the folder again (new, changed or removed designs)">
+          Refresh
+        </button>
         <input placeholder="Find by name" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Find by name" />
       </div>
       {busy && <p className="hint">Looking through the folder… (the first time, each design is read once)</p>}

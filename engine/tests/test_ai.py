@@ -196,6 +196,7 @@ def test_estimate_shows_what_is_sent_and_cost_only_with_prices():
     p = providers.Anthropic("k", "claude-sonnet-5-5")
     e = providers.estimate(req, p)
     assert e["text"] == req.text and len(e["images"]) == 1 and e["cloud"]
+    assert e["instructions"] == req.system  # QA decision 18: the fixed instructions are shown too
     assert e["cost_usd_max"] == pytest.approx((e["tokens_in"] * 3 + 1000 * 15) / 1e6, abs=1e-4)
     settings.save({"cloud": {"price_in": None}})
     assert providers.estimate(req, p)["cost_usd_max"] is None

@@ -210,6 +210,7 @@ def estimate(req: Request, provider: Provider) -> dict[str, Any]:
         "model": provider.model,
         "cloud": provider.cloud,
         "host": host_of(getattr(provider, "url", None) or getattr(provider, "base_url", "")),
+        "instructions": req.system,  # LUDD's fixed instructions to the model, sent with every request
         "text": req.text,
         "images": [{"bytes": len(i), "data_url": "data:image/png;base64," + base64.b64encode(i).decode("ascii")} for i in req.images],
         "tokens_in": tokens_in,

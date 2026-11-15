@@ -12,6 +12,7 @@ the model's own confidence.
 
 from __future__ import annotations
 
+import hashlib
 import http.client
 import os
 import time
@@ -25,9 +26,21 @@ import numpy as np
 from ..storage import data_dir
 
 SOURCE = "https://huggingface.co/Acly/MobileSAM"
+# Pinned: the files are fetched from this exact upstream revision (not "main", which can change), and
+# each one is checked against its SHA-256 before it is kept. To move to a newer upstream version, look
+# up the new revision and checksums on the model page, change both here, and try the download.
+REVISION = "0d3b403339b4674a82493d5e97964dd78089ddc8"
 FILES = {
-    "encoder": ("mobile_sam_image_encoder.onnx", f"{SOURCE}/resolve/main/mobile_sam_image_encoder.onnx"),
-    "decoder": ("sam_mask_decoder_multi.onnx", f"{SOURCE}/resolve/main/sam_mask_decoder_multi.onnx"),
+    "encoder": (
+        "mobile_sam_image_encoder.onnx",
+        f"{SOURCE}/resolve/{REVISION}/mobile_sam_image_encoder.onnx",
+        "580f5fb648ea1062c0aabc26217aed56921985f03f0cbbd852bba81d760cc749",
+    ),
+    "decoder": (
+        "sam_mask_decoder_multi.onnx",
+        f"{SOURCE}/resolve/{REVISION}/sam_mask_decoder_multi.onnx",
+        "8976b90a87ba50a6a72217a5ff994f7d25ce16f2229fcc1ed259e1294c622ffe",
+    ),
 }
 SIZE_MB = 45  # about: both files together
 INPUT_SIDE = 1024  # the model reads pictures with their long side this big
@@ -58,7 +71,7 @@ def runtime() -> bool:
 
 
 def installed() -> bool:
-    return all((model_dir() / name).is_file() for name, _ in FILES.values())
+    return all((model_dir() / name).is_file() for name, *_ in FILES.values())
 
 
 def available() -> bool:
@@ -68,20 +81,31 @@ def available() -> bool:
 
 def status() -> dict[str, Any]:
     d = model_dir()
-    size = sum((d / n).stat().st_size for n, _ in FILES.values() if (d / n).is_file())
+    size = sum((d / n).stat().st_size for n, *_ in FILES.values() if (d / n).is_file())
     return {"installed": installed(), "runtime": runtime(), "size_mb": round(size / 1e6, 1) if size else SIZE_MB, "source": SOURCE, "license": "Apache-2.0"}
 
 
-def _fetch(url: str, part: Path) -> None:
-    """One file, all of it (a body shorter than the server announced is an error)."""
+def _sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        while chunk := f.read(1 << 20):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _fetch(url: str, part: Path) -> str:
+    """One file, all of it (a body shorter than the server announced is an error). Returns its SHA-256."""
+    h = hashlib.sha256()
     with urllib.request.urlopen(urllib.request.Request(url, headers={"User-Agent": "LUDD"}), timeout=60) as r, open(part, "wb") as f:
         expected = r.headers.get("Content-Length")
         got = 0
         while chunk := r.read(1 << 20):
             f.write(chunk)
+            h.update(chunk)
             got += len(chunk)
     if expected and expected.isdigit() and got != int(expected):
         raise http.client.IncompleteRead(b"", int(expected) - got)
+    return h.hexdigest()
 
 
 def download() -> dict[str, Any]:
@@ -89,13 +113,15 @@ def download() -> dict[str, Any]:
     _runtime()  # no point fetching 45 MB that can't run here
     d = model_dir()
     d.mkdir(parents=True, exist_ok=True)
-    for name, url in FILES.values():
+    for name, url, sha in FILES.values():
         dest = d / name
         if dest.is_file():
-            continue
+            if _sha256(dest) == sha:
+                continue
+            dest.unlink()  # an earlier download that isn't the pinned version: fetch it again
         part = d / (name + ".part")
         try:
-            _fetch(url, part)
+            got = _fetch(url, part)
         except (OSError, http.client.HTTPException) as exc:
             part.unlink(missing_ok=True)
             if isinstance(exc, urllib.error.HTTPError):
@@ -105,6 +131,12 @@ def download() -> dict[str, Any]:
             else:
                 why = "the download was cut off"
             raise SegmentError(f"Couldn't download the AI tracing model ({why}). Try again in a moment.") from exc
+        if got != sha:
+            part.unlink(missing_ok=True)
+            raise SegmentError(
+                f"The AI tracing model file {name} didn't match its expected checksum, so it was thrown away. "
+                "Try again; if it keeps happening, the download source may have changed."
+            )
         os.replace(part, dest)
     # Make sure it loads before saying it's ready.
     try:
@@ -119,7 +151,7 @@ def remove() -> dict[str, Any]:
     global _sess, _generation
     _sess = None
     _generation += 1
-    for name, _ in FILES.values():
+    for name, *_ in FILES.values():
         (model_dir() / name).unlink(missing_ok=True)
     return status()
 

@@ -590,6 +590,59 @@ def test_model_download_needs_onnx_runtime_first(tmp_path, monkeypatch):
     assert fetched == []
 
 
+def test_model_files_are_pinned_to_a_revision_with_checksums():
+    """QA decision 2: not the moving "main" branch, and every file has a SHA-256."""
+    import re
+
+    from threadline_engine.ai import segment
+
+    for name, url, sha in segment.FILES.values():
+        assert f"/resolve/{segment.REVISION}/" in url and "/main/" not in url and url.endswith(name)
+        assert re.fullmatch(r"[0-9a-f]{64}", sha)
+    assert re.fullmatch(r"[0-9a-f]{40}", segment.REVISION)
+
+
+def _fake_model(monkeypatch, tmp_path, bodies):
+    """Two tiny stand-in model files with the right checksums, served instead of the real download."""
+    import hashlib
+    import urllib.request
+
+    from threadline_engine.ai import segment
+
+    files = {k: (f"{k}.onnx", f"https://example.test/{k}.onnx", hashlib.sha256(b).hexdigest()) for k, b in bodies.items()}
+    served = {url: bodies[k] for k, (_, url, _) in files.items()}
+    monkeypatch.setattr(segment, "FILES", files)
+    monkeypatch.setattr(segment, "model_dir", lambda: tmp_path / "m")
+    monkeypatch.setattr(segment, "_runtime", lambda: None)
+    monkeypatch.setattr(segment, "_sessions", lambda force=False: None)
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, **k: _Resp(served[req.full_url]))
+    return segment
+
+
+def test_model_download_keeps_files_that_match_their_checksum(tmp_path, monkeypatch):
+    segment = _fake_model(monkeypatch, tmp_path, {"encoder": b"aaa", "decoder": b"bbb"})
+    assert segment.download()["installed"] is True
+    assert (tmp_path / "m" / "encoder.onnx").read_bytes() == b"aaa"
+
+
+def test_model_download_throws_away_a_file_with_the_wrong_checksum(tmp_path, monkeypatch):
+    segment = _fake_model(monkeypatch, tmp_path, {"encoder": b"aaa", "decoder": b"bbb"})
+    name, url, _ = segment.FILES["decoder"]
+    segment.FILES["decoder"] = (name, url, "0" * 64)  # the server's copy is no longer the expected one
+    with pytest.raises(segment.SegmentError, match="checksum"):
+        segment.download()
+    assert not (tmp_path / "m" / "decoder.onnx").exists()
+    assert not list((tmp_path / "m").glob("*.part"))
+
+
+def test_model_download_replaces_an_earlier_unpinned_file(tmp_path, monkeypatch):
+    segment = _fake_model(monkeypatch, tmp_path, {"encoder": b"aaa", "decoder": b"bbb"})
+    (tmp_path / "m").mkdir()
+    (tmp_path / "m" / "encoder.onnx").write_bytes(b"from the old moving main branch")
+    segment.download()
+    assert (tmp_path / "m" / "encoder.onnx").read_bytes() == b"aaa"
+
+
 def _square_fill(id_, x0, y0, x1, y1):
     pts = [[x0, y0, "l"], [x1, y0, "l"], [x1, y1, "l"], [x0, y1, "l"]]
     return {"id": id_, "kind": "fill", "geometry": {"outline": pts}, "params": {}, "thread": {"color": "#000000"}}

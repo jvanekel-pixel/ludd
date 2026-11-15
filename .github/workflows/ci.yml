@@ -20,15 +20,15 @@ jobs:
         os: [windows-latest, macos-latest, macos-15-intel, ubuntu-22.04]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
       - name: Engine tests
         working-directory: engine
         # --locked: fail if uv.lock is out of date, instead of quietly testing other versions.
         run: uv run --locked pytest -q
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
           # pnpm comes from corepack in the next step, so setup-node mustn't look for it yet.
@@ -43,19 +43,21 @@ jobs:
     needs: test
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@v6
-      - uses: actions/setup-node@v5
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
           # pnpm comes from corepack in the next step, so setup-node mustn't look for it yet.
           package-manager-cache: false
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
         with:
           workspaces: apps/desktop/src-tauri
       - name: Freeze engine sidecar
@@ -70,7 +72,7 @@ jobs:
         # Test build: no update files (those are signed, and only the Release workflow has the key).
         run: pnpm tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}'
         shell: bash
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ludd-windows
           path: |

@@ -424,7 +424,7 @@ const UNDERLAY_KINDS = {
     { id: "tatami", label: "Cross-hatch", title: "A light fill across the top stitches: holds the fabric flat" },
   ],
   satin: [
-    { id: "center", label: "Centre", title: "A run down the middle: for narrow columns" },
+    { id: "center", label: "Center", title: "A run down the middle: for narrow columns" },
     { id: "edge", label: "Edge", title: "Runs along both sides: crisp edges" },
     { id: "zigzag", label: "Zigzag", title: "A loose zigzag: lifts wide columns" },
   ],
