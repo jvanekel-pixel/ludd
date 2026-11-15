@@ -30,7 +30,7 @@
   },
   "phase": 2,
   "status": "active",
-  "nextAction": "Confirm the first CI run on GitHub is green on Windows, both Macs and Linux; check the model download checksums once; then the second QA pass",
+  "nextAction": "Check the model download checksums once (Settings > AI tracing > Download); triage the 4 Dependabot PRs; then the second QA pass (docs/QA-PROMPT.md)",
   "blockedOnHuman": null,
   "lastSessionAt": "2026-11-15T02:40:06Z",
   "health": {

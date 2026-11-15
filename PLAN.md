@@ -28,7 +28,7 @@ Why it matters: about 100 modified and 70 new files sit uncommitted, so until th
 - [x] Owner approves committing the uncommitted working tree; commit in logical groups (5 local commits, not pushed)
 - [x] Owner decides the 20 open items listed in docs/QA-RESPONSE.md (decided 2026-11-14; applied in ed160f1)
 - [ ] Run the second QA pass using docs/QA-PROMPT.md and fix what it finds
-- [ ] Push to GitHub (done, ed160f1) and confirm CI is green on Windows, both Macs and Linux (first run not yet checked)
+- [x] Push to GitHub and confirm CI is green on Windows, both Macs and Linux (green at 46b0de4, incl. the Windows installer job)
 - [ ] Tag v1.0.1, check the draft release's `latest.json` URLs, owner publishes
 
 ## Phase 3: Stitch-Out Verification on the PE550D
