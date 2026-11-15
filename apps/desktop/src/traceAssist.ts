@@ -37,12 +37,9 @@ export function pictureUnder(images: readonly RefImage[], x: number, y: number):
   return null;
 }
 
-/** The points the engine should continue from: the shape's points, or a satin's rung centres. */
+/** The points the engine should continue from (a satin ribbon's are its centre line). */
 export function tracePoints(pen: Pen): [number, number][] | null {
-  if (pen.kind !== "satin") return pen.a.map((n) => [n[0], n[1]]);
-  // Only between complete pairs: the next suggestion is a whole rung.
-  if (pen.a.length !== pen.b.length || !pen.a.length) return null;
-  return pen.a.map((n, i) => [(n[0] + pen.b[i][0]) / 2, (n[1] + pen.b[i][1]) / 2]);
+  return pen.a.map((n) => [n[0], n[1]]);
 }
 
 let seq = 0;
@@ -70,7 +67,8 @@ async function refresh() {
       points: pts,
       step_mm: s.traceStep,
       closed: pen.kind === "fill",
-      satin: pen.kind === "satin",
+      // A ribbon follows the middle of a line.
+      mode: pen.kind === "satin" ? "center" : "auto",
     });
     if (my !== seq || useStore.getState().pen !== pen) return;
     s.setGhost(
@@ -103,16 +101,6 @@ export function acceptGhost(which = 1): boolean {
   if (!point) return false;
   const kind: PathNode[2] = g.corner ? "c" : "s";
   s.setGhost(null);
-  if (pen.kind === "satin" && g.rails) {
-    // Keep each side on its own rail: match the proposed pair to the previous rung's sides.
-    const [r1, r2] = g.rails;
-    const lastA = pen.a[pen.a.length - 1];
-    const d = (p: [number, number], q: PathNode) => Math.hypot(p[0] - q[0], p[1] - q[1]);
-    const [toA, toB] = d(r1, lastA) <= d(r2, lastA) ? [r1, r2] : [r2, r1];
-    penAdd([toA[0], toA[1], kind]);
-    penAdd([toB[0], toB[1], kind]);
-    return true;
-  }
   if (g.close && pen.kind === "fill") {
     void penFinish();
     return true;
@@ -192,9 +180,7 @@ export function toggleLastPoint() {
   const pen = s.pen;
   if (!pen) return;
   const flip = (n: PathNode): PathNode => [n[0], n[1], n[2] === "s" ? "l" : n[2] === "l" ? "c" : "s"];
-  if (pen.kind === "satin" && pen.b.length === pen.a.length && pen.b.length) {
-    s.setPen({ ...pen, a: [...pen.a.slice(0, -1), flip(pen.a[pen.a.length - 1])], b: [...pen.b.slice(0, -1), flip(pen.b[pen.b.length - 1])] });
-  } else if (pen.a.length) {
+  if (pen.a.length) {
     s.setPen({ ...pen, a: [...pen.a.slice(0, -1), flip(pen.a[pen.a.length - 1])] });
   }
 }

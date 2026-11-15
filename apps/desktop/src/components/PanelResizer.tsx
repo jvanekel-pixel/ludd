@@ -22,27 +22,9 @@ export function usePanelWidth(): [number, (w: number) => void] {
 
 /** A grip on the panel's left edge: drag to resize, double-click to reset, Esc while dragging puts it back. */
 export function PanelResizer({ width, onWidth }: { width: number; onWidth: (w: number) => void }) {
-  const start = useRef<{ x: number; w: number; release: () => void } | null>(null);
   const [dragging, setDragging] = useState(false);
-
-  useEffect(() => {
-    if (!dragging) return;
-    const move = (e: PointerEvent) => {
-      const s = start.current;
-      if (s) onWidth(clampPanel(s.w + (s.x - e.clientX), window.innerWidth));
-    };
-    const up = () => {
-      start.current?.release();
-      start.current = null;
-      setDragging(false);
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-    return () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-    };
-  }, [dragging, onWidth]);
+  const widthRef = useRef(width);
+  widthRef.current = width;
 
   // Remember the width once a drag ends.
   useEffect(() => {
@@ -60,22 +42,37 @@ export function PanelResizer({ width, onWidth }: { width: number; onWidth: (w: n
       title="Drag to make the panel wider or narrower; double-click to reset"
       onPointerDown={(e) => {
         e.preventDefault();
-        const w0 = width;
-        start.current = {
-          x: e.clientX,
-          w: w0,
-          release: holdEscape(() => {
-            onWidth(w0);
-            start.current = null;
-            setDragging(false);
-          }),
+        const x0 = e.clientX;
+        const w0 = widthRef.current;
+        // Listeners and the Esc hold are set up and torn down together, so a quick click (or a
+        // double-click) can never leave Esc pointing at a finished drag.
+        // A move with no button down means the mouse came up where we didn't hear it: the drag is over.
+        const move = (ev: PointerEvent) => (ev.buttons === 0 ? stop() : onWidth(clampPanel(w0 + (x0 - ev.clientX), window.innerWidth)));
+        const stop = () => {
+          window.removeEventListener("pointermove", move);
+          window.removeEventListener("pointerup", stop);
+          window.removeEventListener("pointercancel", stop);
+          window.removeEventListener("blur", stop);
+          release();
+          setDragging(false);
         };
+        const release = holdEscape(() => {
+          onWidth(w0);
+          stop();
+        });
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", stop);
+        window.addEventListener("pointercancel", stop);
+        window.addEventListener("blur", stop);
         setDragging(true);
       }}
       onDoubleClick={() => onWidth(clampPanel(PANEL_DEFAULT, window.innerWidth))}
       onKeyDown={(e) => {
-        if (e.key === "ArrowLeft") onWidth(clampPanel(width + 20, window.innerWidth));
-        if (e.key === "ArrowRight") onWidth(clampPanel(width - 20, window.innerWidth));
+        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+        // The arrows resize the panel only: they don't also nudge the selected design.
+        e.preventDefault();
+        e.stopPropagation();
+        onWidth(clampPanel(width + (e.key === "ArrowLeft" ? 20 : -20), window.innerWidth));
       }}
     />
   );

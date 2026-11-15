@@ -66,7 +66,15 @@ export function BatchDialog() {
   const writable = sortFormats(formats?.write ?? [{ ext: "pes", description: "" }, { ext: "jef", description: "" }]);
 
   return (
-    <dialog ref={ref} className="modal batch" onClose={() => setOpen(false)} onCancel={(e) => busy && e.preventDefault()}>
+    <dialog
+      ref={ref}
+      className="modal batch"
+      // While saving, Esc must not close it: the browser lets a second Esc past onCancel, so the key
+      // itself is stopped, and a close that slips through anyway reopens the dialog.
+      onKeyDown={(e) => busy && e.key === "Escape" && e.preventDefault()}
+      onCancel={(e) => busy && e.preventDefault()}
+      onClose={() => (busy ? ref.current?.showModal() : setOpen(false))}
+    >
       <h2>Batch convert</h2>
       <p className="hint">Converts every design in a folder. Originals are never changed or overwritten.</p>
       <label>

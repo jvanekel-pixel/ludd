@@ -50,3 +50,12 @@ describe("print", () => {
     expect((html.match(/<tr><td>/g) ?? []).length).toBe(2);
   });
 });
+
+describe("QA C22: the installed app lets the print page use its styles", () => {
+  it("keeps Tauri from adding a style nonce, which would switch off 'unsafe-inline'", async () => {
+    const { readFileSync } = await import("node:fs");
+    const conf = JSON.parse(readFileSync(new URL("../src-tauri/tauri.conf.json", import.meta.url), "utf8"));
+    expect(conf.app.security.csp).toContain("style-src 'self' 'unsafe-inline'");
+    expect(conf.app.security.dangerousDisableAssetCspModification).toContain("style-src");
+  });
+});

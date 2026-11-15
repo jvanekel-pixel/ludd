@@ -14,7 +14,14 @@ export type Command = {
 
 const isMac = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
-type KeyLike = Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "shiftKey" | "altKey">;
+type KeyLike = Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "shiftKey" | "altKey"> & { code?: string };
+
+/** The physical key's code for a letter, digit or bracket ("KeyA", "Digit1", "BracketLeft"). */
+function codeFor(key: string): string | null {
+  if (/^[A-Za-z]$/.test(key)) return `Key${key.toUpperCase()}`;
+  if (/^[0-9]$/.test(key)) return `Digit${key}`;
+  return { "[": "BracketLeft", "]": "BracketRight", ",": "Comma", ".": "Period", "-": "Minus", "=": "Equal" }[key] ?? null;
+}
 
 export function matchesShortcut(e: KeyLike, shortcut: string, mac = isMac()): boolean {
   // "+" itself can be the key: "+", "Shift++".
@@ -28,7 +35,11 @@ export function matchesShortcut(e: KeyLike, shortcut: string, mac = isMac()): bo
   if (want.has("Shift") !== e.shiftKey) return false;
   if (want.has("Alt") !== e.altKey) return false;
   const pressed = e.key === " " ? "Space" : e.key;
-  return pressed.length === 1 ? pressed.toUpperCase() === key.toUpperCase() : pressed === key;
+  if (pressed.length === 1 ? pressed.toUpperCase() === key.toUpperCase() : pressed === key) return true;
+  // On a Mac, Option changes the character (Option+A types "å"), and Shift changes punctuation
+  // (Shift+, types "<"): match those shortcuts by the key itself.
+  const code = e.altKey || (e.shiftKey && !/^[A-Za-z0-9]$/.test(key)) ? codeFor(key) : null;
+  return !!code && e.code === code;
 }
 
 /** Human-readable shortcut for tooltips: "Ctrl+Shift+S" / "⌘⇧S". */

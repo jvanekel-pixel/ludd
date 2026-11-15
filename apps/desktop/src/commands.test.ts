@@ -48,6 +48,12 @@ describe("shortcuts", () => {
     expect(run).toHaveBeenCalledOnce();
   });
 
+  it("matches Shift with punctuation by the key itself (Shift+, types '<')", () => {
+    expect(matchesShortcut({ ...key("<", { shiftKey: true }), code: "Comma" }, "Shift+,", false)).toBe(true);
+    expect(matchesShortcut({ ...key("<"), code: "Comma" }, "Shift+,", false)).toBe(false);
+    expect(matchesShortcut({ ...key("<", { shiftKey: true }), code: "Comma" }, ",", false)).toBe(false);
+  });
+
   it("understands + as a key", () => {
     expect(matchesShortcut(key("+", { shiftKey: true }), "Shift++", false)).toBe(true);
     expect(matchesShortcut(key("+"), "+", false)).toBe(true);

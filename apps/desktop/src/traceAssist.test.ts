@@ -20,13 +20,8 @@ describe("pictureUnder", () => {
 });
 
 describe("tracePoints", () => {
-  it("uses the points of lines and fills, and rung centres of satins", () => {
+  it("uses the points of lines, fills and satin ribbons", () => {
     expect(tracePoints({ kind: "run", a: [[0, 0, "c"], [3, 4, "s"]], b: [] })).toEqual([[0, 0], [3, 4]]);
-    expect(tracePoints({ kind: "satin", a: [[0, 0, "c"], [10, 0, "c"]], b: [[0, 4, "c"], [10, 4, "c"]] })).toEqual([
-      [0, 2],
-      [10, 2],
-    ]);
-    // Halfway through a rung: wait until both sides are placed.
-    expect(tracePoints({ kind: "satin", a: [[0, 0, "c"]], b: [] })).toBe(null);
+    expect(tracePoints({ kind: "satin", a: [[0, 0, "c"], [10, 0, "s"]], b: [] })).toEqual([[0, 0], [10, 0]]);
   });
 });

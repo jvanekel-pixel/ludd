@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { basename, exportOptions, previewExport, saveExport, sortFormats, splitPlan, type SplitPlan } from "../actions";
+import { basename, commit, exportOptions, previewExport, saveExport, sortFormats, splitPlan, type SplitPlan } from "../actions";
 import { defaultCutStops, defaultFormat, hoopFit } from "../design/machine";
 import type { CutStops, ExportReport } from "../design/types";
-import { hasRecolors } from "../design/layout";
+import { hasRecolors, scaleDesign, shrinkToFit } from "../design/layout";
 import type { Layout } from "../design/types";
 import { selectHoop, selectLayout, selectMachine, useStore } from "../store";
 
@@ -71,6 +71,7 @@ export function ExportDialog() {
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [split, setSplit] = useState(true);
+  const [splitSmall, setSplitSmall] = useState(false); // only a little too big: split only if asked
   const [overlap, setOverlap] = useState(10);
   const [plan, setPlan] = useState<SplitPlan | null>(null);
   const setSplitPreview = useStore((s) => s.setSplitPreview);
@@ -83,6 +84,7 @@ export function ExportDialog() {
       setCut(defaultCutStops(machine, design));
       setReport(null);
       setPreviewError(null);
+      setSplitSmall(false);
       d.showModal();
     } else if (!open && d.open) d.close();
   }, [open, machine, design]);
@@ -107,7 +109,9 @@ export function ExportDialog() {
   }, [open, design, ext, cut, machine, hoop, layout]);
 
   const tooBig = !!design && !!hoop && hoopFit(design.info, hoop) === "too_big";
-  const splitting = tooBig && split;
+  // Only a little too big: making it slightly smaller is the simple fix, so it's offered first.
+  const shrink = tooBig && design && hoop ? shrinkToFit(design.info, hoop) : null;
+  const splitting = tooBig && (shrink === null ? split : splitSmall);
 
   // Too big for the hoop: work out the hoopings, and show them on the canvas.
   useEffect(() => {
@@ -160,7 +164,15 @@ export function ExportDialog() {
   const cutsOnlyAtColors = machine?.cuts === "color_change";
 
   return (
-    <dialog ref={ref} className="modal export" onClose={() => setOpen(false)} onCancel={(e) => busy && e.preventDefault()}>
+    <dialog
+      ref={ref}
+      className="modal export"
+      // While saving, Esc must not close it: the browser lets a second Esc past onCancel, so the key
+      // itself is stopped, and a close that slips through anyway reopens the dialog.
+      onKeyDown={(e) => busy && e.key === "Escape" && e.preventDefault()}
+      onCancel={(e) => busy && e.preventDefault()}
+      onClose={() => (busy ? ref.current?.showModal() : setOpen(false))}
+    >
       <h2>Save for {machine ? `your ${machine.name}` : "your machine"}</h2>
 
       <ul className="summary">
@@ -180,11 +192,24 @@ export function ExportDialog() {
         {edits.length > 0 && <li className="ok-good">With your changes: {edits.join(", ")}</li>}
       </ul>
 
-      {tooBig && (
+      {shrink !== null && layout && design && (
+        <div className="shrink-fit">
+          <button className="primary" onClick={() => void commit(scaleDesign(layout, design, shrink))} disabled={busy}>
+            Make it {Math.max(1, Math.round((1 - shrink) * 100))}% smaller
+          </button>{" "}
+          to fit the {hoop?.name} hoop in one go.
+          <label className="check">
+            <input type="checkbox" checked={splitSmall} onChange={(e) => setSplitSmall(e.target.checked)} disabled={busy} />
+            Or split it across hoopings{plan && <SplitMap plan={plan} bounds={design ? design.info.bounds_mm : null} />}
+          </label>
+        </div>
+      )}
+
+      {tooBig && shrink === null && (
         <label className="check big">
           <input type="checkbox" checked={split} onChange={(e) => setSplit(e.target.checked)} disabled={busy} />
           <span>
-            Split it across hoopings{plan ? ` (${plan.cols} × ${plan.rows})` : ""} (recommended)
+            Split it across hoopings{plan && plan.sections.length === plan.cols * plan.rows && plan.sections.length > 1 ? ` (${plan.cols} × ${plan.rows})` : ""} (recommended)
             {plan && <SplitMap plan={plan} bounds={design ? design.info.bounds_mm : null} />}
             <small>
               One file per hooping, shown numbered on the design. Each ends and the next begins with pink alignment crosses: sew 1, re-hoop so the
@@ -208,7 +233,7 @@ export function ExportDialog() {
               {cut.enabled && report
                 ? stops
                   ? `Adds ${stops} stop${stops === 1 ? "" : "s"}. At each one the machine ties off and cuts. Just press Start; no thread change.`
-                  : "This design has no jump threads long enough to cut."
+                  : "No jumps this long are marked for trimming, so there's nothing to cut."
                 : "The machine stops, ties off and cuts at each jump. You press Start to carry on."}
             </small>
           </span>

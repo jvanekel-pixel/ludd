@@ -5,6 +5,8 @@ import {
   IDENTITY,
   addImage,
   addItem,
+  centreItem,
+  moveItem,
   addObject,
   clearRecolors,
   deleteColor,
@@ -22,12 +24,16 @@ import {
   moveBy,
   newDoc,
   newId,
+  objectCenter,
+  objectNodeLists,
+  reorder,
   pushHistory,
   shapeNodes,
   recolor,
   redo,
   removeImage,
   removeItem,
+  renameItem,
   rotateBy,
   scaleBy,
   undo,
@@ -57,11 +63,14 @@ import type {
   ObjectKind,
   PathNode,
   RefImage,
+  SatinColumn,
   Thread,
   ThreadMatch,
   TextItem,
 } from "./design/types";
-import { isObject } from "./design/types";
+import { isObject, isRibbon, isText } from "./design/types";
+import { useContextMenu } from "./contextMenu";
+import { angleOf } from "./design/direction";
 import { RpcError } from "./engine/rpc";
 import { isTauri } from "./engine/sidecar";
 import { canAdvise, loadAISettings, runAdvisor } from "./ai";
@@ -69,8 +78,11 @@ import { checkForUpdates } from "./updates";
 import { resolveResource } from "@tauri-apps/api/path";
 import { printDesign } from "./print";
 import { cancelTraceQueue, queueAccept, queueAcceptMany, setStep, toggleLastPoint } from "./traceAssist";
+import { canFit, nextFit } from "./satinFit";
+import { acceptGuess, loadTraceModel, nextGuess, setSpacing, setSpread } from "./autoTrace";
+import * as feat from "./features";
 import { loadPrefs, savePrefs } from "./prefs";
-import { isDirty, MACHINE_SPEED, PLAYER_SPEEDS, selectHoop, selectMachine, useStore, type Tool } from "./store";
+import { isDirty, MACHINE_SPEED, PLAYER_SPEEDS, selectHoop, selectImages, selectLayout, selectMachine, useStore, type Tool } from "./store";
 
 /** Formats listed first in pickers: the user's Brother (PES) and Janome (JEF). */
 export const PREFERRED_FORMATS = ["pes", "jef"];
@@ -88,7 +100,7 @@ export const JUMP_TRIM_MM = 3;
 /** New pictures start this wide (the PE550D's 4" hoop) unless that's bigger than the hoop. */
 const PICTURE_START_MM = 100;
 
-function engine() {
+export function engine() {
   const client = useStore.getState().engine;
   if (!client) throw new Error("The engine isn't connected");
   return client;
@@ -158,7 +170,43 @@ export function currentLayout(): Layout | null {
   return currentDoc()?.layout ?? null;
 }
 
-/** Show `history.present`. Only the latest of overlapping renders is applied. */
+/** A document being opened (or started): its file and the version that counts as saved. Applied
+ *  with whichever render lands first, even an edit made while it was still opening, so the window,
+ *  the project path and "unsaved changes" always describe what's on screen. */
+let pendingOpen: { path: string | null; doc: Doc } | null = null;
+
+function applyOpen() {
+  const open = pendingOpen;
+  if (!open) return;
+  pendingOpen = null;
+  const s = useStore.getState();
+  s.select(null);
+  s.setTool("select");
+  useStore.setState({ projectPath: open.path, savedDoc: open.doc });
+  s.setMeasure(null);
+  s.selectNode(null);
+  // Per-document modes and proposals end with their document (their Esc bookings go too).
+  s.setStitchEdit(null);
+  s.setAdvice(null);
+  s.notify(null);
+}
+
+/** Lettering just placed, whose text box should be focused as soon as its panel appears. */
+let textToEdit: string | null = null;
+
+/** True (once) if the text box for `id` should take the focus: the lettering was just placed. */
+export function takeTextToEdit(id: string): boolean {
+  if (textToEdit !== id) return false;
+  textToEdit = null;
+  return true;
+}
+
+/** One render at a time: edits made while one is on its way wait, and only the newest of them is
+ *  rendered next (holding an arrow key sends a few renders, not one per key repeat). */
+let rendering = false;
+let queued: { history: History; fresh: boolean; seq: number; done: ((ok: boolean) => void)[] } | null = null;
+
+/** Show `history.present`. Only the newest of overlapping edits is rendered and applied. */
 async function showHistory(history: History, fresh = false): Promise<boolean> {
   const seq = ++renderSeq;
   const { setHistory, setDesign } = useStore.getState();
@@ -166,35 +214,108 @@ async function showHistory(history: History, fresh = false): Promise<boolean> {
   if (!doc || doc.layout.items.length === 0) {
     // Nothing to stitch yet (a new project, or only pictures): the canvas still shows.
     pending = null;
+    if (queued) {
+      queued.done.forEach((d) => d(false));
+      queued = null;
+    }
     setHistory(history);
-    setDesign(null, fresh);
+    setDesign(null, fresh || !!pendingOpen);
+    applyOpen();
     return true;
   }
   pending = history;
+  if (rendering) {
+    // Wait for the render on its way; a newer edit replaces this one before it's sent.
+    // (An edit it replaces is part of it, so that edit's follow-up waits for its result.)
+    return new Promise<boolean>((resolve) => {
+      queued = { history, fresh: fresh || !!queued?.fresh, seq, done: [...(queued?.done ?? []), resolve] };
+    });
+  }
+  return runRender(history, fresh, seq);
+}
+
+async function runRender(history: History, fresh: boolean, seq: number): Promise<boolean> {
+  const { setHistory, setDesign } = useStore.getState();
+  rendering = true;
   try {
-    const design = await engine().call<Design>("layout.render", { layout: doc.layout }, OPEN_TIMEOUT);
-    if (seq !== renderSeq) return false;
+    const design = await engine().call<Design>("layout.render", { layout: history.present!.layout }, OPEN_TIMEOUT);
+    if (seq !== renderSeq) {
+      // A newer edit is waiting and is rendered next. Show this one meanwhile, so an edit that
+      // worked is kept even if the newer one fails (not while a design is opening: the screen,
+      // the file and "unsaved" must all switch together).
+      if (!pending || pendingOpen) return false;
+      setHistory(history);
+      setDesign(design, fresh);
+      return true;
+    }
     pending = null;
     setHistory(history);
-    setDesign(design, fresh);
+    setDesign(design, fresh || !!pendingOpen);
+    applyOpen();
     return true;
   } catch (err) {
     // The edit didn't happen: later edits build on what's on screen.
-    if (seq === renderSeq) pending = null;
-    fail(err);
+    if (seq === renderSeq) {
+      pending = null;
+      pendingOpen = null;
+      fail(err);
+    }
     return false;
+  } finally {
+    rendering = false;
+    const next = queued;
+    queued = null;
+    if (next) void runRender(next.history, next.fresh, next.seq).then((ok) => next.done.forEach((d) => d(ok)));
+    else whenIdleWaiters.splice(0).forEach((w) => w());
   }
 }
 
-/** Apply an edit to the whole document: render it, and only then add it to the undo history. */
-export async function commitDoc(next: Doc) {
-  return showHistory(pushHistory(latestHistory(), next));
+const whenIdleWaiters: (() => void)[] = [];
+
+/** Resolves once no edit is rendering or waiting to (at once if none is). */
+export function whenIdle(): Promise<void> {
+  if (!rendering && !queued) return Promise.resolve();
+  return new Promise((resolve) => whenIdleWaiters.push(resolve));
+}
+
+/** Two documents with the same content: an "edit" from one to the other changes nothing. */
+function sameDoc(a: Doc, b: Doc): boolean {
+  if (a === b) return true;
+  const sameImages = a.images === b.images || (a.images.length === b.images.length && a.images.every((im, i) => im === b.images[i] || JSON.stringify(im) === JSON.stringify(b.images[i])));
+  return sameImages && (a.layout === b.layout || JSON.stringify(a.layout) === JSON.stringify(b.layout));
+}
+
+/** Repeated small moves (an arrow key held or tapped quickly) are one undo step. */
+let gesture: { key: string; until: number } | null = null;
+const GESTURE_MS = 800;
+
+/** The next edit continues the same gesture as the last one with this key (merged undo step). */
+function continueGesture(key: string): Merge {
+  const now = Date.now();
+  const same = !!gesture && gesture.key === key && now < gesture.until;
+  gesture = { key, until: now + GESTURE_MS };
+  return same ? true : "start";
+}
+
+/** How an edit joins the undo history: its own step (false), the first of a gesture ("start"),
+ *  or part of the gesture before it (true: merged into that step). */
+type Merge = boolean | "start";
+
+/** Apply an edit to the whole document: render it, and only then add it to the undo history.
+ *  `merge`: part of the same gesture as the last edit (one undo step for the lot). */
+export async function commitDoc(next: Doc, merge: Merge = false) {
+  const h = latestHistory();
+  if (merge === false) gesture = null; // any other edit ends a gesture
+  // Nothing changed (a value set to what it was, a click that moved nothing): no undo step, and
+  // the design doesn't count as changed.
+  if (h.present && sameDoc(h.present, next)) return true;
+  return showHistory(merge === true && h.present ? { ...h, present: next, future: [] } : pushHistory(h, next));
 }
 
 /** Apply an edit to the layout. */
-export async function commit(next: Layout) {
+export async function commit(next: Layout, merge: Merge = false) {
   const doc = currentDoc();
-  return commitDoc({ layout: next, images: doc?.images ?? [] });
+  return commitDoc({ layout: next, images: doc?.images ?? [] }, merge);
 }
 
 /** Apply an edit to the reference pictures (no re-render needed, but undoable). */
@@ -204,6 +325,7 @@ export function commitImages(images: RefImage[]) {
   // While a render is on its way, go through it so neither change overwrites the other.
   if (pending) return void commitDoc({ ...doc, images });
   const { history, setHistory } = useStore.getState();
+  if (sameDoc(doc, { ...doc, images })) return;
   setHistory(pushHistory(history, { ...doc, images }));
 }
 
@@ -211,28 +333,23 @@ export function commitImages(images: RefImage[]) {
 function freshDoc(): Doc {
   const doc = newDoc();
   const fabric = loadPrefs().fabric;
-  return fabric ? { ...doc, layout: { ...doc.layout, fabric } } : doc;
+  // New designs hide moves under later stitching: fewer jumps and trims to snip.
+  const layout = { ...doc.layout, travel_under: true, ...(fabric ? { fabric } : {}) };
+  return { ...doc, layout };
 }
 
 /** Start over with this document; it counts as saved (nothing to lose yet). */
 async function replaceDoc(doc: Doc, path: string | null, fresh = true) {
-  const ok = await showHistory({ past: [], present: doc, future: [] }, fresh);
-  if (ok) {
-    const s = useStore.getState();
-    s.select(null);
-    s.setTool("select");
-    s.markSaved(path);
-    s.setMeasure(null);
-    s.selectNode(null);
-    s.notify(null);
-  }
-  return ok;
+  pendingOpen = { path, doc };
+  return showHistory({ past: [], present: doc, future: [] }, fresh);
 }
 
 /** If there are unsaved changes, ask. Returns false if the user cancels. */
 export async function confirmDiscard(): Promise<boolean> {
   const s = useStore.getState();
-  if (!s.history.present || !isDirty(s)) return true;
+  // An edit still on its way to the screen counts as unsaved too.
+  const present = latestHistory().present;
+  if (!present || present === s.savedDoc) return true;
   const answer = await message("Save your changes first?", {
     title: "Unsaved changes",
     kind: "warning",
@@ -277,12 +394,29 @@ export async function openDesign(path?: string, skipConfirm = false) {
     }
     setLoading(`Opening ${basename(path)}…`);
     if (isProjectPath(path)) await openProject(path);
-    else await replaceDoc(newDoc(path), null);
+    else {
+      // A stitch file opens in the middle of the hoop, as it will sew (the machine centres it).
+      const doc = newDoc(path);
+      if (await replaceDoc(doc, null)) {
+        const shown = useStore.getState().design?.items?.find((it) => it.id === doc.layout.items[0]?.id);
+        const layout = shown ? centreItem(doc.layout, shown.id, shown.center_mm) : doc.layout;
+        if (layout !== doc.layout) await replaceDoc({ ...doc, layout }, null);
+      }
+    }
   } catch (err) {
     fail(err);
   } finally {
     setLoading(null);
   }
+}
+
+/** Show a project on the machine and hoop it was saved for, for now: your usual machine (the one
+ *  new designs start on) stays as it is. */
+export function applyProjectMachine(machine?: string | null, hoop?: string | null) {
+  const m = machine ? useStore.getState().machines.find((x) => x.id === machine) : undefined;
+  if (!m) return;
+  const hoopId = m.hoops.some((h) => h.id === hoop) ? hoop! : (m.hoops[0]?.id ?? null);
+  useStore.setState({ machineId: m.id, hoopId });
 }
 
 async function openProject(path: string) {
@@ -291,16 +425,14 @@ async function openProject(path: string) {
     { path },
     OPEN_TIMEOUT,
   );
-  const s = useStore.getState();
-  if (p.machine && s.machines.some((m) => m.id === p.machine)) {
-    s.setMachine(p.machine);
-    if (p.hoop) s.setHoop(p.hoop);
-  }
+  applyProjectMachine(p.machine, p.hoop);
   await replaceDoc({ layout: { ...p.layout, title: stem(path) }, images: p.images ?? [] }, p.path);
 }
 
 /** Save the project. Asks for a name the first time, or always with `as`. */
 export async function saveProject(as: boolean): Promise<boolean> {
+  // An edit still rendering is saved too.
+  await whenIdle();
   const s = useStore.getState();
   const doc = s.history.present;
   if (!doc) return false;
@@ -331,8 +463,13 @@ export async function saveProject(as: boolean): Promise<boolean> {
       OPEN_TIMEOUT,
     );
     // What was saved is what was sent: an edit made while saving still counts as unsaved.
-    useStore.setState({ projectPath: r.path, savedDoc: doc });
-    if (!isDirty(useStore.getState())) void engine().call("project.discard_recovery").catch(() => {});
+    // The design takes the file's name (window title, panel) without counting as a change.
+    const titled = doc.layout.title === stem(r.path) ? doc : { ...doc, layout: { ...doc.layout, title: stem(r.path) } };
+    const now = useStore.getState();
+    if (now.history.present === doc && !pending) useStore.setState({ projectPath: r.path, savedDoc: titled, history: { ...now.history, present: titled } });
+    else useStore.setState({ projectPath: r.path, savedDoc: doc });
+    // (Not while a crashed session's copy is waiting for Recover or Discard: that's other work.)
+    if (!recoveryWaiting && !isDirty(useStore.getState())) void engine().call("project.discard_recovery").catch(() => {});
     const extra = r.images ? ` with ${r.images} picture${r.images > 1 ? "s" : ""} included` : "";
     info(`Saved ${basename(r.path)}${extra}`);
     return true;
@@ -347,8 +484,9 @@ export async function saveProject(as: boolean): Promise<boolean> {
 // ---------------------------------------------------------------- autosave and recovery
 
 let autosaveTimer: ReturnType<typeof setTimeout> | undefined;
-/** Work from a crashed session is waiting for Recover or Discard: never overwrite or delete it until then. */
-let recoveryWaiting = false;
+/** Work from a crashed session is waiting for Recover or Discard: never overwrite or delete it until then.
+ *  True until checkRecovery() has asked, so a design started during startup can't delete the copy first. */
+let recoveryWaiting = true;
 export const isRecoveryWaiting = () => recoveryWaiting;
 const AUTOSAVE_DELAY_MS = 3000;
 
@@ -366,7 +504,9 @@ export function startAutosave() {
       const st = useStore.getState();
       const doc = st.history.present;
       if (!doc || !st.engine || !isDirty(st) || recoveryWaiting) return;
-      const project = { title: doc.layout.title, layout: doc.layout, images: doc.images, machine: st.machineId, path: st.projectPath };
+      // Pictures go by path (the engine has them): not their whole contents every few seconds.
+      const images = doc.images.map((im) => ({ ...im, data_url: undefined }));
+      const project = { title: doc.layout.title, layout: doc.layout, images, machine: st.machineId, hoop: selectHoop(st)?.id ?? null, path: st.projectPath };
       st.engine.call("project.autosave", { project_data: project }).catch(() => {
         // Autosave is a safety net; a failure must never interrupt the user.
       });
@@ -386,6 +526,7 @@ export function setFabric(id: string) {
 
 let checkTimer: ReturnType<typeof setTimeout> | undefined;
 let checkSeq = 0;
+let checking = false;
 const CHECK_DELAY_MS = 500;
 
 /** Re-run the quality checks (and the density map, when shown) a moment after the design changes. */
@@ -398,17 +539,27 @@ export function startChecks() {
       if (s.checks) s.setChecks(null);
       return;
     }
-    checkTimer = setTimeout(async () => {
+    const run = async () => {
+      // Checks are advice: they never hold up an edit. Wait while one is rendering, and run one
+      // check at a time (the newest design, when the one before finishes).
+      if (rendering || queued || checking) {
+        checkTimer = setTimeout(run, CHECK_DELAY_MS);
+        return;
+      }
       const layout = currentLayout();
       const st = useStore.getState();
-      if (!layout || !st.engine) return;
+      if (!layout || !st.engine || seq !== checkSeq) return;
+      checking = true;
       try {
         const r = await st.engine.call<CheckResult>("layout.check", { layout, heatmap: st.showDensity }, OPEN_TIMEOUT);
         if (seq === checkSeq) useStore.getState().setChecks(r);
       } catch {
         // Checks are advice; a failure here never interrupts the user.
+      } finally {
+        checking = false;
       }
-    }, CHECK_DELAY_MS);
+    };
+    checkTimer = setTimeout(run, CHECK_DELAY_MS);
   });
 }
 
@@ -427,16 +578,24 @@ export async function checkRecovery(): Promise<RecoveryInfo | null> {
     recoveryWaiting = r !== null;
     return r;
   } catch {
+    recoveryWaiting = false; // can't tell: keep autosaving rather than never
     return null;
   }
 }
 
-export async function restoreRecovery() {
+/** Put the crashed session's work back. True if it's on screen; otherwise the copy stays waiting. */
+export async function restoreRecovery(): Promise<boolean> {
   try {
-    const p = await engine().call<{ layout: Layout; images: RefImage[]; path: string | null }>("project.restore", {}, OPEN_TIMEOUT);
-    recoveryWaiting = false;
+    const p = await engine().call<{ layout: Layout; images: RefImage[]; path: string | null; machine?: string; hoop?: string }>(
+      "project.restore",
+      {},
+      OPEN_TIMEOUT,
+    );
+    applyProjectMachine(p.machine, p.hoop);
     const doc = { layout: p.layout, images: p.images ?? [] };
-    await showHistory({ past: [], present: doc, future: [] }, true);
+    // If it can't be shown (the error says why), keep the copy: the banner stays and closing won't delete it.
+    if (!(await showHistory({ past: [], present: doc, future: [] }, true))) return false;
+    recoveryWaiting = false;
     const s = useStore.getState();
     s.setTool("select");
     s.setMeasure(null);
@@ -445,8 +604,10 @@ export async function restoreRecovery() {
     useStore.setState({ projectPath: p.path, savedDoc: null });
     s.select(null);
     info("Recovered your unsaved work. Save it to keep it.");
+    return true;
   } catch (err) {
     fail(err);
+    return false;
   }
 }
 
@@ -468,8 +629,14 @@ export async function addDesign(path?: string) {
       path = picked;
     }
     const next = addItem(layout, path);
+    const id = next.items[next.items.length - 1].id;
     if (await commit(next)) {
-      useStore.getState().select(next.items[next.items.length - 1].id);
+      // In the middle of the hoop (a little down and right of the last one added), in the same undo step.
+      const shown = useStore.getState().design?.items?.find((it) => it.id === id);
+      const n = next.items.length - 1;
+      const centred = shown ? centreItem(next, id, shown.center_mm, [ADD_OFFSET_MM * n, ADD_OFFSET_MM * n]) : next;
+      if (centred !== next) await commit(centred, true);
+      useStore.getState().select(id);
       useStore.getState().requestFit();
     }
   } catch (err) {
@@ -510,11 +677,22 @@ export function selectionIds(): string[] {
 export function selectionGeometry(ids: string[]): { centers: Record<string, [number, number]>; box: [number, number, number, number] | null; center: [number, number] } {
   const s = useStore.getState();
   const l = currentLayout();
+  const shown = s.history.present?.layout;
   const centers: Record<string, [number, number]> = {};
   let box: [number, number, number, number] | null = null;
   for (const id of ids) {
-    const i = l?.items.findIndex((it) => it.id === id) ?? -1;
-    const b = i >= 0 ? s.design?.items?.[i]?.bounds_mm : null;
+    const it = l?.items.find((x) => x.id === id);
+    const i = shown?.items.findIndex((x) => x.id === id) ?? -1;
+    const b0 = i >= 0 ? s.design?.items?.[i]?.bounds_mm : null;
+    // The bounds on screen are from the last render: shift them by any move made since (a quick
+    // second R or arrow press), so the group turns and flips about where things really are.
+    const was = i >= 0 ? shown!.items[i] : undefined;
+    const [dx, dy] = it && was ? centreShift(was, it) : [0, 0];
+    const b = b0
+      ? ([b0[0] + dx, b0[1] + dy, b0[2] + dx, b0[3] + dy] as [number, number, number, number])
+      : it && isObject(it)
+        ? objectBox(it)
+        : null;
     if (!b) continue;
     centers[id] = [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2];
     box = box ? [Math.min(box[0], b[0]), Math.min(box[1], b[1]), Math.max(box[2], b[2]), Math.max(box[3], b[3])] : [b[0], b[1], b[2], b[3]];
@@ -522,8 +700,40 @@ export function selectionGeometry(ids: string[]): { centers: Record<string, [num
   return { centers, box, center: box ? [(box[0] + box[2]) / 2, (box[1] + box[3]) / 2] : [0, 0] };
 }
 
+/** How far an item's centre moved between two versions of it (turns and flips keep the centre). */
+function centreShift(was: LayoutItem, now: LayoutItem): [number, number] {
+  if (isObject(was) && isObject(now)) {
+    const [a, b] = [objectCenter(was), objectCenter(now)];
+    return [b[0] - a[0], b[1] - a[1]];
+  }
+  return [now.transform.x - was.transform.x, now.transform.y - was.transform.y];
+}
+
+/** The point a side stretch of one drawn shape keeps still: the middle of the opposite side of its
+ *  outline (its stitches sit a fixed margin inside the outline, which doesn't stretch). Null for
+ *  anything else (stitch files, lettering, several things): the frame's side is right for those. */
+export function shapeStretchAnchor(ids: string[], side: "n" | "e" | "s" | "w"): [number, number] | null {
+  if (ids.length !== 1) return null;
+  const o = currentLayout()?.items.find((it) => it.id === ids[0]);
+  if (!o || !isObject(o)) return null;
+  const t = o.transform;
+  if (t.rotate || t.scale_x !== 1 || t.scale_y !== 1 || t.flip_x || t.flip_y) return null;
+  const b = objectBox(o);
+  if (!b) return null;
+  const [x0, y0, x1, y1] = [b[0] + t.x, b[1] + t.y, b[2] + t.x, b[3] + t.y];
+  return side === "e" ? [x0, (y0 + y1) / 2] : side === "w" ? [x1, (y0 + y1) / 2] : side === "s" ? [(x0 + x1) / 2, y0] : [(x0 + x1) / 2, y1];
+}
+
+function objectBox(o: ObjectItem): [number, number, number, number] | null {
+  const pts = objectNodeLists(o).flat();
+  if (!pts.length) return null;
+  const xs = pts.map((n) => n[0]);
+  const ys = pts.map((n) => n[1]);
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+}
+
 /** Turn, mirror, resize or move everything selected, as one. */
-export function editSelection(op: TogetherOp) {
+export function editSelection(op: TogetherOp, merge: Merge = false) {
   const l = currentLayout();
   const ids = selectionIds();
   if (!l || !ids.length) return;
@@ -533,7 +743,7 @@ export function editSelection(op: TogetherOp) {
     return void commit(op.rotate ? rotateBy(l, id, op.rotate) : op.mirror ? mirror(l, id, op.mirror) : op.scale ? scaleBy(l, id, op.scale) : l);
   }
   const g = selectionGeometry(ids);
-  void commit(transformTogether(l, ids, g.centers, g.center, op));
+  void commit(transformTogether(l, ids, g.centers, g.center, op), merge);
 }
 
 /** Click on an item: select it, and the rest of its group. Shift+click adds or removes it. */
@@ -566,15 +776,15 @@ function groupSelection(on: boolean) {
   const l = currentLayout();
   const ids = selectionIds();
   if (!l || (on && ids.length < 2)) return info("Select two or more things first (Shift+click, or Ctrl+A for everything).");
-  void commit(setGroup(l, ids, on ? `g${Date.now().toString(36)}` : null)).then(() =>
-    info(on ? `Grouped ${ids.length} things: they now select and move together.` : "Ungrouped."),
+  void commit(setGroup(l, ids, on ? `g${Date.now().toString(36)}` : null)).then((ok) =>
+    ok && info(on ? `Grouped ${ids.length} things: they now select and move together.` : "Ungrouped."),
   );
 }
 
 /** Remove the selected design, drawn object or picture. */
 export function removeSelected() {
   const s = useStore.getState();
-  const doc = s.history.present;
+  const doc = currentDoc();
   if (!doc || !s.selectedId) return;
   if (doc.images.some((im) => im.id === s.selectedId)) {
     commitImages(removeImage(doc.images, s.selectedId));
@@ -587,12 +797,89 @@ export function removeSelected() {
   s.select(null);
 }
 
-function duplicateSelected() {
+/** Ctrl+D: a copy of everything selected (one undo step); the copies end up selected. */
+export function duplicateSelected() {
+  let l = currentLayout();
+  const ids = selectionIds();
+  if (!l || !ids.length) return;
+  const copies: string[] = [];
+  for (const id of ids) {
+    const r = duplicateItem(l, id);
+    l = r.layout;
+    copies.push(r.id);
+  }
+  const out = l;
+  void commit(out).then((ok) => ok && useStore.getState().setSelection(copies[0], copies.slice(1)));
+}
+
+/** Drag and drop in Order & colors: sew `id` at position `to`. */
+export function moveItemTo(id: string, to: number) {
+  const l = currentLayout();
+  if (l) void commit(moveItem(l, id, to));
+}
+
+/** Sew an item one place earlier (-1) or later (1), building on the newest version. */
+export function reorderItem(id: string, dir: -1 | 1) {
+  const l = currentLayout();
+  if (l) void commit(reorder(l, id, dir));
+}
+
+/** Whether the selected item can be sewn earlier (-1) or later (1). */
+function canMoveInOrder(dir: -1 | 1): boolean {
+  const l = currentLayout();
+  const id = targetId();
+  if (!l || !id || !canEdit() || drawing() || useStore.getState().extraIds.length) return false;
+  const i = l.items.findIndex((it) => it.id === id);
+  return dir < 0 ? i > 0 : i >= 0 && i < l.items.length - 1;
+}
+
+/** Sew the selected item one place earlier or later, or first or last. */
+function sewAt(to: -1 | 1 | "first" | "last") {
   const l = currentLayout();
   const id = targetId();
   if (!l || !id) return;
-  const { layout, id: copy } = duplicateItem(l, id);
-  void commit(layout).then((ok) => ok && useStore.getState().select(copy));
+  if (to === "first") moveItemTo(id, 0);
+  else if (to === "last") moveItemTo(id, l.items.length - 1);
+  else reorderItem(id, to);
+}
+
+/** Move what's selected so its middle is the hoop's middle. */
+function centreSelection() {
+  const g = selectionGeometry(selectionIds());
+  if (!g.box) return;
+  const cx = (g.box[0] + g.box[2]) / 2;
+  const cy = (g.box[1] + g.box[3]) / 2;
+  if (Math.hypot(cx, cy) < 0.05) return info("It's already in the middle of the hoop.");
+  editSelection({ move: [round2(-cx), round2(-cy)] });
+}
+
+/** Whether the selected item (the target) is a drawn shape for which `test` holds. */
+function targetIs(test: (o: ObjectItem) => boolean): boolean {
+  const it = currentLayout()?.items.find((x) => x.id === targetId());
+  return !!it && isObject(it) && test(it);
+}
+
+/** A placed stitch file sewn in one color (several selected can take one thread together). */
+function singleColorFile(id: string): boolean {
+  const l = currentLayout();
+  const i = l?.items.findIndex((x) => x.id === id) ?? -1;
+  if (!l || i < 0 || l.items[i].kind !== "file") return false;
+  const blocks = (useStore.getState().design?.blocks ?? []).flatMap((b) => (b.sources ?? []).filter((src) => src.item === i).map((src) => src.block));
+  return new Set(blocks).size === 1;
+}
+
+/** Drawn shapes and text have one thread to change here; a stitch file's colors are changed one by one in Order & colors. */
+function recolorable(id: string | null): boolean {
+  const it = id ? currentLayout()?.items.find((x) => x.id === id) : undefined;
+  return !!it && (isObject(it) || isText(it));
+}
+
+/** Put the cursor in the selected text's words, in the panel. */
+function editTextWords() {
+  const id = targetId();
+  if (!id) return;
+  textToEdit = id;
+  window.dispatchEvent(new CustomEvent("ludd:edit-text", { detail: id }));
 }
 
 // ---------------------------------------------------------------- pictures
@@ -643,7 +930,7 @@ export async function addPicture(path?: string) {
     commitImages(images);
     useStore.getState().select(id);
     useStore.getState().requestFit();
-    info("Picture added. Move and size it, then lock it (🔒) so you can trace over it.");
+    info("Picture added. Move and size it, then pin it (📌) so you can trace over it.");
   } catch (err) {
     fail(err);
   }
@@ -664,44 +951,97 @@ export const DEFAULT_PARAMS = {
   applique: { cover_width_mm: 3, tack: "zigzag" },
 } as const;
 
+/** Settings a new shape of this kind starts with: the standard ones, then whatever you set
+ *  last on a shape of that kind (so a fill made denser makes the next fill denser too). */
+function deleteSelectedNode() {
+  const n = useStore.getState().selectedNode;
+  if (n) {
+    deleteNode(n.id, n.list as NodeList, n.index);
+    useStore.getState().selectNode(null);
+  }
+}
+
+export function defaultsFor(kind: ObjectKind): Record<string, unknown> {
+  return { ...DEFAULT_PARAMS[kind], ...(loadPrefs().objectDefaults?.[kind] ?? {}) };
+}
+
+/** Settings that belong to one shape, not to the next one you draw. */
+const NOT_REMEMBERED = new Set(["angle_deg", "reverse"]);
+
+function rememberDefaults(kind: ObjectKind, patch: Record<string, unknown>) {
+  const all = { ...(loadPrefs().objectDefaults ?? {}) };
+  const mine: Record<string, unknown> = { ...(all[kind] ?? {}) };
+  for (const [k, v] of Object.entries(patch)) {
+    if (NOT_REMEMBERED.has(k)) continue;
+    if (v === undefined) delete mine[k];
+    else mine[k] = v;
+  }
+  all[kind] = mine;
+  savePrefs({ objectDefaults: all });
+}
+
+/** Has this kind of shape got settings of your own for new shapes? */
+export function hasOwnDefaults(kind: ObjectKind): boolean {
+  return Object.keys(loadPrefs().objectDefaults?.[kind] ?? {}).length > 0;
+}
+
+/** Back to the standard settings for new shapes of this kind (shapes already drawn keep theirs). */
+export function resetDefaults(kind: ObjectKind) {
+  const all = { ...(loadPrefs().objectDefaults ?? {}) };
+  delete all[kind];
+  savePrefs({ objectDefaults: all });
+  if (kind === "satin") {
+    savePrefs({ satinWidth: undefined });
+    useStore.getState().setSatinWidth(3);
+  }
+  info(`New ${KIND_PLURAL[kind]} will start with the standard settings.`);
+}
+
+const KIND_PLURAL: Record<ObjectKind, string> = { run: "lines", satin: "satins", fill: "fills", applique: "appliques" };
+
 /** Points each shape needs before it can be finished. */
-export const MIN_POINTS: Record<ObjectKind, number> = { run: 2, satin: 4, fill: 3, applique: 3 };
+export const MIN_POINTS: Record<ObjectKind, number> = { run: 2, satin: 2, fill: 3, applique: 3 };
 
 export function penReady(): boolean {
   const pen = useStore.getState().pen;
   if (!pen) return false;
-  if (pen.kind === "satin") return pen.a.length >= 2 && pen.a.length === pen.b.length;
   return pen.a.length >= MIN_POINTS[pen.kind];
 }
 
-/** Add a click to the shape being drawn. A satin's clicks alternate between its sides. */
 /** Clicks closer than this to the last point are the same point. */
 const SAME_POINT_MM = 0.3;
 
 export function penAdd(node: PathNode) {
   const s = useStore.getState();
   const tool = s.tool;
-  if (tool === "select" || tool === "text") return;
+  if (tool === "select" || tool === "text" || tool === "autotrace") return;
   const pen = s.pen ?? { kind: tool, a: [], b: [] };
-  // A double-click (to finish) also clicks twice: don't add the same spot again, or onto the other satin side.
-  const last = pen.kind === "satin" && pen.b.length === pen.a.length ? pen.b[pen.b.length - 1] : pen.a[pen.a.length - 1];
+  // A double-click (to finish) also clicks twice: don't add the same spot again.
+  const last = pen.a[pen.a.length - 1];
   if (last && Math.hypot(node[0] - last[0], node[1] - last[1]) < SAME_POINT_MM) return;
-  if (pen.kind === "satin" && pen.a.length > pen.b.length) s.setPen({ ...pen, b: [...pen.b, node] });
-  else s.setPen({ ...pen, a: [...pen.a, node] });
+  s.setPen({ ...pen, a: [...pen.a, node] });
 }
 
 export function penUndoPoint() {
   const s = useStore.getState();
   const pen = s.pen;
   if (!pen) return;
-  if (pen.kind === "satin" && pen.b.length === pen.a.length && pen.b.length) s.setPen({ ...pen, b: pen.b.slice(0, -1) });
-  else if (pen.a.length > 1) s.setPen({ ...pen, a: pen.a.slice(0, -1) });
+  if (pen.a.length > 1) s.setPen({ ...pen, a: pen.a.slice(0, -1) });
   else s.setPen(null);
 }
 
 export function penCancel() {
   cancelTraceQueue();
+  const pen = useStore.getState().pen;
   useStore.getState().setPen(null);
+  if (pen?.holeFor) {
+    // A hole (O) dropped: back to the tool used before, with its fill still selected.
+    useStore.getState().setTool(pen.holeBack ?? "select");
+    useStore.getState().select(pen.holeFor);
+    return info("Hole dropped.");
+  }
+  // Say so: a single point can be hard to see, and nobody should wonder whether Esc worked.
+  if (pen && (pen.a.length || pen.b.length)) info("Shape dropped. Click to start again, or press Esc again for Select.");
 }
 
 /** Turn the pen's points into an object, add it to the layout and select it. */
@@ -709,18 +1049,20 @@ export async function penFinish(opts: { close?: boolean } = {}) {
   const s = useStore.getState();
   const pen = s.pen;
   if (!pen || !penReady()) {
-    if (pen) info(pen.kind === "satin" ? "A satin needs at least two clicks on each side, alternating sides." : `Keep clicking: this shape needs at least ${MIN_POINTS[pen.kind]} points.`);
+    if (pen) info(`Keep clicking: this shape needs at least ${MIN_POINTS[pen.kind]} points.`);
     return;
   }
   if (!s.history.present) await replaceDoc(freshDoc(), null);
   const layout = currentLayout()!;
   const thread = s.drawThread;
+  // A satin fitted all the way round an edge is closed too.
+  const closed = opts.close || pen.closed ? { closed: true } : {};
   const obj =
     pen.kind === "run"
-      ? { kind: "run" as const, geometry: { nodes: pen.a, ...(opts.close ? { closed: true } : {}) }, params: { ...DEFAULT_PARAMS.run }, thread }
+      ? { kind: "run" as const, geometry: { nodes: pen.a, ...closed }, params: defaultsFor("run"), thread }
       : pen.kind === "satin"
-        ? { kind: "satin" as const, geometry: { rail_a: pen.a, rail_b: pen.b }, params: { ...DEFAULT_PARAMS.satin }, thread }
-        : { kind: "fill" as const, geometry: { outline: pen.a }, params: { ...DEFAULT_PARAMS.fill }, thread };
+        ? { kind: "satin" as const, geometry: { nodes: pen.a, width_mm: s.satinWidth, ...closed }, params: defaultsFor("satin"), thread }
+        : { kind: "fill" as const, geometry: { outline: pen.a }, params: defaultsFor("fill"), thread };
   s.setPen(null);
   // A hole (O): add it to the fill it was drawn in.
   if (pen.holeFor && layout.items.some((it) => it.id === pen.holeFor)) {
@@ -728,20 +1070,24 @@ export async function penFinish(opts: { close?: boolean } = {}) {
     const next = updateObject(layout, id, (o) =>
       o.kind === "fill" || o.kind === "applique" ? ({ ...o, geometry: { ...o.geometry, holes: [...(o.geometry.holes ?? []), pen.a] } } as ObjectItem) : o,
     );
-    useStore.getState().setTool("select");
+    // Back to the tool used before O (the tool you chose stays chosen).
+    useStore.getState().setTool(pen.holeBack ?? "select");
     if (await commit(next)) useStore.getState().select(id);
     return;
   }
   // Continuing an object replaces its points and keeps its thread and settings.
   if (pen.replaceId && layout.items.some((it) => it.id === pen.replaceId)) {
     const id = pen.replaceId;
-    // Keep what the pen doesn't draw (a fill's holes, a closed line).
-    const next = updateObject(layout, id, (o) => ({ ...o, geometry: { ...o.geometry, ...obj.geometry } }) as ObjectItem);
+    // Keep what the pen doesn't draw (a fill's holes, a closed line, a satin's width).
+    const drawn = pen.kind === "fill" ? { outline: pen.a } : { nodes: pen.a, ...closed };
+    const next = updateObject(layout, id, (o) => ({ ...o, geometry: { ...o.geometry, ...drawn } }) as ObjectItem);
     if (await commit(next)) useStore.getState().select(id);
     return;
   }
   const { layout: next, id } = addObject(layout, obj as Omit<ObjectItem, "id" | "transform" | "threads" | "ops">);
   if (await commit(next)) useStore.getState().select(id);
+  // It couldn't be made (the error says why): the clicked points come back, to fix and try again.
+  else if (!useStore.getState().pen && useStore.getState().tool === pen.kind) useStore.getState().setPen(pen);
 }
 
 /** Pick the selected shape back up in the pen to add more points ("continue digitizing"). */
@@ -749,8 +1095,9 @@ export function continueDrawing() {
   const s = useStore.getState();
   const o = currentLayout()?.items.find((it) => it.id === s.selectedId);
   if (!o || !isObject(o)) return;
-  const a = o.kind === "run" ? o.geometry.nodes : o.kind === "satin" ? o.geometry.rail_a : o.geometry.outline;
-  const b = o.kind === "satin" ? o.geometry.rail_b : [];
+  if (o.kind === "satin" && !isRibbon(o)) return info("This satin was made by clicking both of its sides: drag its points to change it.");
+  const a = o.kind === "run" || o.kind === "satin" ? (o.geometry as { nodes: PathNode[] }).nodes : o.geometry.outline;
+  const b: PathNode[] = [];
   // An applique is drawn like a fill (a closed outline); it stays an applique.
   const kind = o.kind === "applique" ? "fill" : o.kind;
   s.setTool(kind);
@@ -768,7 +1115,7 @@ export async function addShape(shape: "rectangle" | "circle" | "star") {
   const { layout: next, id } = addObject(currentLayout()!, {
     kind: "fill",
     geometry: { outline: shapeNodes(shape, 0, 0, size) },
-    params: { ...DEFAULT_PARAMS.fill },
+    params: defaultsFor("fill"), // your remembered fill settings, like a drawn fill
     thread: s.drawThread,
   } as Omit<ObjectItem, "id" | "transform" | "threads" | "ops">);
   if (await commit(next)) {
@@ -823,9 +1170,11 @@ export async function addText(x: number, y: number, monogram = false) {
     };
     const layout = currentLayout()!;
     if (await commit({ ...layout, items: [...layout.items, item] })) {
-      useStore.getState().setTool("select");
+      // The Text tool stays chosen (click another spot for more text; click a text to pick it).
       useStore.getState().select(item.id);
-      // Ask the panel to focus the text box so typing replaces the placeholder.
+      // Ask the panel to focus the text box so typing replaces the placeholder. The panel for the
+      // new text isn't there yet: it takes the request when it appears (or now, if it already is).
+      textToEdit = item.id;
       window.dispatchEvent(new CustomEvent("ludd:edit-text", { detail: item.id }));
     }
   } catch (err) {
@@ -838,22 +1187,78 @@ export function setText(id: string, patch: Partial<TextItem>) {
   if (!l) return;
   if (patch.font) savePrefs({ font: patch.font });
   if (patch.thread) useStore.getState().setDrawThread(patch.thread);
-  void commit({ ...l, items: l.items.map((it) => (it.id === id && it.kind === "text" ? { ...it, ...patch, ...(patch.thread ? { threads: [] } : {}) } : it)) });
+  // New words, font, size or look make new letters: the starts and ends chosen for the old ones go.
+  const before = l.items.find((it) => it.id === id);
+  const newLetters =
+    !!before && isText(before) && (["text", "font", "size_mm", "spacing_mm", "style", "shape", "monogram"] as const).some((k) => k in patch && JSON.stringify(patch[k]) !== JSON.stringify(before[k]));
+  void commit({
+    ...l,
+    items: l.items.map((it) => (it.id === id && it.kind === "text" ? { ...it, ...patch, ...(patch.thread ? { threads: [] } : {}), ...(newLetters ? { letters: undefined } : {}) } : it)),
+  });
+}
+
+/** A letter's green (start) or red (end) dot dragged to `at` (mm, as shown): kept on the text in
+ *  its own frame, so it stays put on the letter when the text is moved, turned or resized. */
+export async function setLetterEnd(id: string, part: number, which: "start" | "end", at: [number, number]) {
+  const it = currentLayout()?.items.find((x) => x.id === id);
+  if (!it || !isText(it)) return;
+  try {
+    const local = await engine().call<[number, number]>("text.letter_frame", { item: it, at: [round2(at[0]), round2(at[1])] });
+    const l = currentLayout();
+    const now = l?.items.find((x) => x.id === id);
+    // Moved, turned, retyped or undone meanwhile: the point no longer fits it.
+    if (!l || !now || !isText(now) || now !== it) return;
+    const letters = { ...(now.letters ?? {}) };
+    letters[String(part)] = { ...letters[String(part)], [which === "start" ? "start_mm" : "end_mm"]: local };
+    await commit({ ...l, items: l.items.map((x) => (x.id === id ? { ...now, letters } : x)) });
+  } catch (err) {
+    info(err instanceof Error ? err.message : String(err));
+  }
+}
+
+/** Lettering into drawn shapes, one per letter part, grouped, in its place in the sewing order:
+ *  each can then be edited like any shape. */
+export async function textToShapes() {
+  const id = targetId();
+  const l = currentLayout();
+  const it = l?.items.find((x) => x.id === id);
+  if (!l || !it || !isText(it)) return info("Select some lettering first.");
+  try {
+    const r = await engine().call<{ objects: Omit<ObjectItem, "id" | "transform" | "threads" | "ops">[] }>("text.to_shapes", { item: it }, OPEN_TIMEOUT);
+    if (!r.objects.length) return info("There are no letters to break apart.");
+    // Changed or removed meanwhile: these letters are out of date.
+    const now = currentLayout();
+    if (!now || !unchanged(it.id, it)) return;
+    // The letters stay together: in the text's own group if it had one, else a new group.
+    const group = it.group ?? (r.objects.length > 1 ? `g${Date.now().toString(36)}` : undefined);
+    const shapes = r.objects.map(
+      (o) => ({ ...o, id: newId(), transform: { ...IDENTITY }, threads: [], ops: [], ...(group ? { group } : {}), ...(it.locked ? { locked: true } : {}) }) as ObjectItem,
+    );
+    const at = now.items.indexOf(it);
+    const items = [...now.items.slice(0, at), ...shapes, ...now.items.slice(at + 1)];
+    if (await commit({ ...now, items })) {
+      useStore.getState().setSelection(shapes[0].id, shapes.slice(1).map((x) => x.id));
+      const lost = it.ops?.length ? " The stops and trims you'd added to the lettering were left out: add them again on the shapes if you need them." : "";
+      info(`Broke "${it.text}" into ${shapes.length} shapes (grouped). Each is an ordinary shape now: click one (Ctrl+U ungroups) to change its points, stitches, direction or dots.${lost}`);
+    }
+  } catch (err) {
+    info(err instanceof Error ? err.message : String(err));
+  }
 }
 
 /** Convert a font into an editable LUDD stitch font (.luddfont). */
 export async function saveStitchFont(font: FontRef, style: "satin" | "fill") {
-  const dest = await save({
-    title: "Save as stitch font",
-    defaultPath: `${font.family} ${style}.luddfont`,
-    filters: [{ name: "LUDD stitch font", extensions: ["luddfont"] }],
-  });
-  if (!dest) return;
   try {
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789&.,'!?-";
-    const r = await engine().call<{ path: string; glyphs: number }>("fonts.export_stitch_font", { font, dest, chars, cap_height_mm: 12, style }, OPEN_TIMEOUT);
+    info("Making the stitch font…");
+    // Empty dest and chars: every letter the font has (with accents), saved in LUDD's fonts folder,
+    // where the font list finds it.
+    const r = await engine().call<{ path: string; glyphs: number; folder: string }>(
+      "fonts.export_stitch_font",
+      { font, dest: "", chars: "", cap_height_mm: 12, style },
+      OPEN_TIMEOUT,
+    );
     useStore.setState({ fonts: null });
-    info(`Saved ${basename(r.path)} with ${r.glyphs} letters. Put it in LUDD's fonts folder to use it.`);
+    info(`Saved the stitch font ${basename(r.path)} (${r.glyphs} letters) in ${r.folder}. It's in the font list now; open the file in a text editor to fine-tune it.`);
   } catch (err) {
     fail(err);
   }
@@ -861,13 +1266,100 @@ export async function saveStitchFont(font: FontRef, style: "satin" | "fill") {
 
 // ---------------------------------------------------------------- object editing
 
-export function editObject(id: string, fn: (o: ObjectItem) => ObjectItem) {
+export function editObject(id: string, fn: (o: ObjectItem) => ObjectItem): Promise<boolean> {
   const l = currentLayout();
-  if (l) void commit(updateObject(l, id, fn));
+  return l ? commit(updateObject(l, id, fn)) : Promise.resolve(false);
 }
 
+/** Whether an item is still exactly as it was before an engine call: if it was changed, undone or
+ *  removed meanwhile, the engine's answer (worked out from the old one) is dropped, so it can't
+ *  overwrite the newer edit. */
+function unchanged(id: string, before: LayoutItem): boolean {
+  return currentLayout()?.items.find((it) => it.id === id) === before;
+}
+
+/** Change a shape's stitch settings. They also become the settings new shapes of its kind start with. */
 export function setObjectParams(id: string, patch: Record<string, unknown>) {
-  editObject(id, (o) => ({ ...o, params: { ...o.params, ...patch } }) as ObjectItem);
+  const o = currentLayout()?.items.find((it) => it.id === id);
+  if (o && isObject(o)) rememberDefaults(o.kind, patch);
+  editObject(id, (x) => ({ ...x, params: { ...x.params, ...patch } }) as ObjectItem);
+}
+
+/** A satin ribbon's width; new ribbons start with it too. */
+export function setSatinWidth(id: string, mm: number) {
+  const w = Math.min(12, Math.max(0.5, Math.round(mm * 100) / 100));
+  savePrefs({ satinWidth: w });
+  useStore.getState().setSatinWidth(w);
+  editObject(id, (o) => (isRibbon(o) ? ({ ...o, geometry: { ...o.geometry, width_mm: w } } as ObjectItem) : o));
+}
+
+/** Rename a design, shape, lettering or picture (an empty name puts the standard one back). */
+export function renameThing(id: string, name: string) {
+  const doc = currentDoc();
+  if (!doc) return;
+  if (doc.images.some((im) => im.id === id)) {
+    if (name.trim()) setPicture(id, { name: name.trim().slice(0, 80) });
+    return;
+  }
+  const l = currentLayout();
+  if (l) void commit(renameItem(l, id, name));
+}
+
+/** A satin ribbon around a fill's (or applique's) edge, sewn right after it: the fill-then-outline look. */
+export async function addSatinBorder(id?: string) {
+  const s = useStore.getState();
+  const l = currentLayout();
+  const o = l?.items.find((it) => it.id === (id ?? s.selectedId));
+  if (!l || !o || !isObject(o)) return;
+  const outline = o.kind === "fill" || o.kind === "applique" ? o.geometry.outline : o.kind === "run" && o.geometry.closed ? o.geometry.nodes : null;
+  if (!outline) return info("Select a fill (or a closed line) first, then add a satin border to it.");
+  // The border's thread: the last satin's, so a design's outlines match.
+  const lastSatin = [...l.items].reverse().find((it) => it.kind === "satin") as ObjectItem | undefined;
+  const thread = lastSatin?.thread ?? { color: "#000000", name: "Black", brand: "", catalog: "" };
+  const { layout: withBorder, id: nid } = addObject(l, {
+    kind: "satin",
+    geometry: { nodes: outline, width_mm: s.satinWidth, closed: true },
+    params: defaultsFor("satin"),
+    thread,
+  } as Omit<ObjectItem, "id" | "transform" | "threads" | "ops">);
+  // Sew it straight after its fill.
+  const added = withBorder.items[withBorder.items.length - 1];
+  const items = withBorder.items.slice(0, -1);
+  items.splice(items.findIndex((it) => it.id === o.id) + 1, 0, added);
+  if (await commit({ ...withBorder, items })) useStore.getState().select(nid);
+}
+
+/** Add shapes from Auto-trace (one undo step), selecting the last. Satins get `border` if given. */
+export async function addTraced(
+  shapes: ((
+    | { kind: "fill"; outline: PathNode[]; holes: PathNode[][] }
+    | { kind: "satin"; nodes: PathNode[]; width_mm: number; closed: boolean }
+    | { kind: "column"; rail_a: PathNode[]; rail_b: PathNode[]; widest_mm: number }
+    | { kind: "run"; nodes: PathNode[]; closed: boolean }
+  ) & { thread?: Thread })[],
+  thread: Thread,
+  border?: Thread,
+) {
+  const s = useStore.getState();
+  if (!s.history.present) await replaceDoc(freshDoc(), null);
+  let l = currentLayout()!;
+  let last = "";
+  for (const sh of shapes) {
+    const obj =
+      sh.kind === "fill"
+        ? { kind: "fill" as const, geometry: { outline: sh.outline, ...(sh.holes.length ? { holes: sh.holes } : {}) }, params: defaultsFor("fill"), thread: sh.thread ?? thread }
+        : sh.kind === "satin"
+          ? { kind: "satin" as const, geometry: { nodes: sh.nodes, width_mm: sh.width_mm, ...(sh.closed ? { closed: true } : {}) }, params: defaultsFor("satin"), thread: sh.thread ?? border ?? thread }
+          : sh.kind === "column"
+            ? { kind: "satin" as const, geometry: { rail_a: sh.rail_a, rail_b: sh.rail_b }, params: satinFillParams(sh), thread: sh.thread ?? thread }
+            : { kind: "run" as const, geometry: { nodes: sh.nodes, ...(sh.closed ? { closed: true } : {}) }, params: defaultsFor("run"), thread: sh.thread ?? thread };
+    const r = addObject(l, obj as Omit<ObjectItem, "id" | "transform" | "threads" | "ops">);
+    l = r.layout;
+    last = r.id;
+  }
+  const ok = await commit(l);
+  if (ok) useStore.getState().select(last);
+  return ok;
 }
 
 export function setObjectThread(id: string, thread: Thread) {
@@ -880,11 +1372,14 @@ export type NodeList = "nodes" | "rail_a" | "rail_b" | "outline" | number;
 
 export function nodeLists(o: ObjectItem): { key: NodeList; nodes: PathNode[]; closed: boolean }[] {
   if (o.kind === "run") return [{ key: "nodes", nodes: o.geometry.nodes, closed: !!o.geometry.closed }];
-  if (o.kind === "satin")
+  if (isRibbon(o)) return [{ key: "nodes", nodes: o.geometry.nodes, closed: !!o.geometry.closed }];
+  if (o.kind === "satin") {
+    const g = o.geometry as SatinColumn;
     return [
-      { key: "rail_a", nodes: o.geometry.rail_a, closed: false },
-      { key: "rail_b", nodes: o.geometry.rail_b, closed: false },
+      { key: "rail_a", nodes: g.rail_a, closed: false },
+      { key: "rail_b", nodes: g.rail_b, closed: false },
     ];
+  }
   return [
     { key: "outline", nodes: o.geometry.outline, closed: true },
     ...(o.geometry.holes ?? []).map((h, i) => ({ key: i as NodeList, nodes: h, closed: true })),
@@ -905,6 +1400,60 @@ export function moveNode(id: string, key: NodeList, index: number, x: number, y:
   editObject(id, (o) => withNodes(o, key, (ns) => ns.map((n, i) => (i === index ? [round2(x), round2(y), n[2]] : n))));
 }
 
+/** The green (start) or red (end) dot dragged to `at` (mm): the engine works out the change
+ *  (a fill's start edge or end, a border's first point, or a line turned round), then it's one undo step. */
+export async function moveStitchEnd(id: string, which: "start" | "end", at: [number, number]) {
+  const o = currentLayout()?.items.find((it) => it.id === id);
+  if (!o || !isObject(o)) return;
+  // An open running line's dots sit on its end points: dragging one moves that end point, unless
+  // it's dropped by the other end, which turns the line round. (A satin starts and stops anywhere.)
+  const g = o.geometry as { nodes?: PathNode[]; closed?: boolean };
+  if (o.kind === "run" && g.nodes && g.nodes.length >= 2 && !g.closed) {
+    const ns = g.nodes;
+    const [here, other] = which === "start" ? [ns[0], ns[ns.length - 1]] : [ns[ns.length - 1], ns[0]];
+    const d = (n: PathNode) => Math.hypot(n[0] - at[0], n[1] - at[1]);
+    if (d(other) >= d(here)) return moveNode(id, "nodes", which === "start" ? 0 : ns.length - 1, at[0], at[1]);
+  }
+  try {
+    const next = await engine().call<ObjectItem>("shape.set_end", { obj: o, which, at: [round2(at[0]), round2(at[1])] });
+    if (!unchanged(id, o)) return;
+    await editObject(id, () => next);
+  } catch (err) {
+    info(err instanceof Error ? err.message : String(err));
+  }
+}
+
+/** The purple dots of a fill dragged: its rows run along the line between them. (Not remembered for
+ *  new fills: it belongs to this shape.) */
+export function setFillDirection(id: string, line: [[number, number], [number, number]]): Promise<boolean> {
+  const r = (q: [number, number]): [number, number] => [round2(q[0]), round2(q[1])];
+  const a = r(line[0]);
+  const b = r(line[1]);
+  if (Math.hypot(b[0] - a[0], b[1] - a[1]) < 0.5) {
+    info("Drag the dots further apart: their line sets the stitch direction.");
+    return Promise.resolve(false);
+  }
+  return editObject(id, (o) => ({ ...o, params: { ...o.params, angle_deg: angleOf(a, b), angle_line: [a, b] } }) as unknown as ObjectItem);
+}
+
+/** The purple dots of a satin column dragged round its outline: the satin runs from one to the
+ *  other, its stitches across the shape between them. */
+export async function setSatinTips(id: string, tips: [[number, number], [number, number]]) {
+  const o = currentLayout()?.items.find((it) => it.id === id) as ObjectItem | undefined;
+  if (!o || o.kind !== "satin" || isRibbon(o)) return;
+  try {
+    const r = await engine().call<SatinFill>(
+      "shape.satin_fill",
+      { outline: columnOutline(o.geometry as { rail_a: PathNode[]; rail_b: PathNode[] }), tips: tips.map((t) => [round2(t[0]), round2(t[1])]) },
+      OPEN_TIMEOUT,
+    );
+    if (!unchanged(id, o)) return;
+    await editObject(id, (it) => withSatinRails(it, r));
+  } catch (err) {
+    info(err instanceof Error ? err.message : String(err));
+  }
+}
+
 /** Right-click on a point (or C while drawing) cycles curve → line → cusp. */
 export const nextKind = (k: PathNode[2]): PathNode[2] => (k === "s" ? "l" : k === "l" ? "c" : "s");
 
@@ -916,20 +1465,32 @@ export function deleteNode(id: string, key: NodeList, index: number) {
   const o = currentLayout()?.items.find((it) => it.id === id) as ObjectItem | undefined;
   if (!o) return;
   // Satin rails stay paired: removing a point removes its partner on the other side.
-  if (o.kind === "satin") {
+  if (o.kind === "satin" && !("nodes" in o.geometry)) {
     if (o.geometry.rail_a.length <= 2) return info("A satin needs at least two points on each side.");
     editObject(id, (x) => ({
       ...x,
       geometry: {
-        rail_a: (x as typeof o).geometry.rail_a.filter((_, i) => i !== index),
-        rail_b: (x as typeof o).geometry.rail_b.filter((_, i) => i !== index),
+        rail_a: (o.geometry as SatinColumn).rail_a.filter((_, i) => i !== index),
+        rail_b: (o.geometry as SatinColumn).rail_b.filter((_, i) => i !== index),
       },
     }) as ObjectItem);
     return;
   }
   const list = nodeLists(o).find((l) => l.key === key);
-  const min = o.kind === "run" ? 2 : 3;
-  if (!list || list.nodes.length <= min) return info(`This shape needs at least ${min} points.`);
+  const min = o.kind === "run" || o.kind === "satin" ? 2 : 3;
+  if (list && typeof key === "number" && list.nodes.length <= min) {
+    // A hole with too few points left to be a hole: delete the hole (as in Embrilliance).
+    useStore.getState().selectNode(null);
+    editObject(id, (x) => {
+      const g = x.geometry as { holes?: PathNode[][] };
+      const holes = (g.holes ?? []).filter((_, i) => i !== key);
+      return { ...x, geometry: { ...x.geometry, holes: holes.length ? holes : undefined } } as ObjectItem;
+    });
+    info("Hole removed.");
+    return;
+  }
+  if (!list || list.nodes.length <= min)
+    return info(`This shape needs at least ${min} points. To delete the whole shape, select it and press Delete.`);
   editObject(id, (x) => withNodes(x, key, (ns) => ns.filter((_, i) => i !== index)));
 }
 
@@ -937,9 +1498,10 @@ export function deleteNode(id: string, key: NodeList, index: number) {
 export function insertNode(id: string, key: NodeList, index: number, x: number, y: number) {
   const o = currentLayout()?.items.find((it) => it.id === id) as ObjectItem | undefined;
   if (!o) return;
-  if (o.kind === "satin") {
+  if (o.kind === "satin" && !("nodes" in o.geometry)) {
     // Add a matching rung: the new point on this side and the midpoint on the other.
-    const other = key === "rail_a" ? o.geometry.rail_b : o.geometry.rail_a;
+    const g = o.geometry;
+    const other = key === "rail_a" ? g.rail_b : g.rail_a;
     const a = other[index];
     const b = other[Math.min(index + 1, other.length - 1)];
     const partner: PathNode = [round2((a[0] + b[0]) / 2), round2((a[1] + b[1]) / 2), "c"];
@@ -947,27 +1509,130 @@ export function insertNode(id: string, key: NodeList, index: number, x: number, 
     const ins = (ns: PathNode[], n: PathNode) => [...ns.slice(0, index + 1), n, ...ns.slice(index + 1)];
     editObject(id, () => ({
       ...o,
-      geometry: key === "rail_a" ? { rail_a: ins(o.geometry.rail_a, mine), rail_b: ins(o.geometry.rail_b, partner) } : { rail_a: ins(o.geometry.rail_a, partner), rail_b: ins(o.geometry.rail_b, mine) },
-    }));
+      geometry: key === "rail_a" ? { rail_a: ins(g.rail_a, mine), rail_b: ins(g.rail_b, partner) } : { rail_a: ins(g.rail_a, partner), rail_b: ins(g.rail_b, mine) },
+    }) as ObjectItem);
     return;
   }
   editObject(id, (x0) => withNodes(x0, key, (ns) => [...ns.slice(0, index + 1), [round2(x), round2(y), "c"], ...ns.slice(index + 1)]));
 }
 
-/** The same closed shape as a running stitch line, a fill or an applique. */
-export function convertObject(id: string, to: ObjectKind) {
+/** The same points sewn another way: a line, a satin ribbon, a fill or an applique. */
+/** A satin filling a shape, from the engine: the outline split at its tips into two sides. */
+type SatinFill = { rail_a: PathNode[]; rail_b: PathNode[]; widest_mm: number; ways: number };
+
+/** Which way (tips) each satin fill uses now, for Shift+W. */
+const satinWays = new Map<string, number>();
+
+/** The outline of a two-sided satin: side a, then side b back to the start (the tips are shared). */
+export function columnOutline(g: { rail_a: PathNode[]; rail_b: PathNode[] }): PathNode[] {
+  const back = [...g.rail_b].reverse();
+  const same = (p: PathNode, q: PathNode) => Math.hypot(p[0] - q[0], p[1] - q[1]) < 0.05;
+  const b = back.filter((n, i) => !((i === 0 && same(n, g.rail_a[g.rail_a.length - 1])) || (i === back.length - 1 && same(n, g.rail_a[0]))));
+  return [...g.rail_a, ...b];
+}
+
+/** Satin settings for a satin fill: wide ones split their long stitches. */
+const satinFillParams = (r: { widest_mm: number }) => ({ ...defaultsFor("satin"), ...(r.widest_mm > SPLIT_FROM_MM ? { split_mm: 7 } : {}) });
+/** A satin fill wider than this has its long stitches split (pull compensation makes them longer still). */
+const SPLIT_FROM_MM = 6.5;
+
+async function satinFillFor(outline: PathNode[], way: number): Promise<SatinFill | null> {
+  try {
+    return await engine().call<SatinFill>("shape.satin_fill", { outline, way }, OPEN_TIMEOUT);
+  } catch (err) {
+    fail(err);
+    return null;
+  }
+}
+
+/** Change how a drawn shape is stitched. A closed shape (a fill or applique) set to Satin is filled
+ *  with one satin that turns and changes width with the shape (as in Embrilliance); Shift+W turns
+ *  its stitches another way. A satin fill set back to Fill gets its outline back. */
+export async function convertObject(id: string, to: ObjectKind) {
   const o = currentLayout()?.items.find((it) => it.id === id) as ObjectItem | undefined;
-  if (!o || o.kind === to || o.kind === "satin" || to === "satin") return;
-  const outline = o.kind === "run" ? o.geometry.nodes : o.geometry.outline;
+  if (!o || o.kind === to) return;
+  if (o.kind === "satin" && !isRibbon(o)) {
+    const outline = columnOutline(o.geometry as { rail_a: PathNode[]; rail_b: PathNode[] });
+    editObject(id, () =>
+      to === "run"
+        ? ({ ...o, kind: "run", geometry: { nodes: outline, closed: true }, params: defaultsFor("run") } as ObjectItem)
+        : ({ ...o, kind: to, geometry: { outline }, params: defaultsFor(to) } as ObjectItem),
+    );
+    return;
+  }
+  // A closed shape set to Satin is filled with one satin column (as in Embrilliance): a fill, or a
+  // line drawn all the way round (closed, or ending where it began). Add satin border (Shift+B)
+  // still makes a satin outline round it.
+  const loop = o.kind === "run" ? closedLoop(o.geometry.nodes, !!o.geometry.closed) : null;
+  if (to === "satin" && (o.kind === "fill" || o.kind === "applique" || loop)) {
+    if ((o.kind === "fill" || o.kind === "applique") && o.geometry.holes?.length) {
+      return info("A satin can't go round holes, so this stays a fill. For a satin edge round it, use Add satin border (Shift+B).");
+    }
+    const outline = loop ?? (o.geometry as { outline: PathNode[] }).outline;
+    const r = await satinFillFor(outline, 0);
+    if (!r || !unchanged(id, o)) return;
+    satinWays.set(id, 0);
+    editObject(id, () => ({ ...o, kind: "satin", geometry: { rail_a: r.rail_a, rail_b: r.rail_b }, params: satinFillParams(r) }) as ObjectItem);
+    return info(
+      `Filled with one satin that follows the shape (widest stitch ${round2(r.widest_mm)} mm${r.widest_mm > SPLIT_FROM_MM ? ", split so it can't snag" : ""}). ` +
+        `Shift+W or the purple dots turn the stitches another way; Add satin border (Shift+B) on the ${loop ? "line" : "fill"} edges it with satin instead.`,
+    );
+  }
+  const line = o.kind === "run" || o.kind === "satin";
+  const pts = line ? (o.geometry as { nodes: PathNode[] }).nodes : (o.geometry as { outline: PathNode[] }).outline;
+  // A fill's outline is closed; a line or ribbon keeps whether it was.
+  const closed = line ? !!(o.geometry as { closed?: boolean }).closed : true;
   const holes = o.kind === "fill" || o.kind === "applique" ? o.geometry.holes : undefined;
+  const width = isRibbon(o) ? o.geometry.width_mm : useStore.getState().satinWidth;
   editObject(id, () =>
     to === "run"
-      ? ({ ...o, kind: "run", geometry: { nodes: outline, closed: true }, params: { ...DEFAULT_PARAMS.run } } as ObjectItem)
-      : ({ ...o, kind: to, geometry: { outline, ...(holes ? { holes } : {}) }, params: { ...DEFAULT_PARAMS[to] } } as ObjectItem),
+      ? ({ ...o, kind: "run", geometry: { nodes: pts, ...(closed ? { closed: true } : {}) }, params: defaultsFor("run") } as ObjectItem)
+      : to === "satin"
+        ? ({ ...o, kind: "satin", geometry: { nodes: pts, width_mm: width, ...(closed ? { closed: true } : {}) }, params: defaultsFor("satin") } as ObjectItem)
+        : ({ ...o, kind: to, geometry: { outline: pts, ...(holes ? { holes } : {}) }, params: defaultsFor(to) } as ObjectItem),
   );
 }
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
+
+/** A line's points as a closed outline, if it goes all the way round: closed, or ending within
+ *  half a millimetre of where it began (the repeated last point is dropped). Null if it's open. */
+export function closedLoop(nodes: PathNode[], closed: boolean): PathNode[] | null {
+  if (nodes.length < 3) return null;
+  if (closed) return nodes;
+  const a = nodes[0];
+  const b = nodes[nodes.length - 1];
+  return Math.hypot(a[0] - b[0], a[1] - b[1]) <= 0.5 && nodes.length >= 4 ? nodes.slice(0, -1) : null;
+}
+
+/** Shift+W: turn a satin fill's stitches another way (it's split at other tips). */
+export async function satinOtherWay() {
+  const s = useStore.getState();
+  const o = currentLayout()?.items.find((it) => it.id === s.selectedId) as ObjectItem | undefined;
+  if (!o || o.kind !== "satin" || isRibbon(o)) return info("Select a satin that fills a shape first.");
+  const way = (satinWays.get(o.id) ?? 0) + 1;
+  const r = await satinFillFor(columnOutline(o.geometry as { rail_a: PathNode[]; rail_b: PathNode[] }), way);
+  if (!r || !unchanged(o.id, o)) return;
+  satinWays.set(o.id, way % r.ways);
+  void editObject(o.id, (it) => withSatinRails(it, r));
+  info(`Way ${(way % r.ways) + 1} of ${r.ways} (widest stitch ${round2(r.widest_mm)} mm). Shift+W again for the next.`);
+}
+
+/** A satin column given new rails (another way, or tips moved): wide ones split their stitches; a
+ *  start and end chosen on the old rails go, since the new tips are where it starts and ends. */
+function withSatinRails(it: ObjectItem, r: SatinFill): ObjectItem {
+  const { start_mm: _s, end_mm: _e, ...params } = it.params as Record<string, unknown>;
+  void _s;
+  void _e;
+  const split = r.widest_mm > SPLIT_FROM_MM && !(it.params as { split_mm?: number }).split_mm ? { split_mm: 7 } : {};
+  return { ...it, geometry: { rail_a: r.rail_a, rail_b: r.rail_b }, params: { ...params, ...split } } as ObjectItem;
+}
+
+const isSatinFill = () => {
+  const s = useStore.getState();
+  const o = currentLayout()?.items.find((it) => it.id === s.selectedId);
+  return !!o && isObject(o) && o.kind === "satin" && !isRibbon(o);
+};
 
 // ---------------------------------------------------------------- colors and stitches
 
@@ -976,6 +1641,35 @@ export function recolorBlock(block: number, thread: Thread | null) {
   const l = currentLayout();
   const sources = useStore.getState().design?.blocks[block]?.sources;
   if (l && sources?.length) void commit(recolor(l, sources, thread));
+}
+
+/** Recolor some of the design's color stops (an item's own color, by item and block): one undo step. */
+export function recolorSources(sources: { item: number; block: number }[], thread: Thread | null) {
+  const l = currentLayout();
+  if (l && sources.length) void commit(recolor(l, sources, thread));
+}
+
+/** One thread for several things at once (everything selected): drawn shapes and lettering take
+ *  it as their thread; a stitch file with one color is recolored. One undo step. Returns how many
+ *  multicolor stitch files were left as they are. */
+export function setItemsThread(ids: string[], thread: Thread): number {
+  let l = currentLayout();
+  const design = useStore.getState().design;
+  if (!l) return 0;
+  let skipped = 0;
+  const fileSources: { item: number; block: number }[] = [];
+  l.items.forEach((it, i) => {
+    if (!ids.includes(it.id) || isObject(it) || isText(it)) return;
+    const srcs = (design?.blocks ?? []).flatMap((b) => (b.sources ?? []).filter((src) => src.item === i));
+    if (new Set(srcs.map((src) => src.block)).size === 1) fileSources.push(...srcs);
+    else skipped++;
+  });
+  l = { ...l, items: l.items.map((it) => (ids.includes(it.id) && (isObject(it) || isText(it)) ? ({ ...it, thread, threads: [] } as LayoutItem) : it)) };
+  if (fileSources.length) l = recolor(l, fileSources, thread);
+  useStore.getState().setDrawThread(thread);
+  void commit(l);
+  if (skipped) info(`${skipped === 1 ? "A stitch file with several colors keeps its" : `${skipped} stitch files with several colors keep their`} colors: change them one by one in Order & colors.`);
+  return skipped;
 }
 
 /** Recolor several blocks at once (one undo step). */
@@ -1043,8 +1737,9 @@ function startHole() {
   const s = useStore.getState();
   const o = currentLayout()?.items.find((it) => it.id === s.selectedId);
   if (!o || (o.kind !== "fill" && o.kind !== "applique")) return info("Select a fill first, then press O to draw a hole in it.");
+  const back = s.tool;
   s.setTool("fill");
-  s.setPen({ kind: "fill", a: [], b: [], holeFor: o.id });
+  s.setPen({ kind: "fill", a: [], b: [], holeFor: o.id, holeBack: back });
   info("Click around the hole; Enter or right-click finishes it.");
 }
 
@@ -1168,7 +1863,10 @@ export async function saveAppliqueSvg() {
 
 function toggleBasting() {
   const l = currentLayout();
-  if (l) void commit({ ...l, basting: { ...l.basting, enabled: !l.basting.enabled } });
+  if (!l) return;
+  // Remember the hoop, so the box comes in closer rather than making the design too big for it.
+  const h = selectHoop(useStore.getState());
+  void commit({ ...l, basting: { ...l.basting, enabled: !l.basting.enabled, ...(h ? { fit_mm: [h.width_mm, h.height_mm] as [number, number] } : {}) } });
 }
 
 function toggleJumpsToTrims() {
@@ -1271,6 +1969,7 @@ export async function loadMachinesAndCharts() {
     setMachines(await engine().call<Machine[]>("machines.list"));
     useStore.getState().setFabrics(await engine().call<Fabric[]>("fabrics.list"));
     await loadAISettings();
+    await loadTraceModel();
     setCharts(await engine().call<ChartSummary[]>("threads.charts"));
   } catch (err) {
     fail(err);
@@ -1357,6 +2056,8 @@ const hasDesign = () => useStore.getState().design !== null;
 const hasApplique = () => engineReady() && !!currentLayout()?.items.some((it) => it.kind === "applique");
 const engineReady = () => useStore.getState().engine !== null;
 const canEdit = () => hasDesign() && engineReady();
+const guessing = () => !!useStore.getState().autoTrace?.guesses.length && !useStore.getState().autoTrace?.busy;
+const guessingFill = () => guessing() && useStore.getState().autoTrace!.guesses[useStore.getState().autoTrace!.index]?.kind === "fill";
 const hasTarget = () => canEdit() && !drawing() && targetId() !== null;
 const hasSelection = () => engineReady() && useStore.getState().selectedId !== null;
 const noSelection = () => hasDesign() && useStore.getState().selectedId === null;
@@ -1367,12 +2068,13 @@ const drawing = () => useStore.getState().pen !== null;
 const notDrawing = () => engineReady() && !drawing();
 const nudge = (dx: number, dy: number) => () => {
   const s = useStore.getState();
-  const img = s.history.present?.images.find((im) => im.id === s.selectedId);
+  const img = currentDoc()?.images.find((im) => im.id === s.selectedId);
   if (img) {
     if (!img.locked) setPicture(img.id, { x: img.x + dx, y: img.y + dy });
     return;
   }
-  editSelection({ move: [dx, dy] });
+  // Tapping or holding an arrow key is one move: one undo step, renders as fast as the engine goes.
+  editSelection({ move: [dx, dy] }, continueGesture(`nudge:${[s.selectedId, ...s.extraIds].join(",")}`));
 };
 const tool = (t: Tool) => async () => {
   // Switching tools mid-shape keeps the shape if it's complete enough, rather than losing it.
@@ -1380,8 +2082,9 @@ const tool = (t: Tool) => async () => {
     if (penReady()) await penFinish();
     else penCancel();
   }
+  // No design yet: start one first (starting one goes back to Select), then pick the tool.
+  if (!hasDoc()) await replaceDoc(freshDoc(), null);
   useStore.getState().setTool(t);
-  if (!hasDoc()) void replaceDoc(freshDoc(), null);
 };
 
 const hasJunction = () => (useStore.getState().ghost?.alternatives.length ?? 0) > 0;
@@ -1390,6 +2093,43 @@ const hasJunction = () => (useStore.getState().ghost?.alternatives.length ?? 0) 
 // is nudged by the arrows, otherwise they step the player).
 export const COMMANDS: Command[] = [
   // While drawing, Tab always belongs to Trace Assist (never moves keyboard focus).
+  // Stitch editing: Delete removes the selected stitches (before the other Delete commands).
+  {
+    id: "stitch.deleteSelected",
+    title: "Delete the selected stitches",
+    shortcut: "Delete",
+    run: () => feat.deleteSelectedStitches(),
+    // On whenever stitches are being edited (doing nothing if none is selected), so the key never
+    // falls through to "delete the design".
+    enabled: () => !!useStore.getState().stitchEdit,
+  },
+  {
+    id: "stitch.deleteSelectedAlt",
+    title: "Delete the selected stitches",
+    shortcut: "Backspace",
+    run: () => feat.deleteSelectedStitches(),
+    // On whenever stitches are being edited (doing nothing if none is selected), so the key never
+    // falls through to "delete the design".
+    enabled: () => !!useStore.getState().stitchEdit,
+  },
+  {
+    id: "autotrace.allAccept",
+    title: "Add every shape found in the picture",
+    shortcut: "Enter",
+    run: () => void feat.acceptWholePicture(),
+    enabled: () => { const a = useStore.getState().autoAll; return !!a && !a.busy && a.shapes.length > 0; },
+  },
+  { id: "autotrace.next", title: "Auto-trace: next guess", shortcut: "Tab", run: () => nextGuess(1), enabled: guessing },
+  { id: "autotrace.prev", title: "Auto-trace: previous guess", shortcut: "Shift+Tab", run: () => nextGuess(-1), enabled: guessing },
+  { id: "autotrace.accept", title: "Auto-trace: use this guess", shortcut: "Enter", run: () => void acceptGuess(), enabled: guessing },
+  { id: "autotrace.fillBorder", title: "Auto-trace: use as a fill with a satin border", shortcut: "Shift+Enter", run: () => void acceptGuess("fillAndBorder"), enabled: guessingFill },
+  { id: "autotrace.closer", title: "Auto-trace: points closer together", shortcut: "[", run: () => setSpacing(useStore.getState().autoSpacing - 0.5), enabled: () => useStore.getState().tool === "autotrace" },
+  { id: "autotrace.further", title: "Auto-trace: points further apart", shortcut: "]", run: () => setSpacing(useStore.getState().autoSpacing + 0.5), enabled: () => useStore.getState().tool === "autotrace" },
+  { id: "autotrace.spreadLess", title: "Auto-trace: spread less (stop at fainter changes)", shortcut: "Alt+[", run: () => setSpread(useStore.getState().autoSpread - 1), enabled: () => useStore.getState().tool === "autotrace" },
+  { id: "autotrace.spreadMore", title: "Auto-trace: spread more (join similar shades)", shortcut: "Alt+]", run: () => setSpread(useStore.getState().autoSpread + 1), enabled: () => useStore.getState().tool === "autotrace" },
+  // Drawing a satin along a shape's edge: Tab fits it to the edge (before Trace Assist's Tab).
+  { id: "satin.fitEdge", title: "Fit the satin along the edge (again: the next way)", shortcut: "Tab", run: () => nextFit(1), enabled: canFit },
+  { id: "satin.fitEdgeBack", title: "Fit the satin along the edge: the way before", shortcut: "Shift+Tab", run: () => nextFit(-1), enabled: () => !!useStore.getState().edgeFit?.original },
   { id: "trace.accept", title: "Accept the suggested point", shortcut: "Tab", run: () => queueAccept(), enabled: drawing },
   { id: "trace.acceptMany", title: "Keep accepting points", shortcut: "Shift+Tab", run: queueAcceptMany, enabled: drawing },
   { id: "trace.pick1", title: "Take branch 1", shortcut: "1", run: () => queueAccept(1), enabled: hasJunction },
@@ -1403,6 +2143,21 @@ export const COMMANDS: Command[] = [
     shortcut: "Mod+Shift+A",
     run: () => useStore.getState().toggleTraceAssist(),
   },
+  // While drawing, the arrow keys move the view 1 cm (as in Embrilliance), so you can keep going off-screen.
+  ...(
+    [
+      ["Left", -10, 0],
+      ["Right", 10, 0],
+      ["Up", 0, -10],
+      ["Down", 0, 10],
+    ] as const
+  ).map(([k, dx, dy]) => ({
+    id: `view.pan${k}`,
+    title: `Move the view ${k.toLowerCase()} 1 cm`,
+    shortcut: `Arrow${k}`,
+    run: () => useStore.getState().requestZoom("pan", { pan: [dx, dy] }),
+    enabled: () => drawing() || (useStore.getState().tool !== "select" && !hasSelection()),
+  })),
   { id: "pen.finish", title: "Finish the shape", shortcut: "Enter", run: () => void penFinish(), enabled: drawing },
   { id: "pen.undoPoint", title: "Remove the last point", shortcut: "Backspace", run: penUndoPoint, enabled: drawing },
   { id: "pen.cancel", title: "Cancel the shape", shortcut: "Escape", run: penCancel, enabled: drawing },
@@ -1419,7 +2174,7 @@ export const COMMANDS: Command[] = [
 
   { id: "app.settings", title: "Settings…", shortcut: "Mod+,", run: () => useStore.getState().setSettingsOpen(true) },
   { id: "app.help", title: "Help", shortcut: "F1", run: () => useStore.getState().setHelpOpen(true) },
-  { id: "ai.advisor", title: "Stitch Advisor (AI)…", shortcut: "Mod+Shift+I", run: () => void runAdvisor(), enabled: canAdvise },
+  { id: "ai.advisor", title: "Stitch Advisor (AI)…", shortcut: "Mod+Shift+I", run: () => void runAdvisor(), enabled: () => canAdvise() },
   { id: "file.new", title: "New design", shortcut: "Mod+N", run: () => void newProject(), enabled: engineReady },
   { id: "file.open", title: "Open…", shortcut: "Mod+O", run: () => void openDesign(), enabled: engineReady },
   { id: "file.save", title: "Save project", shortcut: "Mod+S", run: () => void saveProject(false), enabled: () => engineReady() && hasDoc() },
@@ -1450,7 +2205,28 @@ export const COMMANDS: Command[] = [
 
   { id: "tool.select", title: "Select and move", shortcut: "V", run: tool("select"), enabled: notDrawing },
   { id: "tool.run", title: "Draw a running stitch line", shortcut: "L", run: tool("run"), enabled: notDrawing },
-  { id: "tool.satin", title: "Draw a satin column", shortcut: "C", run: tool("satin"), enabled: notDrawing },
+  { id: "tool.satin", title: "Draw a satin ribbon", shortcut: "C", run: tool("satin"), enabled: notDrawing },
+  { id: "tool.autotrace", title: "Auto-trace a shape in a picture", shortcut: "Shift+A", run: tool("autotrace"), enabled: notDrawing },
+  {
+    id: "autotrace.all",
+    title: "Auto-digitize the whole picture…",
+    shortcut: "Alt+A",
+    run: () => void feat.digitizeWholePicture(),
+    enabled: () => notDrawing() && !!useStore.getState().history.present?.images.length,
+  },
+  { id: "tool.knife", title: "Knife: cut the selected shape in two", shortcut: "Shift+K", run: () => feat.startKnife(), enabled: () => hasTarget() && targetIs((o) => o.kind === "fill" || o.kind === "applique" || o.kind === "run" || isRibbon(o)) },
+  { id: "object.merge", title: "Merge the selected fills into one", shortcut: "Mod+M", run: () => void feat.mergeSelected(), enabled: () => hasTarget() && useStore.getState().extraIds.length > 0 },
+  { id: "object.offset", title: "Outline / offset around the selection…", shortcut: "Mod+Shift+K", run: () => useStore.getState().setDialog("offset"), enabled: () => hasTarget() },
+  { id: "layout.travelUnder", title: "Hide moves under later stitching (fewer jumps & trims)", shortcut: "Mod+Alt+T", run: () => feat.toggleTravelUnder(), enabled: canEdit },
+  { id: "layout.shortestOrder", title: "Sew in the shortest order", shortcut: "Mod+Alt+O", run: () => void feat.shortestOrder(), enabled: canEdit },
+  { id: "layout.optimizeJumps", title: "Optimize jumps (where each piece starts and ends)", shortcut: "Mod+Alt+J", run: () => void feat.optimizeJumps(), enabled: canEdit },
+  { id: "file.browse", title: "Browse designs…", shortcut: "Mod+Alt+B", run: () => useStore.getState().setDialog("browse"), enabled: engineReady },
+  { id: "edit.stitches", title: "Edit stitches of the selected design", shortcut: "Mod+Alt+E", run: () => feat.startStitchEdit(), enabled: () => hasTarget() },
+  { id: "text.onLine", title: "Put the text on the selected line", shortcut: "Mod+Alt+L", run: () => void feat.textOnLine(), enabled: () => hasTarget() && useStore.getState().extraIds.length > 0 },
+  { id: "text.names", title: "One file per name…", shortcut: "Mod+Alt+N", run: () => useStore.getState().setDialog("names"), enabled: () => hasTarget() && currentLayout()?.items.find((it) => it.id === targetId())?.kind === "text" },
+  { id: "view.rulers", title: "Rulers (drag from them for guides)", shortcut: "Mod+R", run: () => useStore.getState().setShowRulers(!useStore.getState().showRulers), enabled: () => true },
+  { id: "view.clearGuides", title: "Remove all guides", shortcut: "Mod+Alt+G", run: () => feat.clearGuides(), enabled: () => feat.guidesOf().length > 0 },
+  { id: "object.border", title: "Add a satin border", shortcut: "Shift+B", run: () => void addSatinBorder(), enabled: () => canEdit() && !drawing() && targetIs((o) => o.kind === "fill" || o.kind === "applique" || (o.kind === "run" && !!o.geometry.closed)) },
   { id: "tool.fill", title: "Draw a fill shape", shortcut: "F", run: tool("fill"), enabled: notDrawing },
   { id: "tool.text", title: "Add text (click where it goes)", shortcut: "Shift+T", run: tool("text"), enabled: notDrawing },
   // Embrilliance's create keys.
@@ -1459,8 +2235,10 @@ export const COMMANDS: Command[] = [
   { id: "create.line", title: "Draw a line (running stitch)", shortcut: "Shift+X", run: tool("run"), enabled: notDrawing },
   { id: "create.same", title: "Draw a shape like the last one", shortcut: "Q", run: () => drawLike(0), enabled: notDrawing },
   { id: "create.prior", title: "Draw a shape like the one before the last", shortcut: "W", run: () => drawLike(1), enabled: notDrawing },
-  { id: "object.hole", title: "Add a hole to the selected fill", shortcut: "O", run: startHole, enabled: () => notDrawing() && hasSelection() },
-  { id: "object.angle", title: "Set the stitch angle with a line", shortcut: "I", run: startAngle, enabled: () => notDrawing() && hasSelection() },
+  { id: "object.hole", title: "Cut a hole in the selected fill (draw round it)", shortcut: "O", run: startHole, enabled: () => notDrawing() && targetIs((o) => o.kind === "fill" || o.kind === "applique") },
+  { id: "object.cutOut", title: "Cut the shapes on top out of the fill (select the fill and them)", shortcut: "Shift+O", run: () => void feat.cutOutSelected(), enabled: () => notDrawing() && useStore.getState().extraIds.length > 0 && selectionIds().some((id) => { const it = currentLayout()?.items.find((x) => x.id === id); return !!it && (it.kind === "fill" || it.kind === "applique"); }) },
+  { id: "satin.otherWay", title: "Turn a satin fill's stitches another way", shortcut: "Shift+W", run: () => void satinOtherWay(), enabled: () => notDrawing() && isSatinFill() },
+  { id: "object.angle", title: "Set the stitch angle with a line", shortcut: "I", run: startAngle, enabled: () => notDrawing() && targetIs((o) => o.kind === "fill") },
   { id: "text.monogram", title: "Add a monogram", shortcut: "Mod+Alt+M", run: () => void addText(0, 0, true), enabled: engineReady },
   { id: "shape.rectangle", title: "Add a rectangle", shortcut: "Mod+Alt+1", run: () => void addShape("rectangle"), enabled: engineReady },
   { id: "shape.circle", title: "Add a circle", shortcut: "Mod+Alt+2", run: () => void addShape("circle"), enabled: engineReady },
@@ -1473,7 +2251,7 @@ export const COMMANDS: Command[] = [
     enabled: () => {
       const s = useStore.getState();
       const it = s.history.present?.layout.items.find((x) => x.id === s.selectedId);
-      return !!it && isObject(it) && s.tool === "select";
+      return !!it && isObject(it) && !it.locked && !drawing();
     },
   },
   {
@@ -1496,15 +2274,11 @@ export const COMMANDS: Command[] = [
     id: "node.delete",
     title: "Remove the selected point",
     shortcut: "Delete",
-    run: () => {
-      const n = useStore.getState().selectedNode;
-      if (n) {
-        deleteNode(n.id, n.list as NodeList, n.index);
-        useStore.getState().selectNode(null);
-      }
-    },
+    run: deleteSelectedNode,
     enabled: () => useStore.getState().selectedNode !== null,
   },
+  // Backspace too: with a point selected it removes the point, never the whole shape.
+  { id: "node.deleteAlt", title: "Remove the selected point", shortcut: "Backspace", run: deleteSelectedNode, enabled: () => useStore.getState().selectedNode !== null },
   { id: "arrange.delete", title: "Remove", shortcut: "Delete", run: removeSelected, enabled: hasSelection },
   { id: "arrange.deleteAlt", title: "Remove", shortcut: "Backspace", run: removeSelected, enabled: hasSelection },
   {
@@ -1540,6 +2314,52 @@ export const COMMANDS: Command[] = [
   { id: "stitch.jumpsToTrims", title: `Trim jumps longer than ${JUMP_TRIM_MM} mm`, shortcut: "Mod+Shift+J", run: toggleJumpsToTrims, enabled: canEdit },
   { id: "stitch.basting", title: "Add a basting box", shortcut: "Mod+Shift+B", run: toggleBasting, enabled: canEdit },
   { id: "stitch.knockdown", title: "Knockdown stitches (towels, fleece)", shortcut: "Mod+Shift+N", run: toggleKnockdown, enabled: canEdit },
+  {
+    // Pin (or unpin) what's selected: a pinned shape can't be dragged; a pinned picture lets clicks through.
+    id: "arrange.pin",
+    title: "Pin in place / unpin",
+    shortcut: "Mod+L",
+    run: () => {
+      const st = useStore.getState();
+      const id = st.selectedId;
+      if (!id) return;
+      const img = selectImages(st).find((im) => im.id === id);
+      if (img) return setPicture(id, { locked: !img.locked });
+      const it = selectLayout(st)?.items.find((x) => x.id === id);
+      if (it) setItemPinned(id, !it.locked);
+    },
+    enabled: hasSelection,
+  },
+  {
+    id: "arrange.rename",
+    title: "Rename",
+    shortcut: "F2",
+    run: () => window.dispatchEvent(new CustomEvent("ludd:rename", { detail: useStore.getState().selectedId })),
+    enabled: () => hasSelection() && !useStore.getState().extraIds.length,
+  },
+  // Sewing order, from the keyboard or a right-click (the list's arrows and grip do the same).
+  { id: "arrange.earlier", title: "Sew earlier", shortcut: "Mod+[", run: () => sewAt(-1), enabled: () => canMoveInOrder(-1) },
+  { id: "arrange.later", title: "Sew later", shortcut: "Mod+]", run: () => sewAt(1), enabled: () => canMoveInOrder(1) },
+  { id: "arrange.first", title: "Sew first", shortcut: "Mod+Shift+[", run: () => sewAt("first"), enabled: () => canMoveInOrder(-1) },
+  { id: "arrange.last", title: "Sew last", shortcut: "Mod+Shift+]", run: () => sewAt("last"), enabled: () => canMoveInOrder(1) },
+  { id: "arrange.centre", title: "Centre in the hoop", shortcut: "Mod+Shift+M", run: centreSelection, enabled: () => hasTarget() && !!selectionGeometry(selectionIds()).box },
+  // With several selected, the thread chosen goes to all of them.
+  { id: "object.thread", title: "Change thread…", shortcut: "Alt+T", run: () => useContextMenu.setState({ threadFor: selectionIds().find(recolorable) ?? selectionIds()[0] ?? null }), enabled: () => hasTarget() && (selectionIds().some(recolorable) || (selectionIds().length > 1 && selectionIds().some(singleColorFile))) },
+  { id: "text.toShapes", title: "Break the lettering into shapes", shortcut: "Mod+Alt+X", run: () => void textToShapes(), enabled: () => hasTarget() && currentLayout()?.items.find((it) => it.id === targetId())?.kind === "text" },
+  {
+    id: "text.resetEnds",
+    title: "Reset the letters' starts and ends",
+    shortcut: "Mod+Alt+R",
+    run: () => {
+      const id = targetId();
+      if (id) setText(id, { letters: undefined });
+    },
+    enabled: () => {
+      const it = currentLayout()?.items.find((x) => x.id === targetId());
+      return hasTarget() && !!it && isText(it) && Object.keys(it.letters ?? {}).length > 0;
+    },
+  },
+  { id: "text.edit", title: "Change the words", shortcut: "Mod+Alt+W", run: editTextWords, enabled: () => hasTarget() && currentLayout()?.items.find((it) => it.id === targetId())?.kind === "text" },
   { id: "arrange.repeat", title: "Repeat, carousel or mirror…", shortcut: "Mod+Shift+D", run: () => useStore.getState().setRepeatOpen(true), enabled: hasTarget },
   { id: "applique.svg", title: "Save applique cut file (SVG)…", shortcut: "Mod+Shift+U", run: () => void saveAppliqueSvg(), enabled: hasApplique },
 
@@ -1567,6 +2387,7 @@ export const COMMANDS: Command[] = [
   { id: "view.measure", title: "Measure (click two points)", shortcut: "M", run: toggleRuler, enabled: () => hasDoc() && !drawing() },
   { id: "view.points", title: "Show stitch points", shortcut: "P", run: () => useStore.getState().toggleView("showPoints"), enabled: hasDesign },
   { id: "view.stitches", title: "Show stitches", shortcut: "N", run: () => useStore.getState().toggleView("showStitches"), enabled: hasDoc },
+  { id: "view.seeThrough", title: "See-through stitches (to work over a picture)", shortcut: "Shift+N", run: () => useStore.getState().toggleSeeThrough(), enabled: hasDoc },
   { id: "view.pictures", title: "Show pictures", shortcut: "B", run: () => useStore.getState().toggleView("showPictures"), enabled: hasDoc },
   { id: "view.crosshair", title: "Crosshairs", shortcut: "E", run: () => useStore.getState().toggleView("crosshair"), enabled: hasDoc },
   { id: "view.snap", title: "Snap new points to the grid", shortcut: "Shift+G", run: () => useStore.getState().toggleSnapGrid(), enabled: hasDoc },
@@ -1588,7 +2409,7 @@ export const COMMANDS: Command[] = [
 
   {
     id: "player.toggle",
-    title: "Play / pause",
+    title: "Play / pause (tap Space; hold Space and drag to move around)",
     shortcut: "Space",
     run: () => {
       const s = useStore.getState();
@@ -1614,7 +2435,7 @@ export const COMMANDS: Command[] = [
   { id: "player.start", title: "Go to start", shortcut: "Home", run: () => step(-Infinity), enabled: hasDesign },
   { id: "player.end", title: "Show whole design", shortcut: "End", run: () => step(Infinity), enabled: hasDesign },
   {
-    id: "player.faster",
+    id: "player.fasterAlt",
     title: "Faster playback",
     shortcut: "]",
     run: () => {
@@ -1623,7 +2444,7 @@ export const COMMANDS: Command[] = [
     },
   },
   {
-    id: "player.slower",
+    id: "player.slowerAlt",
     title: "Slower playback",
     shortcut: "[",
     run: () => {

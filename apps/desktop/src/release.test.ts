@@ -13,6 +13,21 @@ describe("installed app", () => {
     expect(csp).not.toContain("unsafe-eval");
   });
 
+  it("lets Tauri's fast messaging through (no CSP error and slow fallback on every start)", () => {
+    expect(csp).toMatch(/connect-src [^;]*\bipc:/);
+    expect(csp).toMatch(/connect-src [^;]*http:\/\/ipc\.localhost/);
+  });
+
+  it("declares the oldest macOS the bundled engine runs on (its libraries need macOS 14)", () => {
+    expect(conf.bundle.macOS.minimumSystemVersion).toBe("14.0");
+  });
+
+  it("ships the licences of the libraries and fonts it includes", () => {
+    expect(Object.values(conf.bundle.resources)).toContain("THIRD-PARTY-NOTICES.txt");
+    const build = readFileSync(new URL("../../../scripts/build_engine.py", import.meta.url), "utf8");
+    expect(build).toContain("make_notices.py");
+  });
+
   it("loads PixiJS's no-eval add-on before anything draws", () => {
     const main = readFileSync(new URL("./main.tsx", import.meta.url), "utf8");
     const firstImport = main.indexOf("import ");

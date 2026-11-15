@@ -1,6 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { saveAISettings, setAIKey, testAI, type AISettings as Settings } from "../ai";
+import { heldCount } from "../escape";
 import { useStore } from "../store";
+import { downloadTraceModel, removeTraceModel, resetPicks, setTraceAI } from "../autoTrace";
 
 const MODES: { id: Settings["mode"]; label: string }[] = [
   { id: "off", label: "Off" },
@@ -11,6 +13,7 @@ const MODES: { id: Settings["mode"]; label: string }[] = [
 /** A text box that saves when you leave it (or press Enter). */
 function Field({ label, value, onSave, placeholder }: { label: string; value: string; onSave: (v: string) => void; placeholder?: string }) {
   const [v, setV] = useState(value);
+  const reverting = useRef(false);
   useEffect(() => setV(value), [value]);
   return (
     <label className="field">
@@ -19,8 +22,21 @@ function Field({ label, value, onSave, placeholder }: { label: string; value: st
         value={v}
         placeholder={placeholder}
         onChange={(e) => setV(e.target.value)}
-        onBlur={() => v.trim() !== value && onSave(v.trim())}
-        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+        onBlur={() => {
+          if (!reverting.current && v.trim() !== value) onSave(v.trim());
+          reverting.current = false;
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+          // Esc lets go of the typing: the old value comes back, nothing is saved, and the
+          // dialog stays open (one thing per press; something held, like a drag, goes first).
+          if (e.key === "Escape" && !heldCount()) {
+            e.preventDefault();
+            reverting.current = true;
+            setV(value);
+            (e.target as HTMLInputElement).blur();
+          }
+        }}
       />
     </label>
   );
@@ -132,6 +148,79 @@ export function AISettingsSection() {
           {status && <p className="hint">{status}</p>}
         </>
       )}
+    </>
+  );
+}
+
+/** AI tracing for Auto-trace: a small model that runs on this computer, downloaded only on request. */
+export function AITracingSection() {
+  const model = useStore((s) => s.traceModel);
+  const ai = useStore((s) => s.traceAI);
+  const engine = useStore((s) => s.engine);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
+  if (!model) return null;
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await fn();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+      setAsking(false);
+    }
+  };
+  return (
+    <>
+      <h3>AI tracing (optional)</h3>
+      <p className="hint">
+        Makes Auto-trace much better at photos and shaded art: a small model (MobileSAM, Apache-2.0 license) that runs on this computer. Nothing is sent
+        anywhere; the only network use is downloading it once.
+      </p>
+      {!model.runtime ? (
+        <p className="hint">AI tracing isn't available on this computer (it needs ONNX Runtime, which has no version for Intel Macs). Auto-trace works without it.</p>
+      ) : model.installed ? (
+        <>
+          <label className="check">
+            <input type="checkbox" checked={ai} onChange={(e) => setTraceAI(e.target.checked)} /> Use AI guesses in Auto-trace
+          </label>
+          <div className="btn-row">
+            <button onClick={() => void run(async () => void (await removeTraceModel()))} disabled={busy || !engine}>
+              Remove the model ({model.size_mb} MB)
+            </button>
+          </div>
+        </>
+      ) : asking ? (
+        <div className="confirm">
+          <p>
+            Download <b>mobile_sam_image_encoder.onnx</b> and <b>sam_mask_decoder_multi.onnx</b> (about {model.size_mb} MB together) from{" "}
+            <b>{model.source}</b>?
+          </p>
+          <div className="btn-row">
+            <button className="primary" onClick={() => void run(downloadTraceModel)} disabled={busy || !engine}>
+              {busy ? "Downloading…" : "Download"}
+            </button>
+            <button onClick={() => setAsking(false)} disabled={busy}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="btn-row">
+          <button onClick={() => setAsking(true)} disabled={!engine}>
+            Get AI tracing…
+          </button>
+        </div>
+      )}
+      {err && <p className="hint warn">{err}</p>}
+      <div className="btn-row">
+        <button className="link" onClick={resetPicks} title="Auto-trace puts the kind of guess you use most first">
+          Forget which Auto-trace guesses I usually pick
+        </button>
+      </div>
     </>
   );
 }

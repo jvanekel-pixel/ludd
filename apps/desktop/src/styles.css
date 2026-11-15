@@ -94,8 +94,8 @@ input[type=checkbox], input[type=range] { accent-color: var(--mark); }
 .stage { flex: 1; position: relative; background: var(--fabric); min-width: 0; overflow: hidden; }
 .stage.dark { background: var(--fabric-dark); }
 .stage.drop-target { outline: 3px dashed var(--fg); outline-offset: -8px; }
-.stitch-canvas { position: absolute; inset: 0; cursor: grab; touch-action: none; }
-.stitch-canvas.panning { cursor: grabbing; }
+/* The canvas's mouse pointer is set by StitchCanvas from cursors.ts (it depends on what's under it). */
+.stitch-canvas { position: absolute; inset: 0; cursor: default; touch-action: none; }
 .stitch-canvas canvas { display: block; }
 
 .empty {
@@ -123,18 +123,6 @@ input[type=checkbox], input[type=range] { accent-color: var(--mark); }
 .info-panel dt { color: var(--muted); }
 .info-panel dd { margin: 0; font-variant-numeric: tabular-nums; }
 .info-panel h3 { font-size: 13px; margin: 1rem 0 0.4rem; }
-.threads { list-style: none; margin: 0; padding: 0; }
-.threads li {
-  display: flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.35rem; border-radius: 6px;
-}
-.threads li.current { background: var(--bar); outline: 1px solid var(--line); }
-.threads .swatch {
-  width: 18px; height: 18px; border-radius: 4px; flex-shrink: 0;
-  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.2);
-}
-.threads .num { width: 1.4rem; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
-.threads .tname { display: flex; flex-direction: column; line-height: 1.2; }
-.threads small { color: var(--muted); font-size: 11px; }
 
 .player {
   display: flex; align-items: center; gap: 0.35rem; padding: 0.4rem 0.75rem;
@@ -162,6 +150,8 @@ input[type=checkbox], input[type=range] { accent-color: var(--mark); }
 dialog.modal {
   width: min(560px, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: 10px;
   background: var(--panel); color: var(--fg); padding: 1.25rem;
+  /* A small window: the dialog scrolls (the wheel scrolls it rather than the app behind it). */
+  max-height: calc(100vh - 24px); overflow-y: auto; overscroll-behavior: contain;
 }
 dialog.modal::backdrop { background: rgb(0 0 0 / 0.35); }
 dialog.modal h2 { margin: 0 0 0.25rem; font-size: 17px; }
@@ -186,15 +176,8 @@ dialog.modal .actions { display: flex; justify-content: flex-end; gap: 0.5rem; }
 .fit-fits { color: var(--ok); }
 .fit-rotate { color: var(--warn); }
 .fit-too_big { color: var(--bad); font-weight: 600; }
-.threads-head { display: flex; align-items: center; justify-content: space-between; margin: 1rem 0 0.4rem; }
-.threads-head h3 { margin: 0; }
-.threads-head button { padding: 0.15rem 0.5rem; font-size: 12px; }
 .edited-note { font-size: 12px; color: var(--muted); margin: 0 0 0.4rem; }
 button.link { border: none; background: none; padding: 0; color: var(--fg); text-decoration: underline; }
-.threads .tname { flex: 1; min-width: 0; }
-.threads .was { font-style: italic; }
-.threads .edit { border: none; background: none; padding: 0 0.3rem; color: var(--muted); visibility: hidden; }
-.threads li:hover .edit, .threads .edit:focus-visible { visibility: visible; }
 .swatch.inline {
   display: inline-block; width: 14px; height: 14px; border-radius: 3px; vertical-align: -2px;
   box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.2);
@@ -218,6 +201,12 @@ dialog.export legend .check { margin: 0; }
 dialog.export .cut-options.disabled { opacity: 0.5; }
 dialog.export .slider { display: flex; flex-direction: column; gap: 0.2rem; }
 dialog.export .slider input { accent-color: var(--mark); }
+/* "Make it N% smaller to fit": the suggested fix when the design is too big, as a callout. */
+dialog.export .shrink-fit {
+  background: var(--info-bg); border-left: 3px solid var(--accent-edge); border-radius: 8px;
+  padding: 0.6rem 0.8rem; margin: 0 0 0.75rem; line-height: 1.6;
+}
+dialog.export .shrink-fit label.check { margin: 0.4rem 0 0; }
 dialog.modal label.check { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0.35rem; margin: 0.4rem 0; }
 dialog.modal label.check small { flex-basis: 100%; padding-left: 1.4rem; color: var(--muted); font-size: 12px; }
 dialog.export .stops-count { margin: 0.5rem 0 0; padding: 0.4rem 0.6rem; background: var(--info-bg); border-radius: 6px; }
@@ -308,8 +297,6 @@ dialog.threads-dialog { width: min(680px, calc(100vw - 32px)); }
 .custom-spool input[type="color"] { width: 48px; height: 100%; min-height: 34px; padding: 0; border: 1px solid var(--line); border-radius: 6px; grid-row: span 3; }
 .custom-spool input:not([type]) { padding: 0.3rem 0.5rem; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
 .empty-note { color: var(--muted); font-style: italic; }
-.threads .edit { visibility: visible; opacity: 0.45; }
-.threads li:hover .edit { opacity: 1; }
 
 /* Empty and welcome states sit on a card so they read on the light fabric in both themes. */
 .empty { pointer-events: none; }
@@ -326,6 +313,9 @@ dialog.threads-dialog { width: min(680px, calc(100vw - 32px)); }
 .zoom-controls button { border: none; background: none; min-width: 2rem; padding: 0.2rem 0.45rem; font-variant-numeric: tabular-nums; }
 .zoom-controls button:hover { background: var(--bar); }
 .zoom-controls .pct { min-width: 3.6rem; }
+.zoom-controls .see-through { border-right: 1px solid var(--line); border-radius: 0; font-size: 12.5px; }
+.zoom-controls .see-through.on { background: var(--accent); color: var(--accent-fg); }
+.zoom-controls .see-through.on:hover { background: var(--accent); }
 
 /* M3: editing */
 .toolbar .sep { width: 1px; height: 22px; background: var(--line); margin: 0 0.15rem; }
@@ -351,9 +341,6 @@ dialog.threads-dialog { width: min(680px, calc(100vw - 32px)); }
 .design-list li.current { background: var(--bar); outline: 1px solid var(--mark); }
 .design-list .name { flex: 1; text-align: left; border: none; background: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .design-list li > button:not(.name) { border: none; background: none; padding: 0 0.35rem; }
-.threads-head { gap: 0.3rem; }
-.threads-head h3 { flex: 1; }
-.threads-head .menu > button { font-size: 14px; padding: 0.05rem 0.4rem; }
 .info-panel .hint { font-size: 12px; color: var(--muted); }
 
 /* M4: drawing */
@@ -370,7 +357,6 @@ dialog.threads-dialog { width: min(680px, calc(100vw - 32px)); }
 .tool-rail .icon { font-size: 20px; line-height: 1.1; }
 .tool-rail kbd { margin: 0; font-size: 10px; color: var(--muted); }
 .tool-rail .rail-sep { height: 1px; background: var(--line); margin: 0.3rem 0.2rem; }
-.stitch-canvas.drawing { cursor: crosshair; }
 .draw-hint {
   position: absolute; left: 50%; top: 10px; transform: translateX(-50%); max-width: calc(100% - 32px);
   background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 8px;
@@ -409,6 +395,10 @@ dialog.threads-dialog { width: min(680px, calc(100vw - 32px)); }
 .rail-shapes .menu > button { font-size: 12px; width: 64px; padding: 0.45rem 0.2rem; border: 1px solid transparent; background: none; }
 .rail-shapes .menu > button:hover { background: var(--bar); }
 .rail-shapes .menu-list { left: 0; right: auto; }
+.menu-list.pop-right { top: auto; z-index: 40; min-width: 300px; }
+/* Menu items in the tool rail's pop-out look like any menu's (not like the rail's big buttons). */
+.tool-rail .menu-list button { display: grid; grid-template-columns: 1.2rem 1fr auto; flex-direction: row; align-items: center; justify-items: start; gap: 0.4rem; width: 100%; text-align: left; font-size: 13px; padding: 0.4rem 0.5rem; border: none; }
+.tool-rail .menu-list kbd { font-size: 11px; justify-self: end; }
 
 /* M6: lettering */
 .text-field { display: flex; flex-direction: column; gap: 0.2rem; font-size: 12px; color: var(--muted); margin-bottom: 0.5rem; }
@@ -427,6 +417,12 @@ dialog.threads-dialog { width: min(680px, calc(100vw - 32px)); }
 .font-list small { color: var(--muted); margin-left: 0.3rem; }
 
 dialog.modal.settings { width: min(440px, calc(100vw - 32px)); }
+dialog.modal.licences { width: min(640px, calc(100vw - 32px)); }
+dialog.modal.licences .licences-text {
+  max-height: min(60vh, 520px); overflow: auto; margin: 0.5rem 0 1rem; padding: 0.6rem 0.75rem;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  font: 11px/1.45 "Space Mono", ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere;
+}
 dialog.modal.settings .actions { align-items: center; margin-top: 1.25rem; }
 dialog.modal.settings .about { flex: 1; display: flex; align-items: center; gap: 0.5rem; color: var(--muted); --logo-gap: var(--panel); }
 .empty > .card { --logo-gap: var(--panel); }
@@ -528,6 +524,167 @@ dialog.modal.help { width: min(620px, calc(100vw - 32px)); }
 .fold-title { margin: 0.75rem 0 0.35rem; }
 .fold-button { border: none; background: none; padding: 0; font: inherit; font-weight: 600; display: inline-flex; align-items: center; gap: 0.3rem; color: inherit; }
 .fold-button .caret { width: 0.8rem; color: var(--muted); }
-.threads-head .fold-title, .checks-head .fold-title { margin: 0; flex: 1; }
+.checks-head .fold-title { margin: 0; flex: 1; }
 /* Dialogs can be moved by their title */
-dialog.modal > h2:first-child { cursor: move; user-select: none; }
+dialog.modal > h2:first-child, dialog.modal > .tabs:first-child { cursor: move; user-select: none; touch-action: none; }
+dialog.modal > .tabs:first-child button { cursor: pointer; }
+
+/* Hold Space: the hand tool */
+.draw-hint .placed { font-weight: 600; }
+
+/* ---- Right panel: folding sections (Accordion.tsx) ---- */
+.info-panel { padding: 0 0 1rem; }
+.info-panel .panel-title { padding: 0.75rem 1rem 0.5rem; }
+.info-panel .advisor { margin: 0.5rem 1rem; }
+.inspector {
+  position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.5rem 1rem; background: var(--bar); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+}
+.inspector-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.inspector-name strong { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.inspector-name small { font-size: 11px; color: var(--muted); }
+.inspector-actions { display: flex; align-items: center; gap: 0.15rem; flex-shrink: 0; }
+.inspector .quick, .inspector .menu > button { min-width: 28px; height: 28px; padding: 0 0.3rem; font-size: 15px; line-height: 1; }
+.inspector .quick[aria-pressed="true"] { background: var(--pressed-bg); color: var(--bg); }
+
+.info-panel section.acc { margin: 0; border-bottom: 1px solid var(--line); }
+.acc-head { display: flex; align-items: center; gap: 0.3rem; padding-right: 0.75rem; }
+.info-panel .acc-head h3 { flex: 1; min-width: 0; margin: 0; font-size: 13px; }
+.acc-head h3 > button {
+  width: 100%; display: flex; align-items: center; gap: 0.45rem; padding: 0.6rem 0.25rem 0.6rem 1rem;
+  border: 0; border-radius: 0; background: none; color: var(--fg); font: inherit; font-weight: 650; text-align: left; cursor: pointer;
+}
+.acc-head h3 > button:hover { background: var(--bar); }
+.acc-head h3 > button:focus-visible { outline: 2px solid var(--mark); outline-offset: -2px; }
+.info-panel .caret {
+  width: 6px; height: 6px; margin: 0 3px 0 1px; flex-shrink: 0;
+  border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg); transition: transform 0.15s;
+}
+.info-panel [aria-expanded="true"] > .caret { transform: rotate(45deg); }
+.acc-title { flex-shrink: 0; }
+.acc-summary { flex: 1; min-width: 0; font-weight: 400; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.acc-badge { margin-left: auto; min-width: 1.4em; padding: 0 0.35em; border-radius: 999px; background: var(--line); font-size: 11px; font-weight: 600; text-align: center; }
+.acc-actions { display: flex; align-items: center; gap: 0.25rem; flex-shrink: 0; }
+.acc-actions button { padding: 0.15rem 0.5rem; font-size: 12px; }
+.acc-actions .check { margin: 0; font-size: 12px; color: var(--muted); }
+.acc-body { padding: 0.1rem 1rem 0.8rem; }
+.acc-body > :first-child { margin-top: 0; }
+.acc.open > .acc-head h3 > button { color: var(--fg); }
+.acc-sub { margin: 0.5rem 0 0; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+.acc-sub-head {
+  width: 100%; display: flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.6rem;
+  border: 0; background: none; color: var(--fg); font: inherit; font-size: 12.5px; font-weight: 600; text-align: left; cursor: pointer; border-radius: 6px;
+}
+.acc-sub-head:hover { background: var(--bar); }
+.acc-sub-body { padding: 0.2rem 0.6rem 0.6rem; }
+.acc-row { display: grid; grid-template-columns: 5.5rem 1fr; align-items: center; gap: 0.5rem; margin: 0.35rem 0; }
+.acc-label { font-size: 12px; color: var(--muted); }
+.acc-label:empty { visibility: hidden; }
+.acc-control { min-width: 0; }
+.acc-control .num-field > span:first-child:empty { display: none; }
+.seg.wrap { flex-wrap: wrap; }
+.swatch-strip { display: inline-flex; gap: 2px; vertical-align: middle; }
+.swatch-strip span { width: 10px; height: 10px; border-radius: 2px; border: 1px solid var(--line); }
+.info-panel .acc-body .fabric-picker { margin-top: 0.6rem; }
+.acc-row .seg, .acc-row .stepper { margin: 0; }
+.acc-row .seg button { flex: 1; }
+
+/* Auto-trace's bar: it has buttons, so it takes clicks. */
+.draw-hint.auto-trace { pointer-events: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.6rem; max-width: min(760px, calc(100% - 32px)); }
+.draw-hint.auto-trace button { padding: 0.15rem 0.5rem; font-size: 12px; }
+.draw-hint.auto-trace .at-spacing { display: inline-flex; align-items: center; gap: 0.25rem; color: var(--muted); }
+.draw-hint.auto-trace .at-spacing button { min-width: 1.6rem; padding: 0.05rem 0.3rem; }
+.draw-hint.auto-trace .at-spacing b { color: var(--fg); font-weight: 600; }
+.draw-hint.auto-trace .at-use { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; }
+
+/* Renaming in the panel */
+.rename { cursor: text; }
+.rename-input { width: 100%; min-width: 6rem; font: inherit; padding: 0.05rem 0.3rem; border: 1px solid var(--mark); border-radius: 4px; background: var(--bg); color: var(--fg); }
+.design-list span.name { cursor: pointer; padding: 0.15rem 0.25rem; border-radius: 4px; }
+/* Sewing order: drag a row by its grip. */
+.design-list .grip { cursor: grab; color: var(--muted); padding: 0 0.15rem; user-select: none; touch-action: none; font-size: 13px; line-height: 1; }
+.design-list .grip:hover { color: var(--fg); }
+.design-list.reordering, .design-list.reordering * { cursor: grabbing !important; user-select: none; }
+.design-list li.dragging { background: var(--info-bg, var(--bar)); outline: 1.5px solid var(--accent-edge); border-radius: 6px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18); position: relative; z-index: 1; }
+.design-list span.name:hover { background: var(--bar); }
+.design-list .rename-input { flex: 1; width: auto; }
+.info-panel .remembered { margin-top: 0.5rem; }
+.design-list .rename-btn { opacity: 0.5; }
+.design-list li:hover .rename-btn, .design-list .rename-btn:focus-visible { opacity: 1; }
+.draw-hint.auto-trace .at-ai { display: inline-flex; align-items: center; gap: 0.2rem; }
+.draw-hint.auto-trace .at-more { color: var(--muted); font-size: 12px; }
+
+/* Design browser */
+dialog.modal.browse { width: min(980px, calc(100vw - 32px)); }
+.browse-bar { display: flex; gap: 0.5rem; align-items: center; margin-bottom: 0.5rem; }
+.browse-folder { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; }
+.browse-bar input { width: 12rem; }
+.browse-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.6rem; max-height: 60vh; overflow-y: auto; }
+.browse-grid li { position: relative; }
+.browse-card { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 0.2rem; padding: 0.5rem; text-align: center; }
+.browse-card img { background: #fff; border-radius: 4px; }
+.browse-name { font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.browse-card small { color: var(--muted); font-size: 11px; }
+.browse-add { position: absolute; top: 6px; right: 6px; padding: 0.1rem 0.4rem; font-size: 11px; }
+.browse-none { width: 120px; height: 120px; display: grid; place-items: center; color: var(--muted); font-size: 12px; }
+.browse-grid li.bad { opacity: 0.6; }
+dialog.modal textarea { width: 100%; font: inherit; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 0.4rem; }
+
+.color-sets { list-style: none; margin: 0 0 0.4rem; padding: 0; }
+.color-sets li { display: flex; align-items: center; gap: 0.4rem; padding: 0.15rem 0; }
+.color-sets .name { flex: 1; font-size: 12.5px; }
+.color-sets button { padding: 0.1rem 0.45rem; font-size: 12px; }
+.acc-sub .btn-row input { flex: 1; min-width: 0; font: inherit; padding: 0.2rem 0.4rem; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 4px; }
+
+/* Density: a slider between the presets and the exact spacing. */
+.density-slider { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 0.4rem; font-size: 11.5px; color: var(--muted); margin: 0.1rem 0 0.2rem; }
+.density-slider input[type=range] { width: 100%; accent-color: var(--accent-edge); }
+.density-slider .density-value { grid-column: 1 / -1; justify-self: center; font-size: 12px; color: var(--fg); font-variant-numeric: tabular-nums; }
+.density-slider .density-value b { font-weight: 650; }
+
+/* Pictures: the selected picture's settings under its row. */
+.design-list li.picture-settings-row { display: block; padding: 0.3rem 0.4rem 0.5rem 1.4rem; border-left: 2px solid var(--accent-edge); margin: 0 0 0.3rem 0.5rem; }
+.picture-settings .slider { display: block; }
+
+/* Thread picker: the color code, an exact color and one of your own. */
+dialog.picker h2 .hex { font: 500 12px var(--mono, monospace); color: var(--muted); margin-left: 0.25rem; user-select: all; }
+dialog.picker .exact-color { align-items: center; gap: 0.45rem; margin: 0 0 0.5rem; font-size: 13px; }
+dialog.picker .exact-color small { color: var(--muted); }
+dialog.picker .mix-color { align-items: center; gap: 0.5rem; font-size: 13px; color: var(--muted); }
+dialog.picker .mix-color input[type="color"] { width: 2.2rem; height: 1.6rem; padding: 0; vertical-align: middle; }
+
+/* Right-click menus: at the mouse, above everything, scrolling if the window is short. */
+.menu-list.context-menu { z-index: 60; min-width: 250px; max-height: calc(100vh - 8px); overflow-y: auto; overscroll-behavior: contain; font-size: 13px; }
+.menu-list.context-menu button { padding: 0.28rem 0.5rem; }
+.menu-list.context-menu button:focus-visible { background: var(--bar); outline: none; }
+.menu-list.context-menu kbd { font-size: 11px; }
+.menu-list .context-title { padding: 0.25rem 0.5rem 0.35rem; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px; }
+
+/* Order & colors: the palette, each step's colors, the selection and what's sewing now. */
+.palette { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; margin: 0 0 0.5rem; }
+.palette-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-right: 0.2rem; }
+.palette-swatch { width: 22px; height: 22px; padding: 0; border-radius: 5px; border: 1px solid var(--line); box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.15); cursor: pointer; }
+.palette-swatch:hover:not(:disabled) { transform: scale(1.12); outline: 2px solid var(--mark); }
+.order-note { margin: 0 0 0.4rem; font-size: 12px; }
+.design-list li > button.swatch.small { width: 16px; height: 16px; padding: 0; border-radius: 4px; border: none; flex-shrink: 0; cursor: pointer; font-size: 10px; line-height: 16px; text-align: center; color: #fff; text-shadow: 0 0 2px #000; }
+.design-list li > button.swatch.small:disabled { cursor: default; opacity: 1; }
+.design-list li.sewing { box-shadow: inset 3px 0 0 var(--accent-edge, var(--mark)); }
+.design-list li.color-row { padding-left: 1.6rem; font-size: 12px; }
+.design-list li.color-row.current { outline: none; }
+.design-list li.color-row .num { width: 1.3rem; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+.design-list li.color-row .tname { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.2; overflow: hidden; }
+.design-list li.color-row small { color: var(--muted); font-size: 11px; }
+.design-list li.color-row .was { font-style: italic; }
+.design-list li.added-row .name { font-size: 12px; }
+.design-list li.added-row small { color: var(--muted); }
+.design-list .group-tag { color: var(--muted); font-size: 11px; padding: 0 0.15rem; }
+
+/* Several selected: the explanation gets the full width, the buttons go under it. */
+.inspector:has(.inspector-name small.multi-note) { flex-wrap: wrap; }
+.inspector:has(.inspector-name small.multi-note) .inspector-name { flex-basis: 100%; }
+.inspector:has(.inspector-name small.multi-note) .inspector-actions { margin-top: 0.3rem; }
+
+/* Lettering: how its letters are stitched. */
+.letter-notes { margin: 0.4rem 0 0.2rem; }
+.letter-notes .hint { margin: 0 0 0.35rem; font-size: 12px; }

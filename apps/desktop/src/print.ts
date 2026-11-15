@@ -7,6 +7,10 @@ const MARGIN_MM = 12;
 const CROSS_EXTRA_MM = 8;
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+/** A thread colour as it goes into the page: only a plain #hex colour (a colour from a damaged or
+ * hand-edited file could otherwise end the style or attribute it sits in). */
+export const safeColor = (c: unknown): string =>
+  typeof c === "string" && /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(c.trim()) ? c.trim() : "#808080";
 
 /** One SVG path per color block, in mm. Jumps and trims lift the pen. */
 export function stitchPaths(d: Design): { color: string; d: string }[] {
@@ -22,7 +26,7 @@ export function stitchPaths(d: Design): { color: string; d: string }[] {
       path += `${down ? "L" : "M"}${x[i].toFixed(2)} ${y[i].toFixed(2)}`;
       down = true;
     }
-    return { color: d.threads[b.thread]?.color ?? "#808080", d: path };
+    return { color: safeColor(d.threads[b.thread]?.color), d: path };
   });
 }
 
@@ -91,7 +95,7 @@ export function printHtml(d: Design, hoop: Hoop | null, machineName: string | nu
     .map((b, i) => {
       const t = d.threads[b.thread];
       const brand = [t.brand, t.catalog].filter(Boolean).join(" ");
-      return `<tr><td>${i + 1}</td><td><span class="sw" style="background:${t.color}"></span></td><td>${esc(t.name || t.color)}</td><td>${esc(brand)}</td><td class="n">${counts[i].toLocaleString()}</td><td class="tick"></td></tr>`;
+      return `<tr><td>${i + 1}</td><td><span class="sw" style="background:${safeColor(t.color)}"></span></td><td>${esc(String(t.name || t.color || ""))}</td><td>${esc(brand)}</td><td class="n">${counts[i].toLocaleString()}</td><td class="tick"></td></tr>`;
     })
     .join("");
   const date = new Date().toLocaleDateString();

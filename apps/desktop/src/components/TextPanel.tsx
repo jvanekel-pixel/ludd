@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { command, loadFonts, saveStitchFont, setText } from "../actions";
+import { command, info, loadFonts, saveStitchFont, setText, takeTextToEdit } from "../actions";
 import { formatShortcut } from "../commands";
-import { holdEscape } from "../escape";
+import { heldCount, holdEscape } from "../escape";
 import { MM_PER_IN } from "../design/grid";
 import type { FontInfo, LayoutItemInfo, TextItem, TextShape, Thread } from "../design/types";
-import { useStore } from "../store";
+import { selectLayout, useStore } from "../store";
+import { Section, Sub, type SelKind } from "./Accordion";
 import { ThreadPicker } from "./ThreadDialogs";
 
 const SHAPES: { type: TextShape["type"]; label: string; title: string }[] = [
@@ -15,6 +16,12 @@ const SHAPES: { type: TextShape["type"]; label: string; title: string }[] = [
 ];
 
 const TYPE_DELAY_MS = 450;
+const FONT_LIST_MAX = 200;
+const MIN_SIZE_MM = 2;
+const MAX_SIZE_MM = 200;
+
+/** A LUDD stitch font: its letters are ready-made stitches, so Satin look / Fill don't apply. */
+const isStitchFont =(path: string) => /\.(luddfont|tlfont)$/i.test(path);
 
 /** Searchable font list: type part of a name ("script", "arial"). */
 function FontPicker({ value, onPick }: { value: TextItem["font"]; onPick: (f: FontInfo) => void }) {
@@ -28,20 +35,25 @@ function FontPicker({ value, onPick }: { value: TextItem["font"]; onPick: (f: Fo
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent) => {
-      if (!root.current?.contains(e.target as Node)) setOpen(false);
+      if (root.current?.contains(e.target as Node)) return;
+      setOpen(false);
+      // A click on the design that closes the list only closes it: it doesn't also draw or select.
+      if (e.target instanceof Element && e.target.closest(".stitch-canvas")) e.stopPropagation();
     };
     const release = holdEscape(() => setOpen(false));
-    window.addEventListener("pointerdown", onDown);
+    // Capture: heard before the canvas gets the click.
+    window.addEventListener("pointerdown", onDown, true);
     return () => {
-      window.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("pointerdown", onDown, true);
       release();
     };
   }, [open]);
-  const list = useMemo(() => {
+  const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
     const all = fonts ?? [];
-    return (q ? all.filter((f) => `${f.family} ${f.style}`.toLowerCase().includes(q)) : all).slice(0, 200);
+    return q ? all.filter((f) => `${f.family} ${f.style}`.toLowerCase().includes(q)) : all;
   }, [fonts, query]);
+  const list = matches.slice(0, FONT_LIST_MAX);
   return (
     <div className="font-picker" ref={root}>
       <button className="font-current" onClick={() => setOpen(!open)} aria-expanded={open} title="Choose a font">
@@ -52,6 +64,7 @@ function FontPicker({ value, onPick }: { value: TextItem["font"]; onPick: (f: Fo
         <div className="font-list">
           <input autoFocus placeholder="Search fonts, e.g. script" value={query} onChange={(e) => setQuery(e.target.value)} />
           {!fonts && <p className="hint">Looking for fonts…</p>}
+          {matches.length > list.length && <p className="hint">Showing {list.length} of {matches.length} fonts: type part of a name to find the others.</p>}
           <ul>
             {list.map((f) => (
               <li key={`${f.path}#${f.index}`}>
@@ -73,22 +86,67 @@ function FontPicker({ value, onPick }: { value: TextItem["font"]; onPick: (f: Fo
   );
 }
 
+/** How the letters are stitched, in plain words, and what you can do with each one. */
+function LetterNotes({ item, stitchFont }: { item: TextItem; stitchFont: boolean }) {
+  const design = useStore((s) => s.design);
+  const layout = useStore(selectLayout);
+  const i = layout?.items.findIndex((it) => it.id === item.id) ?? -1;
+  const parts = i >= 0 ? design?.items?.[i]?.letters : undefined;
+  const chosen = Object.keys(item.letters ?? {}).length;
+  const how = stitchFont
+    ? "each letter sews the stitches its stitch font was made with"
+    : item.style === "satin"
+      ? "each letter is filled with long, smooth satin stitches across its strokes, at the angle that crosses them best"
+      : "each letter is a woven (tatami) fill";
+  return (
+    <div className="letter-notes">
+      <p className="hint">
+        {parts ? `${parts.length} letter part${parts.length === 1 ? "" : "s"}: ` : ""}
+        {how}. Each one starts by where the one before ended. Drag a letter's green (start) or red (end) dot on the design to move it
+        along the letter's edge{chosen ? ` (${chosen} chosen)` : ""}.
+      </p>
+      <div className="btn-row">
+        {chosen > 0 && (
+          <button onClick={() => command("text.resetEnds").run()} title={`Let every letter start and end where LUDD puts them again (${formatShortcut(command("text.resetEnds").shortcut)})`}>
+            Reset starts and ends
+          </button>
+        )}
+        <button disabled={!(command("text.toShapes").enabled?.() ?? true)} onClick={() => command("text.toShapes").run()} title={`Turn the letters into ordinary shapes, to change their points, stitch type, density and direction one by one (${formatShortcut(command("text.toShapes").shortcut)}). The words can't be retyped after.`}>
+          Break into shapes…
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** Lettering: what it says, its font and size, satin look or fill, and the shape it follows. */
-export function SelectedText({ item, info }: { item: TextItem; info: LayoutItemInfo }) {
+export function SelectedText({ item, sel }: { item: TextItem; info: LayoutItemInfo; sel: SelKind }) {
+  // The thread it's sewn in: a color changed in Order & colors wins over its own.
+  const sewn = item.threads?.[0] ?? item.thread;
   const units = useStore((s) => s.units);
   const [draft, setDraft] = useState(item.text);
   const [picking, setPicking] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const reverting = useRef(false);
+  const before = useRef(item.text); // the text when the box was clicked into: Esc brings it back
 
-  useEffect(() => setDraft(item.text), [item.text]);
+  // The saved text comes back into the box, but never while you're typing in it: a slow update
+  // landing mid-word would wipe the letters typed since.
   useEffect(() => {
+    if (document.activeElement !== input.current) setDraft(item.text);
+  }, [item.text]);
+  useEffect(() => setDraft(item.text), [item.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const focus = () => {
+      takeTextToEdit(item.id);
+      input.current?.focus();
+      input.current?.select();
+    };
+    // Just placed: the request came before this panel was here.
+    if (takeTextToEdit(item.id)) focus();
     const onEdit = (e: Event) => {
-      if ((e as CustomEvent).detail === item.id) {
-        input.current?.focus();
-        input.current?.select();
-      }
+      if ((e as CustomEvent).detail === item.id) focus();
     };
     window.addEventListener("ludd:edit-text", onEdit);
     return () => window.removeEventListener("ludd:edit-text", onEdit);
@@ -100,11 +158,11 @@ export function SelectedText({ item, info }: { item: TextItem; info: LayoutItemI
   };
   const toUnits = (mm: number) => (units === "in" ? mm / MM_PER_IN : mm);
   const fromUnits = (v: number) => (units === "in" ? v * MM_PER_IN : v);
-  const curved = item.shape.type !== "line";
+  const curved = item.shape.type !== "line" && item.shape.type !== "path";
+  const stitchFont = isStitchFont(item.font.path);
 
   return (
-    <section className="selected">
-      <h3>{info.name}</h3>
+    <Section id="lettering" sel={sel} defaultOpen title="Lettering" summary={`${item.font.family} · ${item.style === "satin" ? "Satin" : "Fill"}`}>
       <label className="text-field">
         <span>{item.monogram ? "Three initials" : "Text"}</span>
         <input
@@ -118,17 +176,28 @@ export function SelectedText({ item, info }: { item: TextItem; info: LayoutItemI
             // Typing updates the stitches after a short pause, not on every key.
             timer.current = setTimeout(() => commitText(v), TYPE_DELAY_MS);
           }}
+          onFocus={() => {
+            before.current = item.text;
+          }}
           onBlur={() => {
             if (reverting.current) reverting.current = false;
-            else commitText(draft);
+            else if (!draft.trim()) {
+              // An empty box can't be stitched: the text it had comes back.
+              clearTimeout(timer.current);
+              setDraft(item.text);
+            } else commitText(draft);
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-            if (e.key === "Escape") {
-              // Esc lets go of the edit: the text goes back to what it was.
+            // (While something is held, such as a drag, Esc lets go of that first.)
+            if (e.key === "Escape" && !heldCount()) {
+              // Esc lets go of the edit: the text goes back to what it was before you typed,
+              // even if a pause in typing already updated the design.
               clearTimeout(timer.current);
               reverting.current = true;
-              setDraft(item.text);
+              setDraft(before.current);
+              if (before.current !== item.text) setText(item.id, { text: before.current });
+              (e.target as HTMLInputElement).blur();
             }
           }}
         />
@@ -141,12 +210,20 @@ export function SelectedText({ item, info }: { item: TextItem; info: LayoutItemI
           <input
             type="number"
             step={units === "in" ? 0.05 : 1}
+            min={toUnits(MIN_SIZE_MM).toFixed(2)}
+            max={toUnits(MAX_SIZE_MM).toFixed(2)}
             defaultValue={toUnits(item.size_mm).toFixed(2)}
             key={`${item.id}-${item.size_mm}-${units}`}
             onBlur={(e) => {
               if (e.target.value === e.target.defaultValue) return; // unchanged: clicking in and out does nothing
               const v = fromUnits(Number(e.target.value));
-              if (Number.isFinite(v) && v > 0) setText(item.id, { size_mm: v });
+              if (e.target.value.trim() && Number.isFinite(v) && v >= MIN_SIZE_MM - 1e-6 && v <= MAX_SIZE_MM + 1e-6) {
+                setText(item.id, { size_mm: v });
+                return;
+              }
+              e.target.value = e.target.defaultValue; // the old height comes back
+              const range = units === "in" ? `${toUnits(MIN_SIZE_MM).toFixed(2)} and ${toUnits(MAX_SIZE_MM).toFixed(1)} in` : `${MIN_SIZE_MM} and ${MAX_SIZE_MM} mm`;
+              info(`Letter height must be between ${range}.`);
             }}
             onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
           />
@@ -155,24 +232,41 @@ export function SelectedText({ item, info }: { item: TextItem; info: LayoutItemI
       </div>
 
       <button className="thread-button" onClick={() => setPicking(true)} title="Change thread">
-        <span className="swatch" style={{ background: item.thread.color }} />
+        <span className="swatch" style={{ background: sewn.color }} />
         <span className="tname">
-          {item.thread.name || item.thread.color}
-          <small>{[item.thread.brand, item.thread.catalog].filter(Boolean).join(" ") || "Click to choose a thread"}</small>
+          {sewn.name || sewn.color}
+          <small>{[sewn.brand, sewn.catalog].filter(Boolean).join(" ") || "Click to choose a thread"}</small>
         </span>
       </button>
 
-      <div className="seg" role="group" aria-label="Stitch look">
-        <button aria-pressed={item.style === "satin"} onClick={() => setText(item.id, { style: "satin" })} title="Smooth, shiny stitches across each stroke: best for names and small text">
-          Satin look
-        </button>
-        <button aria-pressed={item.style === "fill"} onClick={() => setText(item.id, { style: "fill" })} title="Woven fill: best for big, bold letters">
-          Fill
-        </button>
-      </div>
+      {stitchFont ? (
+        <p className="hint">A stitch font sews the stitches it was made with.</p>
+      ) : (
+        <div className="seg" role="group" aria-label="Stitch look">
+          <button aria-pressed={item.style === "satin"} onClick={() => setText(item.id, { style: "satin" })} title="Smooth, shiny stitches across each stroke: best for names and small text">
+            Satin look
+          </button>
+          <button aria-pressed={item.style === "fill"} onClick={() => setText(item.id, { style: "fill" })} title="Woven fill: best for big, bold letters">
+            Fill
+          </button>
+        </div>
+      )}
+      <LetterNotes item={item} stitchFont={!!stitchFont} />
+
+      <label className="check">
+        <input type="checkbox" checked={item.monogram} onChange={(e) => setText(item.id, { monogram: e.target.checked, text: e.target.checked ? (item.text.replace(/\s/g, "").slice(0, 3).padEnd(3, "A")) : item.text })} />
+        Monogram (three letters, big middle initial)
+      </label>
 
       {!item.monogram && (
+        <Sub id="text-shape" title="Shape" summary={SHAPES.find((sh) => sh.type === item.shape.type)?.label}>
+      {!item.monogram && (
         <div className="seg" role="group" aria-label="Shape">
+          {item.shape.type === "path" && (
+            <button aria-pressed title="Following a line you drew (pick another shape to put it back)">
+              On your line
+            </button>
+          )}
           {SHAPES.map((sh) => (
             <button
               key={sh.type}
@@ -205,55 +299,40 @@ export function SelectedText({ item, info }: { item: TextItem; info: LayoutItemI
           </label>
         </div>
       )}
-      <label className="check">
-        <input type="checkbox" checked={item.monogram} onChange={(e) => setText(item.id, { monogram: e.target.checked, text: e.target.checked ? (item.text.replace(/\s/g, "").slice(0, 3).padEnd(3, "A")) : item.text })} />
-        Monogram (three letters, big middle initial)
-      </label>
+        </Sub>
+      )}
 
-      <div className="btn-row">
-        <Cmd id="arrange.rotateCcw" label="⟲ 90°" />
-        <Cmd id="arrange.rotateCw" label="⟳ 90°" />
-        <Cmd id="arrange.duplicate" label="Duplicate" />
-        <Cmd id="arrange.repeat" label="Repeat…" />
-      </div>
-
-      <details className="more">
-        <summary>More options</summary>
+      <Sub id="text-advanced" title="Advanced">
         <div className="size-row">
           <label className="num-field">
             <span>Extra letter spacing</span>
             <input
               type="number"
-              step={0.1}
-              defaultValue={item.spacing_mm.toFixed(1)}
-              key={`${item.id}-sp-${item.spacing_mm}`}
+              step={units === "in" ? 0.01 : 0.1}
+              defaultValue={toUnits(item.spacing_mm).toFixed(units === "in" ? 3 : 1)}
+              key={`${item.id}-sp-${item.spacing_mm}-${units}`}
               onBlur={(e) => {
                 if (e.target.value === e.target.defaultValue) return;
-                const v = Number(e.target.value);
-                if (Number.isFinite(v) && v !== item.spacing_mm) setText(item.id, { spacing_mm: v });
+                const v = fromUnits(Number(e.target.value));
+                if (!e.target.value.trim() || !Number.isFinite(v)) e.target.value = e.target.defaultValue;
+                else if (v !== item.spacing_mm) setText(item.id, { spacing_mm: v });
               }}
               onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
             />
-            <small>mm</small>
+            <small>{units}</small>
           </label>
         </div>
-        <button className="wide" onClick={() => void saveStitchFont(item.font, item.style)} title="Turn this font into an editable LUDD stitch font (.luddfont)">
-          Save this font as a stitch font…
+        <button className="wide" onClick={() => useStore.getState().setDialog("names")} title="Save one machine file per name, from a list">
+          One file per name…
         </button>
-        <div className="btn-row">
-          <Cmd id="arrange.delete" label="Remove" />
-        </div>
-      </details>
-      <ThreadPicker index={picking ? -1 : null} onClose={() => setPicking(false)} onPick={(t: Thread) => setText(item.id, { thread: t })} current={item.thread} />
-    </section>
-  );
-}
-
-function Cmd({ id, label }: { id: string; label: string }) {
-  const c = command(id);
-  return (
-    <button onClick={c.run} title={`${c.title} (${formatShortcut(c.shortcut)})`} aria-label={c.title}>
-      {label}
-    </button>
+        <p className="hint">To put the text on a line of your own: draw a Line, select it and the text (Shift+click), then ⋯ → Put the text on the line.</p>
+        {!stitchFont && (
+          <button className="wide" onClick={() => void saveStitchFont(item.font, item.style)} title="Turn this font into a LUDD stitch font (.luddfont) you can fine-tune; it's added to your font list">
+            Save this font as a stitch font
+          </button>
+        )}
+      </Sub>
+      <ThreadPicker index={picking ? -1 : null} onClose={() => setPicking(false)} onPick={(t: Thread) => setText(item.id, { thread: t, threads: [] })} current={sewn} />
+    </Section>
   );
 }

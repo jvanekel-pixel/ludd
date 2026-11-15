@@ -56,6 +56,9 @@ export type LayoutItemInfo = {
   center_mm: [number, number];
   bounds_mm: [number, number, number, number] | null;
   source_size_mm: [number, number] | null;
+  /** Lettering: each letter part, how it's stitched ("satin" look or "fill"), its outline and
+   *  where it starts and ends (mm, as shown). */
+  letters?: { index: number; kind: string; look: string; start: [number, number]; end: [number, number]; ring: [number, number][] }[];
 };
 
 export type Transform = {
@@ -70,7 +73,17 @@ export type Transform = {
 
 export type LayoutOp =
   | { op: "delete_block"; block: number }
-  | { op: "insert"; after: number; command: "stop" | "trim" }
+  /** Stitch editing: single stitches deleted, by their index in the file. */
+  | { op: "delete_stitches"; indices: number[] }
+  /** Stitch editing: a stitch dragged (mm, on the design). */
+  /** `local`: the move is in the design's own frame (turns and resizes with it). Older projects'
+   *  moves have no `local` and are a fixed shift on the hoop. */
+  | { op: "move_stitch"; index: number; dx_mm: number; dy_mm: number; local?: boolean }
+  /** Stitch editing: several stitches dragged together (one op per drag). */
+  | { op: "move_stitches"; indices: number[]; dx_mm: number; dy_mm: number; local?: boolean }
+  /** `n`: for drawn shapes and lettering, how many records the item had when the stop or trim was
+   *  added; if the shape changes, that place no longer exists and the engine leaves it out. */
+  | { op: "insert"; after: number; command: "stop" | "trim"; n?: number }
   | { op: "jumps_to_trims"; min_mm: number };
 
 /** A stitch file placed in the layout. */
@@ -78,6 +91,8 @@ export type FileItem = {
   id: string;
   kind?: "file";
   path: string;
+  /** Your own name for it (Sewing order); the file's name if unset. */
+  name?: string;
   transform: Transform;
   /** Replacement thread per source color block (null = as in the file). */
   threads: (Thread | null)[];
@@ -95,10 +110,24 @@ export type PathNode = [number, number, NodeKind];
 export type ObjectKind = "run" | "satin" | "fill" | "applique";
 
 export type RunGeometry = { nodes: PathNode[]; closed?: boolean };
-export type SatinGeometry = { rail_a: PathNode[]; rail_b: PathNode[] };
+/** A satin column clicked side by side (rung by rung): what older projects have. */
+export type SatinColumn = { rail_a: PathNode[]; rail_b: PathNode[] };
+/** A satin ribbon: a centre line and a width (what the Satin tool draws). */
+export type SatinRibbon = { nodes: PathNode[]; width_mm: number; closed?: boolean };
+export type SatinGeometry = SatinColumn | SatinRibbon;
 export type FillGeometry = { outline: PathNode[]; holes?: PathNode[][] };
 
-export type RunParams = { style?: "single" | "triple" | "bean"; stitch_mm?: number; tie_in?: boolean; tie_off?: boolean };
+export type Motif = "wave" | "zigzag" | "scallop" | "blanket";
+export type RunParams = {
+  style?: "single" | "triple" | "bean" | "motif";
+  stitch_mm?: number;
+  /** style "motif": the pattern repeated along the line, how long each repeat is and how wide. */
+  motif?: Motif;
+  motif_mm?: number;
+  motif_width_mm?: number;
+  tie_in?: boolean;
+  tie_off?: boolean;
+};
 export type SatinParams = {
   spacing_mm?: number;
   pull_comp_mm?: number;
@@ -106,8 +135,21 @@ export type SatinParams = {
   tie_in?: boolean;
   tie_off?: boolean;
 };
+export type FillPattern = "tatami" | "gradient" | "wave" | "contour" | "stipple" | "cross";
 export type FillParams = {
+  pattern?: FillPattern;
+  /** gradient: row spacing at the sparse end. */
+  gradient_to_mm?: number;
+  wave_mm?: number;
+  wave_length_mm?: number;
+  stipple_mm?: number;
+  cross_mm?: number;
   angle_deg?: number;
+  /** Where its purple direction dots were left (they set angle_deg). */
+  angle_line?: [[number, number], [number, number]];
+  /** Where it starts (green dot) and ends (red dot), mm. */
+  start_mm?: [number, number];
+  end_mm?: [number, number];
   spacing_mm?: number;
   stitch_mm?: number;
   pull_comp_mm?: number;
@@ -147,7 +189,13 @@ export type ObjectItem =
 export type FontRef = { path: string; index: number; family: string; style: string };
 export type FontInfo = { family: string; style: string; path: string; index: number; kind: "outline" | "stitch" };
 
-export type TextShape = { type: "line" | "arc_up" | "arc_down" | "circle"; radius_mm?: number };
+export type TextShape = {
+  type: "line" | "arc_up" | "arc_down" | "circle" | "path";
+  radius_mm?: number;
+  /** type "path": the line the letters follow, in the text's own frame (mm from its position). */
+  nodes?: PathNode[];
+  closed?: boolean;
+};
 
 /** Lettering: stitched from a font each time, so it stays editable and keeps its density at any size. */
 export type TextItem = {
@@ -162,6 +210,8 @@ export type TextItem = {
   style: "satin" | "fill";
   shape: TextShape;
   monogram: boolean;
+  /** Where letters start and end, chosen with their dots (by letter part, in the text's own frame). */
+  letters?: Record<string, { start_mm?: [number, number]; end_mm?: [number, number] }>;
   locked?: boolean;
   group?: string;
   thread: Thread;
@@ -173,6 +223,11 @@ export type TextItem = {
 export type LayoutItem = FileItem | ObjectItem | TextItem;
 
 export const isText = (it: LayoutItem): it is TextItem => it.kind === "text";
+
+export type SatinItem = Extract<ObjectItem, { kind: "satin" }>;
+
+/** A satin drawn as a ribbon (centre line + width), not as two clicked sides. */
+export const isRibbon = (o: ObjectItem): o is SatinItem & { geometry: SatinRibbon } => o.kind === "satin" && "nodes" in o.geometry;
 
 export const isObject = (it: LayoutItem): it is ObjectItem =>
   it.kind === "run" || it.kind === "satin" || it.kind === "fill" || it.kind === "applique";
@@ -203,12 +258,27 @@ export type Layout = {
   items: LayoutItem[];
   merge_colors: boolean;
   color_sort: boolean;
-  basting: { enabled: boolean; margin_mm: number };
+  /** `fit_mm`: the hoop it was turned on for; the box comes in closer (down to 2 mm) to fit it. */
+  basting: { enabled: boolean; margin_mm: number; fit_mm?: [number, number] };
+  /** "Trim jumps longer than" this (mm), for every design in the layout, including ones added later. */
+  jumps_to_trims?: number | null;
   /** What it will be stitched on (a fabric id); sets density, pull compensation and underlay. */
   fabric?: string;
   /** A light grid of stitches under the design, for towels and fleece. */
-  knockdown?: { enabled: boolean; margin_mm: number };
+  knockdown?: { enabled: boolean; margin_mm: number; /** Its thread (one matching the fabric). */ thread?: Thread };
+  /** Moves between same-thread shapes run under later stitching where they can (fewer jumps and trims). */
+  travel_under?: boolean;
+  /** Saved sets of thread colors (colorways), to switch between. */
+  colorways?: Colorway[];
+  /** Guide lines dragged from the rulers (mm). */
+  guides?: Guide[];
 };
+
+/** A saved set of thread colors: each item's thread (and color changes), by item id. */
+export type Colorway = { name: string; items: Record<string, { thread?: Thread; threads: (Thread | null)[] }> };
+
+/** A guide line across the design area: vertical at x, or horizontal at y (mm). */
+export type Guide = { axis: "x" | "y"; at: number };
 
 export type Fabric = {
   id: string;

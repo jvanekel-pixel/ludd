@@ -4,7 +4,7 @@
  */
 import { commit, currentDoc, currentLayout, fail, info } from "./actions";
 import { updateObject } from "./design/layout";
-import type { Layout, ObjectItem, PathNode } from "./design/types";
+import { isRibbon, type Layout, type ObjectItem, type PathNode } from "./design/types";
 import { useStore } from "./store";
 
 export type AISettings = {
@@ -13,13 +13,18 @@ export type AISettings = {
   cloud: { provider: "anthropic" | "openai"; model: string; base_url: string; price_in: number | null; price_out: number | null };
   features: { advisor: boolean; help: boolean };
   has_key: boolean;
+  /** How a saved key is kept: encrypted for the Windows account, or a file only this user can read. */
+  key_protection?: "windows" | "file";
 };
 
 /** What will be sent, shown before any cloud call. */
 export type AIEstimate = {
   provider: string;
   model: string;
+  /** True when it leaves this computer (a cloud service, or a model on another machine). */
   cloud: boolean;
+  /** Where it goes (api.anthropic.com, 192.168.1.20...). */
+  host?: string;
   text: string;
   images: { bytes: number; data_url: string }[];
   tokens_in: number;
@@ -47,6 +52,10 @@ function engine() {
 
 // ---------------------------------------------------------------- settings
 
+/** What saving a key did, in plain words (only Windows encrypts it). */
+export const keySavedText = (ai: Pick<AISettings, "key_protection">) =>
+  ai.key_protection === "file" ? "Key saved in a file only your user account can read." : "Key saved, encrypted for your Windows account.";
+
 export async function loadAISettings() {
   try {
     useStore.getState().setAI(await engine().call<AISettings>("ai.settings"));
@@ -65,8 +74,9 @@ export async function saveAISettings(patch: Partial<Omit<AISettings, "has_key">>
 
 export async function setAIKey(key: string | null) {
   try {
-    useStore.getState().setAI(await engine().call<AISettings>("ai.set_key", { key }));
-    info(key ? "Key saved, encrypted for your Windows account." : "Key removed.");
+    const ai = await engine().call<AISettings>("ai.set_key", { key });
+    useStore.getState().setAI(ai);
+    info(key ? keySavedText(ai) : "Key removed.");
   } catch (err) {
     fail(err);
   }
@@ -83,6 +93,12 @@ export const aiOn = (feature: "advisor" | "help") => {
   const ai = useStore.getState().ai;
   return !!ai && ai.mode !== "off" && ai.features[feature];
 };
+
+/** "Send this to Anthropic (api.anthropic.com)?": who gets it, and at which address. */
+export function sendTitle(e: Pick<AIEstimate, "provider" | "host">): string {
+  const who = e.provider === "anthropic" ? "Anthropic" : e.provider === "ollama" ? "the AI model" : "your AI service";
+  return `Send this to ${who}${e.host ? ` at ${e.host}` : ""}?`;
+}
 
 /** Before a cloud call, show exactly what goes out (and the cost) and wait for Send or Cancel. */
 function confirmSend(estimate: AIEstimate): Promise<boolean> {
@@ -134,21 +150,29 @@ const UNDERLAY = {
   satin: { light: ["center"], normal: ["edge"], heavy: ["edge", "zigzag"] },
 } as const;
 
-/** Can this proposal be applied as it is? (A satin is two rails; a fill or line can't become one.) */
+/** Can this proposal be applied as it is? A line and a satin ribbon swap (the line is the ribbon's
+ *  centre); a fill's outline isn't a centre line, and a two-rail satin has none, so those stay. */
 export function applicable(o: ObjectItem, c: AdviceChange): boolean {
   if (!c.stitch_type || c.stitch_type === o.kind) return true;
-  return c.stitch_type !== "satin" && o.kind !== "satin";
+  if (o.kind === "run") return true;
+  if (o.kind === "satin") return isRibbon(o) && c.stitch_type === "run";
+  return c.stitch_type !== "satin";
 }
 
 /** The shape with a proposal's changes. Pure, for tests. */
 export function withChange(o: ObjectItem, c: AdviceChange): ObjectItem {
   let out: ObjectItem = o;
   if (c.stitch_type && c.stitch_type !== o.kind && applicable(o, c)) {
-    const outline: PathNode[] = o.kind === "run" ? o.geometry.nodes : o.kind === "satin" ? [] : o.geometry.outline;
+    const line = o.kind === "run" || o.kind === "satin";
+    const outline: PathNode[] = line ? (o.geometry as { nodes: PathNode[] }).nodes : (o.geometry as { outline: PathNode[] }).outline;
+    // A line or ribbon keeps whether it was closed; a fill's outline is.
+    const closed = line ? !!(o.geometry as { closed?: boolean }).closed : true;
     out =
       c.stitch_type === "run"
-        ? ({ ...o, kind: "run", geometry: { nodes: outline, closed: true }, params: { style: "single", stitch_mm: 2.5 } } as ObjectItem)
-        : ({ ...o, kind: "fill", geometry: { outline }, params: { angle_deg: 45, spacing_mm: 0.4, stitch_mm: 3.5 } } as ObjectItem);
+        ? ({ ...o, kind: "run", geometry: { nodes: outline, ...(closed ? { closed: true } : {}) }, params: { style: "single", stitch_mm: 2.5 } } as ObjectItem)
+        : c.stitch_type === "satin"
+          ? ({ ...o, kind: "satin", geometry: { nodes: outline, width_mm: useStore.getState().satinWidth, ...(closed ? { closed: true } : {}) }, params: { spacing_mm: 0.4 } } as ObjectItem)
+          : ({ ...o, kind: "fill", geometry: { outline }, params: { angle_deg: 45, spacing_mm: 0.4, stitch_mm: 3.5 } } as ObjectItem);
   }
   const p: Record<string, unknown> = { ...out.params };
   if (out.kind === "fill" && c.angle_deg !== undefined) p.angle_deg = c.angle_deg;

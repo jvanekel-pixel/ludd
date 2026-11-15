@@ -2,7 +2,7 @@ import { setFabric, showCheck } from "../actions";
 import { DEFAULT_FABRIC } from "../design/layout";
 import type { Fabric, QualityCheck, Warning } from "../design/types";
 import { selectLayout, useStore } from "../store";
-import { FoldTitle, useFold } from "./Fold";
+import { Section, type SelKind } from "./Accordion";
 
 export function fabricAdvice(f: Fabric): string {
   return `Stabilizer: ${f.stabilizer}.${f.topping ? ` Topping: ${f.topping}.` : ""}`;
@@ -34,29 +34,32 @@ export function FabricPicker() {
 }
 
 /** Problems worth fixing before stitching: each says why it matters and what to do. */
-export function Checks() {
+export function Checks({ sel }: { sel: SelKind }) {
   const design = useStore((s) => s.design);
   const checks = useStore((s) => s.checks);
   const showDensity = useStore((s) => s.showDensity);
   const toggleDensity = useStore((s) => s.toggleDensity);
-  const [open, toggle] = useFold("checks");
   if (!design) return null;
   const items: (Warning & Partial<QualityCheck>)[] = [
     ...(design.warnings ?? []).filter((w) => w.level !== "info"),
     ...(checks?.checks ?? []),
   ];
   return (
-    <section className="checks" aria-label="Checks">
-      <div className="checks-head">
-        <FoldTitle open={open} onToggle={toggle}>
-          {items.length ? `Check before stitching (${items.length})` : "Checks"}
-        </FoldTitle>
+    <Section
+      id="checks"
+      sel={sel}
+      defaultOpen={sel === "none" && items.length > 0}
+      title="Check before stitching"
+      badge={items.length ? items.length : checks ? "✓" : undefined}
+      summary={items.length ? `${items.length} to look at` : checks ? "Nothing to fix" : undefined}
+      actions={
         <label className="check" title="Color the design by how much thread is in each spot (Alt+D)">
           <input type="checkbox" checked={showDensity} onChange={toggleDensity} /> Density map
         </label>
-      </div>
-      {open && items.length === 0 && checks && <p className="hint ok">✓ Nothing to fix: no thick spots, gaps or loose stitches found.</p>}
-      <ul hidden={!open}>
+      }
+    >
+      {items.length === 0 && checks && <p className="hint ok">✓ Nothing to fix: no thick spots, gaps or loose stitches found.</p>}
+      <ul className="checks">
         {items.map((c) => (
           <li key={c.code} className={`check-${c.level}`}>
             <p className="what">
@@ -72,6 +75,6 @@ export function Checks() {
           </li>
         ))}
       </ul>
-    </section>
+    </Section>
   );
 }

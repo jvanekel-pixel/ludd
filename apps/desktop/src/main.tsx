@@ -11,8 +11,11 @@ import "./styles.css";
 import * as actions from "./actions";
 import { loadPrefs } from "./prefs";
 import { applyTheme } from "./theme";
+import { blockBrowserKeys } from "./browserKeys";
 
 applyTheme(loadPrefs().theme ?? "system");
+// No reload, find-in-page or browser right-click menu in the installed app.
+blockBrowserKeys();
 
 // Dev-only handle for driving the app from the browser console and tests.
 if (import.meta.env.DEV) (window as unknown as { __actions: typeof actions }).__actions = actions;

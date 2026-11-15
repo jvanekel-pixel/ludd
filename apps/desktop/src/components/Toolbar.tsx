@@ -66,12 +66,15 @@ export function Toolbar() {
   const showHoop = useStore((s) => s.showHoop);
   const showGrid = useStore((s) => s.showGrid);
   const realistic = useStore((s) => s.realistic);
+  const seeThrough = useStore((s) => s.seeThrough);
   const traceAssist = useStore((s) => s.traceAssist);
   const units = useStore((s) => s.units);
   const layout = useStore(selectLayout);
   const jumpsTrimmed = layout ? jumpsToTrimsSetting(layout) !== null : false;
   const basting = layout?.basting.enabled ?? false;
   const knockdown = layout?.knockdown?.enabled ?? false;
+  const travelUnder = layout?.travel_under ?? false;
+  const rulers = useStore((s) => s.showRulers);
   return (
     <header className="toolbar">
       <span className="brand">
@@ -97,22 +100,31 @@ export function Toolbar() {
           { id: "file.picture" },
           { id: "threads.charts", label: "My threads & charts…" },
           { id: "file.print" },
+          { id: "file.browse" },
           { id: "file.batch" },
+          { id: "autotrace.all" },
           "separator",
           { id: "stitch.stop" },
           { id: "stitch.trim" },
           { id: "stitch.jumpsToTrims", checked: jumpsTrimmed },
           { id: "stitch.basting", checked: basting },
           { id: "stitch.knockdown", checked: knockdown },
+          { id: "layout.travelUnder", checked: travelUnder },
+          { id: "layout.optimizeJumps" },
+          { id: "layout.shortestOrder" },
           { id: "arrange.repeat" },
           { id: "ai.advisor" },
           { id: "applique.svg" },
           "separator",
           { id: "view.hoop", checked: showHoop },
           { id: "view.grid", checked: showGrid },
+          { id: "view.rulers", checked: rulers },
+          { id: "view.clearGuides" },
+          { id: "view.measure" },
           { id: "view.units", checked: units === "mm" },
           { id: "trace.toggle", checked: traceAssist },
           { id: "view.realistic", checked: realistic },
+          { id: "view.seeThrough", checked: seeThrough },
           { id: "view.jumps", checked: showJumps },
           { id: "view.density", checked: showDensity },
           { id: "view.fit" },

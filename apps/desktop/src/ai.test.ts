@@ -27,6 +27,18 @@ describe("Stitch Advisor proposals", () => {
     expect(withChange(f, { stitch_type: "satin" }).kind).toBe("fill");
   });
 
+  it("QA C10: swaps a satin ribbon and a line, and adjusts a ribbon's density", () => {
+    const { layout } = addObject(newLayout(), { kind: "satin", geometry: { nodes: [[0, 0, "c"], [20, 0, "c"]], width_mm: 3 }, params: {}, thread } as never);
+    const r = layout.items[0] as ObjectItem;
+    expect(applicable(r, { stitch_type: "run" })).toBe(true);
+    expect(applicable(r, { stitch_type: "fill" })).toBe(false);
+    const line = withChange(r, { stitch_type: "run" });
+    expect(line.kind).toBe("run");
+    expect((line as Extract<ObjectItem, { kind: "run" }>).geometry.nodes).toHaveLength(2);
+    expect(withChange(line, { stitch_type: "satin" }).geometry).toMatchObject({ nodes: [[0, 0, "c"], [20, 0, "c"]] });
+    expect(withChange(r, { density: "dense" }).params).toMatchObject({ spacing_mm: 0.33 });
+  });
+
   it("reorders only the advised shapes, in their own places", () => {
     let l = newLayout();
     for (const n of ["a", "b", "c"]) l = addObject(l, { kind: "run", geometry: { nodes: [] }, params: {}, thread, name: n } as never).layout;

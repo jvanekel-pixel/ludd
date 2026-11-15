@@ -2,7 +2,6 @@ import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useState } from "react";
 import {
-  COMMANDS,
   addDesign,
   addPicture,
   checkRecovery,
@@ -19,8 +18,8 @@ import {
   startChecks,
   type RecoveryInfo,
 } from "./actions";
-import { dispatchKey, formatShortcut } from "./commands";
-import { letGoNewest } from "./escape";
+import { formatShortcut } from "./commands";
+import { keepFocusOffBars, onKeyDown, onKeyUp, onWindowBlur } from "./keys";
 import { BatchDialog } from "./components/BatchDialog";
 import { ExportDialog } from "./components/ExportDialog";
 import { InfoPanel } from "./components/InfoPanel";
@@ -29,6 +28,7 @@ import { PanelResizer, usePanelWidth } from "./components/PanelResizer";
 import { Player } from "./components/Player";
 import { HelpDialog, SendPreview } from "./components/AIPanels";
 import { RepeatDialog } from "./components/RepeatDialog";
+import { BrowseDialog, NamesDialog, OffsetDialog } from "./components/FeatureDialogs";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { StatusBar } from "./components/StatusBar";
 import { StitchCanvas } from "./components/StitchCanvas";
@@ -37,35 +37,32 @@ import { DrawHint, ToolRail } from "./components/ToolRail";
 import { MachinePicker, Toolbar } from "./components/Toolbar";
 import { ZoomControls } from "./components/ZoomControls";
 import type { Formats } from "./design/types";
-import { startEngine } from "./engine/sidecar";
+import { connectEngine, shutdownEngine, stopEngine } from "./engine/manager";
+import { listen } from "@tauri-apps/api/event";
 import { startTraceAssist } from "./traceAssist";
+import { startSatinFit } from "./satinFit";
 import { installUpdate, startUpdateCheck } from "./updates";
 import { startDialogDragging } from "./dragDialogs";
+import { ContextMenu } from "./components/ContextMenu";
 import { invoke } from "@tauri-apps/api/core";
 import { loadPrefs, savePrefs } from "./prefs";
 import { isDirty, selectCanvasDark, useStore } from "./store";
 
 const IMAGE_FILE = /\.(png|jpe?g|gif|bmp|webp)$/i;
 
+/** Start the engine (and start it again if it stops); `onReady` runs after the first start. */
 function useEngine(onReady: () => void) {
   useEffect(() => {
-    const { setEngine, setFormats } = useStore.getState();
-    let stop: (() => void) | undefined;
-    let cancelled = false;
-    void startEngine((s) => setEngine(s)).then(async (h) => {
-      if (cancelled) return h.stop();
-      stop = h.stop;
-      setEngine(useStore.getState().engineStatus, h.client);
-      if (h.client) {
-        setFormats(await h.client.call<Formats>("formats.list"));
-        await loadMachinesAndCharts();
-        onReady();
-      }
+    connectEngine(async (first) => {
+      const client = useStore.getState().engine;
+      if (!client) return;
+      useStore.getState().setFormats(await client.call<Formats>("formats.list"));
+      await loadMachinesAndCharts();
+      if (first) onReady();
     });
     return () => {
-      cancelled = true;
-      stop?.();
-      setEngine({ state: "starting" }, null);
+      stopEngine();
+      useStore.getState().setEngine({ state: "starting" }, null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -73,35 +70,14 @@ function useEngine(onReady: () => void) {
 
 function useShortcuts() {
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const t = e.target instanceof Element ? e.target : null;
-      // Open dialogs close themselves on Esc.
-      if (t?.closest("dialog")) return;
-      const field = t?.closest<HTMLElement>("input:not([type=range]):not([type=checkbox]), select, textarea");
-      if (e.key === "Escape") {
-        // Esc lets go: first anything held (a drag, an open list), then the field you're typing in
-        // (fields put back their old value), then the Escape commands.
-        e.preventDefault();
-        if (letGoNewest()) return;
-        if (field) {
-          // Number boxes save when you leave them: put the old value back first.
-          // (Fields that handle Esc themselves have already let go.)
-          if (document.activeElement !== field) return;
-          if (field instanceof HTMLInputElement && field.type === "number") field.value = field.defaultValue;
-          return field.blur();
-        }
-        dispatchKey(e, COMMANDS);
-        return;
-      }
-      // Let text fields keep their own keys, a focused slider its arrows, and a focused
-      // button or tick box its Space and Enter.
-      if (field) return;
-      if (t?.matches("input[type=range]") && /^(Arrow|Home$|End$|Page)/.test(e.key)) return;
-      if (t?.matches(":is(button, input[type=checkbox], summary, [role=menuitem], [role=tab]):focus-visible") && (e.key === " " || e.key === "Enter")) return;
-      if (dispatchKey(e, COMMANDS)) e.preventDefault();
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", onWindowBlur);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", onWindowBlur);
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
   }, []);
 }
 
@@ -151,9 +127,11 @@ function useWindowTitle() {
     let unlisten: (() => void) | undefined;
     void getCurrentWindow()
       .onCloseRequested(async (e) => {
-        if (!(await confirmDiscard())) e.preventDefault();
+        if (!(await confirmDiscard())) return e.preventDefault();
         // Unanswered recovery from a crash stays for next time.
-        else if (!isRecoveryWaiting()) void discardRecovery();
+        if (!isRecoveryWaiting()) await discardRecovery();
+        // Let the engine stop by itself, so it deletes its unpacked files from the temp folder.
+        await shutdownEngine();
       })
       .then((u) => (unlisten = u));
     return () => unlisten?.();
@@ -180,7 +158,21 @@ function Notice() {
 }
 
 /** Offer back work an unclosed session left behind (crash, power cut, forced restart). */
-function RecoveryPrompt({ info, onDone }: { info: RecoveryInfo; onDone: () => void }) {
+/** A .ludd double-clicked while LUDD is already open: the running window opens it (see lib.rs). */
+function useOpenFromOtherLaunches() {
+  useEffect(() => {
+    if (!isTauri()) return;
+    let unlisten: (() => void) | undefined;
+    let gone = false;
+    void listen<string>("ludd:open-file", (e) => void openDesign(e.payload)).then((u) => (gone ? u() : (unlisten = u)));
+    return () => {
+      gone = true;
+      unlisten?.();
+    };
+  }, []);
+}
+
+function RecoveryPrompt({ info, onDone }: { info: RecoveryInfo; onDone: (recovered: boolean) => void }) {
   const when = info.saved_at ? new Date(info.saved_at * 1000).toLocaleString() : "recently";
   const what = [info.title && `“${info.title}”`, `${info.items} design part${info.items === 1 ? "" : "s"}`, info.images ? `${info.images} picture${info.images === 1 ? "" : "s"}` : ""]
     .filter(Boolean)
@@ -193,16 +185,15 @@ function RecoveryPrompt({ info, onDone }: { info: RecoveryInfo; onDone: () => vo
       <button
         className="primary"
         onClick={() => {
-          onDone();
-          void restoreRecovery();
+          // If it couldn't be shown, the banner stays (the error says why) and the copy is kept.
+          void restoreRecovery().then((ok) => ok && onDone(true));
         }}
       >
         Recover
       </button>
       <button
         onClick={() => {
-          onDone();
-          void discardRecovery();
+          void discardRecovery().then(() => onDone(false));
         }}
       >
         Discard
@@ -298,16 +289,17 @@ function EmptyState() {
 
 export function App() {
   const [recovery, setRecovery] = useState<RecoveryInfo | null>(null);
+  const [launchFile, setLaunchFile] = useState<string | null>(null);
   useEngine(() => {
     void checkRecovery().then(async (r) => {
       setRecovery(r);
-      // Opened by double-clicking a .ludd project: open it (unless there's work to recover first).
-      if (!r && isTauri()) {
-        const file = await invoke<string | null>("launch_file").catch(() => null);
-        if (file) void openDesign(file);
-      }
+      // Opened by double-clicking a .ludd project: open it, after the choice about work to recover.
+      const file = isTauri() ? await invoke<string | null>("launch_file").catch(() => null) : null;
+      if (file && !r) void openDesign(file);
+      else setLaunchFile(file);
     });
   });
+  useOpenFromOtherLaunches();
   useEffect(() => startUpdateCheck(), []);
   useEffect(() => startDialogDragging(), []);
   useShortcuts();
@@ -323,6 +315,11 @@ export function App() {
   const canvasDark = useStore(selectCanvasDark);
   const [panelWidth, setPanelWidth] = usePanelWidth();
   useEffect(() => startTraceAssist(), []);
+  useEffect(() => startSatinFit(), []);
+  useEffect(() => {
+    document.addEventListener("mousedown", keepFocusOffBars, true);
+    return () => document.removeEventListener("mousedown", keepFocusOffBars, true);
+  }, []);
   const dragging = useFileDrop();
   const hasDoc = useStore((s) => s.history.present !== null);
   const hasDesign = useStore((s) => s.design !== null);
@@ -331,7 +328,18 @@ export function App() {
     <div className="app">
       <Toolbar />
       <Notice />
-      {recovery && <RecoveryPrompt info={recovery} onDone={() => setRecovery(null)} />}
+      {recovery && (
+        <RecoveryPrompt
+          info={recovery}
+          onDone={(recovered) => {
+            setRecovery(null);
+            if (!launchFile) return;
+            if (!recovered) void openDesign(launchFile, true);
+            else useStore.getState().notify({ kind: "info", text: `Your work is back. To open ${launchFile.split(/[\\/]/).pop()} too, press Ctrl+O.` });
+            setLaunchFile(null);
+          }}
+        />
+      )}
       <UpdateBanner />
       <div className="workspace">
         {hasDoc && <ToolRail />}
@@ -355,8 +363,12 @@ export function App() {
       <BatchDialog />
       <ExportDialog />
       <ChartsDialog />
+      <ContextMenu />
       <SettingsDialog />
       <RepeatDialog />
+      <OffsetDialog />
+      <BrowseDialog />
+      <NamesDialog />
       <HelpDialog />
       <SendPreview />
     </div>

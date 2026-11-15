@@ -6,6 +6,7 @@ import { blockStartStitches, stitchRecordIndex } from "./design/player";
 import type { ChartSummary, CheckResult, Design, Doc, Fabric, FontInfo, Formats, Layout, Machine, ObjectKind, PathNode, RefImage, Thread } from "./design/types";
 import type { RpcClient } from "./engine/rpc";
 import type { EngineStatus } from "./engine/sidecar";
+import type { EdgeFit } from "./design/edgeFit";
 import { loadPrefs, savePrefs } from "./prefs";
 import { applyTheme, resolveTheme, type ThemeChoice } from "./theme";
 
@@ -16,14 +17,16 @@ export const MACHINE_SPEED = 12;
 export type Notice = { kind: "error" | "info"; text: string };
 
 /** What a click on the canvas does: select and move, or draw a new object. */
-export type Tool = "select" | "run" | "satin" | "fill" | "text";
+export type Tool = "select" | "run" | "satin" | "fill" | "text" | "autotrace";
 export type ZoomRequest = {
-  kind: "in" | "out" | "actual" | "scale" | "box";
+  kind: "in" | "out" | "actual" | "scale" | "box" | "pan";
   n: number;
   /** "scale": a multiple of real size. */
   factor?: number;
   /** "box": the area to show, mm. */
   box?: [number, number, number, number];
+  /** "pan": move the view by this much, mm (the design moves the other way on screen). */
+  pan?: [number, number];
 };
 
 /** Trace Assist's proposal for the next point (mm). */
@@ -36,11 +39,47 @@ export type Ghost = {
   rails: [[number, number], [number, number]] | null;
 };
 
+/** One auto-trace guess, in mm. A fill's outline (and holes), or a satin ribbon along a line. */
+export type TraceGuess =
+  | {
+      kind: "fill";
+      id: string;
+      label: string;
+      outline: PathNode[];
+      holes: PathNode[][];
+      /** Separate areas added with Shift+click. */
+      parts?: { outline: PathNode[]; holes: PathNode[][] }[]; line_width_mm?: number; background: boolean; color?: string }
+  | { kind: "satin"; id: string; label: string; nodes: PathNode[]; width_mm: number; closed: boolean; color?: string };
+
+/** Auto-trace's guesses for a click on a picture; `index` is the one shown. */
+export type AutoTrace = {
+  imageId: string;
+  at: [number, number];
+  /** Shift+clicks (this too) and Alt+clicks (not this), mm. */
+  add: [number, number][];
+  subtract: [number, number][];
+  guesses: TraceGuess[];
+  index: number;
+  busy: boolean;
+};
+
+/** A shape from "whole picture" auto-digitizing (mm), with the picture's color. */
+export type TracedShape =
+  | { kind: "fill"; outline: PathNode[]; holes: PathNode[][]; color: string }
+  | { kind: "satin"; nodes: PathNode[]; width_mm: number; closed: boolean; color: string }
+  | { kind: "run"; nodes: PathNode[]; closed: boolean; color: string };
+
+/** Garments the design can be previewed on. */
+export type Garment = "none" | "tshirt" | "tote" | "towel" | "bodysuit" | "cap";
+
+/** The optional AI tracing model: downloaded or not. */
+export type TraceModel = { installed: boolean; runtime: boolean; size_mb: number; source: string; license: string };
+
 /** A selected point of a drawn object: which object, which list of points, which point. */
 export type NodeRef = { id: string; list: string | number; index: number };
 
 /** A shape being drawn: clicks so far. A satin's clicks alternate between its two sides. */
-export type Pen = { kind: ObjectKind; a: PathNode[]; b: PathNode[]; replaceId?: string; /** Drawing a hole in this fill (O). */ holeFor?: string };
+export type Pen = { kind: ObjectKind; a: PathNode[]; b: PathNode[]; replaceId?: string; /** Drawing a hole in this fill (O). */ holeFor?: string; /** The tool to go back to once the hole is done. */ holeBack?: Tool; /** The line goes all the way round (a satin fitted round an edge). */ closed?: boolean };
 
 type State = {
   engineStatus: EngineStatus;
@@ -66,6 +105,41 @@ type State = {
   traceAssist: boolean;
   ghost: Ghost | null;
   traceStep: number;
+  /** Satin edge fit: ways to lay the satin being drawn along the edge it follows (Tab). `original`
+   *  is the clicked points while one is applied (Esc puts them back); null while only offered. */
+  edgeFit: { options: EdgeFit[]; index: number; original: Pen | null } | null;
+  /** Auto-trace: the guesses on screen, and how far apart their points are (mm). */
+  autoTrace: AutoTrace | null;
+  autoSpacing: number;
+  autoSpread: number;
+  setAutoTrace: (a: AutoTrace | null) => void;
+  setAutoSpacing: (mm: number) => void;
+  setAutoSpread: (n: number) => void;
+  traceModel: TraceModel | null;
+  traceAI: boolean;
+  /** "Whole picture": every shape found in a picture, waiting to be added or dismissed. */
+  autoAll: { imageId: string; shapes: TracedShape[]; busy: boolean; outlines: boolean; skipBackground: boolean } | null;
+  setAutoAll: (a: State["autoAll"]) => void;
+  /** The knife: a line being drawn across the selected shape. */
+  knife: { id: string; points: [number, number][] } | null;
+  setKnife: (k: State["knife"]) => void;
+  /** Stitch editing of a placed stitch file: which item, and which of its stitches are selected (file indices). */
+  stitchEdit: { id: string; selected: number[] } | null;
+  setStitchEdit: (s: State["stitchEdit"]) => void;
+  /** A dialog open by name. */
+  dialog: "offset" | "browse" | "names" | null;
+  setDialog: (d: State["dialog"]) => void;
+  /** Preview the design on a garment, in a fabric color. */
+  preview: { garment: Garment; color: string };
+  setPreview: (p: Partial<State["preview"]>) => void;
+  /** Rulers along the design area's edges (drag from them for guides). */
+  showRulers: boolean;
+  setShowRulers: (on: boolean) => void;
+  setTraceModel: (m: TraceModel | null) => void;
+  setTraceAI: (on: boolean) => void;
+  /** Width of new satin ribbons, mm (the last one you set). */
+  satinWidth: number;
+  setSatinWidth: (mm: number) => void;
   selectedNode: NodeRef | null;
   /** Measuring a picture: the points clicked so far (two needed). */
   measure: { imageId: string; points: [number, number][] } | null;
@@ -122,6 +196,8 @@ type State = {
   /** View toggles from Embrilliance's hotkeys: stitch points (P), stitches (N), pictures (B), crosshairs (E). */
   showPoints: boolean;
   showStitches: boolean;
+  /** See-through stitches (Shift+N): thread drawn faint, to work over a picture. */
+  seeThrough: boolean;
   showPictures: boolean;
   crosshair: boolean;
   /** The drawing tool used last (D and X go back to it). */
@@ -152,6 +228,8 @@ type Actions = {
   setDrawThread: (t: Thread) => void;
   setPen: (p: Pen | null) => void;
   setGhost: (g: Ghost | null) => void;
+  setEdgeFit: (f: State["edgeFit"]) => void;
+  toggleSeeThrough: () => void;
   setTraceStep: (mm: number) => void;
   toggleTraceAssist: () => void;
   selectNode: (n: NodeRef | null) => void;
@@ -192,7 +270,10 @@ type Actions = {
   setCanvasBg: (bg: "theme" | "light") => void;
   setSettingsOpen: (open: boolean) => void;
   setZoomScale: (s: number) => void;
-  requestZoom: (kind: ZoomRequest["kind"], extra?: { factor?: number; box?: [number, number, number, number] }) => void;
+  requestZoom: (kind: ZoomRequest["kind"], extra?: { factor?: number; box?: [number, number, number, number]; pan?: [number, number] }) => void;
+  /** Space is held: dragging pans the view (Embrilliance's hand tool). */
+  spaceDown: boolean;
+  setSpaceDown: (down: boolean) => void;
   toggleView: (key: "showPoints" | "showStitches" | "showPictures" | "crosshair") => void;
   setRuler: (r: [number, number][] | null) => void;
   setAngleFor: (a: { id: string; points: [number, number][] } | null) => void;
@@ -238,9 +319,42 @@ export const useStore = create<State & Actions>()((set) => ({
   tool: "select",
   drawThread: { color: "#1f3a93", name: "Navy", catalog: "", brand: "" },
   pen: null,
-  traceAssist: prefs.traceAssist ?? true,
+  // Off unless turned on: Auto-trace (Shift+A) does the heavy lifting now.
+  traceAssist: prefs.traceAssist ?? false,
   ghost: null,
   traceStep: prefs.traceStep ?? 3,
+  autoTrace: null,
+  autoSpacing: prefs.traceSpacing ?? 3,
+  autoSpread: prefs.traceSpread ?? 5,
+  setAutoTrace: (autoTrace) => set({ autoTrace }),
+  setAutoSpacing: (autoSpacing) => set({ autoSpacing }),
+  setAutoSpread: (autoSpread) => set({ autoSpread }),
+  traceModel: null,
+  traceAI: prefs.traceAI ?? true,
+  autoAll: null,
+  setAutoAll: (autoAll) => set({ autoAll }),
+  knife: null,
+  setKnife: (knife) => set({ knife }),
+  stitchEdit: null,
+  setStitchEdit: (stitchEdit) => set({ stitchEdit }),
+  dialog: null,
+  setDialog: (dialog) => set({ dialog }),
+  preview: { garment: prefs.previewGarment ?? "none", color: prefs.previewColor ?? "#f4f1ea" },
+  setPreview: (p) =>
+    set((s) => {
+      const preview = { ...s.preview, ...p };
+      savePrefs({ previewGarment: preview.garment, previewColor: preview.color });
+      return { preview };
+    }),
+  showRulers: prefs.showRulers ?? true,
+  setShowRulers: (showRulers) => {
+    savePrefs({ showRulers });
+    set({ showRulers });
+  },
+  setTraceModel: (traceModel) => set({ traceModel }),
+  setTraceAI: (traceAI) => set({ traceAI }),
+  satinWidth: prefs.satinWidth ?? 3,
+  setSatinWidth: (satinWidth) => set({ satinWidth }),
   selectedNode: null,
   measure: null,
   stitchIdx: new Int32Array(0),
@@ -271,12 +385,15 @@ export const useStore = create<State & Actions>()((set) => ({
   units: prefs.units ?? "in",
   theme: prefs.theme ?? "system",
   systemDark: typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches,
-  canvasBg: prefs.canvasBg ?? "theme",
+  canvasBg: prefs.canvasBg ?? "light", // the fabric stays light in dark mode too (shadows and thread show as sewn)
   settingsOpen: false,
   zoomScale: 1,
   zoomRequest: { kind: "actual", n: 0 },
   showPoints: false,
+  spaceDown: false,
   showStitches: true,
+  seeThrough: prefs.seeThrough ?? false,
+  edgeFit: null,
   showPictures: true,
   crosshair: false,
   lastTool: "fill",
@@ -302,13 +419,26 @@ export const useStore = create<State & Actions>()((set) => ({
       const measure = s.measure && doc?.images.some((im) => im.id === s.measure!.imageId) ? s.measure : null;
       const selectedNode = s.selectedNode && doc?.layout.items.some((it) => it.id === s.selectedNode!.id) ? s.selectedNode : null;
       const extraIds = exists && doc ? s.extraIds.filter((id) => doc.layout.items.some((it) => it.id === id)) : [];
-      return { history, selectedId: exists ? s.selectedId : null, extraIds, measure, selectedNode };
+      // Modes working on a design, shape or picture that's gone (deleted, undone) end with it.
+      const hasItem = (id: string) => !!doc?.layout.items.some((it) => it.id === id);
+      const hasImage = (id: string) => !!doc?.images.some((im) => im.id === id);
+      const knife = s.knife && hasItem(s.knife.id) ? s.knife : null;
+      const stitchEdit = s.stitchEdit && hasItem(s.stitchEdit.id) ? s.stitchEdit : null;
+      const autoTrace = s.autoTrace && hasImage(s.autoTrace.imageId) ? s.autoTrace : null;
+      const autoAll = s.autoAll && hasImage(s.autoAll.imageId) ? s.autoAll : null;
+      return { history, selectedId: exists ? s.selectedId : null, extraIds, measure, selectedNode, knife, stitchEdit, autoTrace, autoAll };
     }),
   setTool: (tool) =>
     set((s) => ({
       tool,
       pen: null,
+      autoTrace: null,
+      autoAll: null,
+      knife: null,
+      // A drawing tool starts with nothing selected (none of it hidden behind the panel either).
       selectedId: tool === "select" ? s.selectedId : null,
+      extraIds: tool === "select" ? s.extraIds : [],
+      selectedNode: tool === "select" ? s.selectedNode : null,
       lastTool: tool === "select" ? s.lastTool : tool,
       ruler: null,
       angleFor: null,
@@ -317,6 +447,12 @@ export const useStore = create<State & Actions>()((set) => ({
   // Any change to the drawing makes the old suggestion stale.
   setPen: (pen) => set({ pen, ghost: null }),
   setGhost: (ghost) => set({ ghost }),
+  setEdgeFit: (edgeFit) => set({ edgeFit }),
+  toggleSeeThrough: () =>
+    set((s) => {
+      savePrefs({ seeThrough: !s.seeThrough });
+      return { seeThrough: !s.seeThrough };
+    }),
   setTraceStep: (traceStep) => set({ traceStep }),
   toggleTraceAssist: () =>
     set((s) => {
@@ -430,6 +566,7 @@ export const useStore = create<State & Actions>()((set) => ({
   setZoomScale: (zoomScale) => set({ zoomScale }),
   requestZoom: (kind, extra) => set((s) => ({ zoomRequest: { kind, n: s.zoomRequest.n + 1, ...extra } })),
   toggleView: (key) => set((s) => ({ [key]: !s[key] }) as Partial<State>),
+  setSpaceDown: (spaceDown) => set({ spaceDown }),
   setRuler: (ruler) => set({ ruler }),
   setAngleFor: (angleFor) => set({ angleFor }),
   setCharts: (charts) => set({ charts }),

@@ -11,6 +11,7 @@ import {
 } from "../actions";
 import type { Chart, ChartThread, Thread, ThreadMatch } from "../design/types";
 import { useStore } from "../store";
+import { colorDifference, searchThreads } from "../threadSearch";
 
 const MY_THREADS = "my-threads";
 
@@ -107,13 +108,40 @@ function ThreadGrid({
 }
 
 function useFiltered(threads: ChartThread[] | undefined, query: string) {
-  return useMemo(() => {
-    if (!threads) return [];
-    const q = query.trim().toLowerCase();
-    return q
-      ? threads.filter((t) => [t.code, t.name, t.brand ?? ""].some((s) => s.toLowerCase().includes(q)))
-      : threads;
-  }, [threads, query]);
+  return useMemo(() => searchThreads(threads ?? [], query).threads, [threads, query]);
+}
+
+/** Charts already loaded this session (searching the others when a number isn't in this one). */
+const chartCache = new Map<string, Promise<Chart>>();
+const cachedChart = (id: string) => {
+  if (!chartCache.has(id)) chartCache.set(id, getChart(id).catch((e: unknown) => (chartCache.delete(id), Promise.reject(e))));
+  return chartCache.get(id)!;
+};
+
+/** Other charts that have a search the chosen one doesn't: "Found in Madeira Polyneon (2)". */
+function useElsewhere(query: string, chartId: string | null, foundHere: number) {
+  const charts = useMatchableCharts();
+  // Spools added or a chart imported: read the charts afresh.
+  useEffect(() => chartCache.clear(), [charts]);
+  const [found, setFound] = useState<{ id: string; name: string; n: number }[]>([]);
+  useEffect(() => {
+    setFound([]);
+    const q = query.trim();
+    if (!q || foundHere > 0 || searchThreads([], q).hex) return;
+    let stale = false;
+    const others = charts.filter((c) => c.id !== chartId);
+    void Promise.all(
+      others.map((c) =>
+        cachedChart(c.id)
+          .then((ch) => ({ id: c.id, name: c.mine ? "My threads" : c.name, n: searchThreads(ch.threads, q).threads.length }))
+          .catch(() => ({ id: c.id, name: c.name, n: 0 })),
+      ),
+    ).then((all) => !stale && setFound(all.filter((x) => x.n > 0)));
+    return () => {
+      stale = true;
+    };
+  }, [query, chartId, foundHere, charts]);
+  return found;
 }
 
 const sameThread = (a: Thread, b: Thread) =>
@@ -128,11 +156,16 @@ export function ThreadPicker({
   onClose,
   onPick,
   current: given,
+  onReset,
+  resetLabel,
 }: {
   index: number | null;
   onClose: () => void;
   onPick?: (t: Thread) => void;
   current?: Thread;
+  /** Put the thread back as it was (shown as "Back to <resetLabel>"). */
+  onReset?: () => void;
+  resetLabel?: string;
 }) {
   const design = useStore((s) => s.design);
   const openThreads = useStore((s) => s.setChartsOpen);
@@ -142,27 +175,47 @@ export function ThreadPicker({
   const [closest, setClosest] = useState<ThreadMatch[]>([]);
   const [query, setQuery] = useState("");
   const filtered = useFiltered(chart?.threads, query);
+  const hex = searchThreads([], query).hex;
+  const elsewhere = useElsewhere(query, chartId, filtered.length);
+  const [mixed, setMixed] = useState<string | null>(null);
 
   const block = index !== null && index >= 0 && design ? design.blocks[index] : null;
   const current = given ?? (block && design ? design.threads[block.thread] : null);
   const original = block?.original ?? current;
 
+  // Closed: nothing from this time is left for the next (the search, a mixed color, the matches).
+  useEffect(() => {
+    if (index !== null) return;
+    setQuery("");
+    setMixed(null);
+    setClosest([]);
+  }, [index]);
+
   useEffect(() => {
     if (index === null || !chartId || !original) return;
     let stale = false;
-    void getChart(chartId).then((c) => !stale && setChart(c));
-    void matchThreads([original.color], chartId, 6).then((m) => !stale && setClosest(m[0]));
+    setClosest([]); // never the last thread's matches while this one's are on their way
+    getChart(chartId)
+      .then((c) => !stale && setChart(c))
+      .catch(() => !stale && setChart(null));
+    matchThreads([original.color], chartId, 6)
+      .then((m) => !stale && setClosest(m[0] ?? []))
+      .catch(() => !stale && setClosest([]));
     return () => {
       stale = true;
     };
   }, [index, chartId, original]);
 
-  const pick = (t: ChartThread) => {
-    if (index === null || !chart) return;
-    if (onPick) onPick(toThread(t, chart.brand));
-    else recolorBlock(index, toThread(t, chart.brand));
+  const use = (t: Thread) => {
+    if (index === null) return;
+    if (onPick) onPick(t);
+    else recolorBlock(index, t);
+    setQuery("");
     onClose();
   };
+  const pick = (t: ChartThread) => chart && use(toThread(t, chart.brand));
+  /** A color of your own, for when no chart has it (or you have no chart for your spools). */
+  const useColor = (color: string) => use({ color, name: color.toUpperCase(), catalog: "", brand: "" });
 
   return (
     <dialog ref={ref} className="modal picker" onClose={onClose}>
@@ -171,6 +224,11 @@ export function ThreadPicker({
           <h2>
             Change thread <span className="swatch inline" style={{ background: current.color }} />{" "}
             {current.name || current.color}
+            {current.name && current.name.toUpperCase() !== current.color.toUpperCase() && (
+              <small className="hex" title="This thread's color code: type it in the search to find the closest threads">
+                {current.color.toUpperCase()}
+              </small>
+            )}
           </h2>
           <div className="row">
             <ChartSelect value={chartId} onChange={choose} />
@@ -196,12 +254,54 @@ export function ThreadPicker({
           )}
           <input
             className="search"
-            placeholder="Search by number or name…"
+            placeholder="Search by number, name or color code (#FF7A1A)…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
+          {hex && (
+            <div className="row exact-color">
+              <span className="swatch inline" style={{ background: hex }} />
+              <span>
+                Closest to {hex.toUpperCase()} first
+                {filtered[0] && <small> · best: {spoolLabel(filtered[0])}, {closeness(colorDifference(hex, filtered[0].color))}</small>}
+              </span>
+              <span className="spacer" />
+              <button onClick={() => useColor(hex)}>Use exactly {hex.toUpperCase()}</button>
+            </div>
+          )}
+          {!hex && query.trim() && filtered.length === 0 && (
+            <p className="hint">
+              Nothing called "{query.trim()}" in this chart.
+              {elsewhere.map((c) => (
+                <button key={c.id} className="link" onClick={() => choose(c.id)}>
+                  {" "}Found in {c.name} ({c.n})
+                </button>
+              ))}
+            </p>
+          )}
           <ThreadGrid threads={filtered} onPick={pick} />
+          <div className="row mix-color">
+            <label>
+              Or mix your own color:{" "}
+              <input type="color" value={mixed ?? current.color} onChange={(e) => setMixed(e.target.value)} aria-label="Your own thread color" />
+            </label>
+            {mixed && (
+              <button onClick={() => useColor(mixed)}>
+                Use {mixed.toUpperCase()}
+              </button>
+            )}
+          </div>
           <div className="actions">
+            {onReset && resetLabel && (
+              <button
+                onClick={() => {
+                  onReset();
+                  onClose();
+                }}
+              >
+                Back to {resetLabel}
+              </button>
+            )}
             {!onPick && !sameThread(original, current) && (
               <button
                 onClick={() => {
@@ -239,7 +339,8 @@ export function MatchAllDialog({ open, onClose }: { open: boolean; onClose: () =
 
   // Each color block in sewing order, matched from the file's own color.
   const used = useMemo(
-    () => (design ? design.blocks.map((b, i) => ({ block: i, was: b.original ?? design.threads[b.thread] })) : []),
+    // Only the design's own colors: the basting box and knockdown aren't matched to a chart.
+    () => (design ? design.blocks.flatMap((b, i) => (b.sources?.length ? [{ block: i, was: b.original ?? design.threads[b.thread] }] : [])) : []),
     [design],
   );
 

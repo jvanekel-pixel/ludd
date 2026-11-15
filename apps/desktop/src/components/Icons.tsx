@@ -37,6 +37,16 @@ export const SatinIcon = () => (
   </Svg>
 );
 
+/** Auto-trace: a wand with a spark, over a dotted outline. */
+export const WandIcon = () => (
+  <Svg>
+    <path d="M4 20 L14 10" strokeWidth={2} />
+    <path d="M14 10 L16 8" strokeWidth={2.6} />
+    <path d="M18 2.5 L18 5.5 M16.5 4 L19.5 4 M21 8 L21 10 M20 9 L22 9 M11 3 L11 5 M10 4 L12 4" strokeWidth={1.3} />
+    <path d="M7 9 C 4 9, 3 12, 4.5 14 M15 16.5 C 16 19, 19.5 19, 20 16" strokeDasharray="1.6 1.8" strokeWidth={1.3} />
+  </Svg>
+);
+
 /** Fill: a rounded shape hatched with angled rows. */
 export const FillIcon = () => (
   <Svg>

@@ -7,7 +7,12 @@ import {
   currentLayout,
   finishAngle,
   pickItem,
+  moveStitchEnd,
+  setFillDirection,
+  setLetterEnd,
+  setSatinTips,
   selectionGeometry,
+  deleteNode,
   insertNode,
   moveNode,
   nodeLists,
@@ -16,18 +21,28 @@ import {
   setPicture,
   toggleNodeKind,
   type NodeList,
+  shapeStretchAnchor,
 } from "../actions";
-import { gridLines, gridSpacing, PX_PER_MM_ACTUAL } from "../design/grid";
-import { hitTest, moveBy, rotateBy, scaleBy, transformTogether } from "../design/layout";
+import { gridLines, gridSpacing, MM_PER_IN, PX_PER_MM_ACTUAL } from "../design/grid";
+import { hitTest, itemLabel, moveBy, rotateBy, scaleBy, transformTogether } from "../design/layout";
 import { heatColor } from "../design/heat";
 import { hoopFit } from "../design/machine";
 import { flatten, spanAt, type Pt } from "../design/paths";
 import { chunkBlocks, visibleRecords, type Chunk } from "../design/player";
 import { threadLayers } from "../design/threadLook";
 import { buildThreadChunk, showUpTo, type ThreadChunk } from "./threadRender";
-import { isObject, Kind, type Design, type Heatmap, type Hoop, type NodeKind, type ObjectItem, type PathNode, type RefImage } from "../design/types";
+import { isObject, Kind, type Design, type Heatmap, type Hoop, type LayoutItemInfo, type NodeKind, type ObjectItem, type PathNode, type RefImage } from "../design/types";
+import type { AutoTrace } from "../store";
 import { clamp, fitView, MAX_SCALE, MIN_SCALE, zoomAt, type View } from "../design/view";
 import { holdEscape } from "../escape";
+import { acceptGuess, autoTraceAt, guessLists } from "../autoTrace";
+import { endStitchEdit, finishKnife, moveSelectedStitches, setGuides } from "../features";
+import { canvasMenu, itemMenu, openContextMenu, pictureMenu } from "../contextMenu";
+import { garmentShape } from "../design/garments";
+import { markSpacePanned } from "../spacePan";
+import { cursorCss, type CursorName } from "../cursors";
+import { OPPOSITE, resizeCursorFor, sideAxis, sideMids, stretchFactor } from "../design/handles";
+import { columnRing, columnTips, fillDirection, fillRing, nearestOnLine, nearestOnRings } from "../design/direction";
 import { selectCanvasDark, selectHoop, useStore, type Ghost, type Pen } from "../store";
 
 const TRAVEL_COLOR = 0x8a8a8a; // trimmed travel: the thread is cut, nothing is left
@@ -64,6 +79,12 @@ const ROTATE_KNOB_PX = 26;
 const OBJECT_BOX_PAD_PX = 10; // keeps scale handles off a shape's own corner points
 const DRAG_THRESHOLD_PX = 3;
 const DIM_ALPHA = 0.25;
+/** How faint the thread is while you hold a point. */
+const NODE_DIM_ALPHA = 0.2;
+/** See-through stitches (Shift+N): faint enough to see the picture under them, clear enough to follow. */
+const SEE_THROUGH_ALPHA = 0.22;
+/** How opaque the stitches are when nothing is being dragged. */
+const restingAlpha = () => (useStore.getState().seeThrough ? SEE_THROUGH_ALPHA : 1);
 const SNAP_PX = 7;
 
 type Scene = {
@@ -83,6 +104,9 @@ type Scene = {
   jumps: Graphics;
   needle: Graphics;
   overlay: Graphics; // selection box, nodes, pen preview
+  product: Graphics; // "Preview on": a garment behind the design
+  rulers: Graphics; // screen space, along the top and left edges
+  rulerLabels: Container;
   heat: Container; // density map, over the stitches
   split: Container; // hoopings of a split design, while saving it
   design: Design | null;
@@ -104,12 +128,35 @@ type Frame = {
   knob: Pt;
   up: Pt;
   locked: boolean;
+  /** How far the frame sits outside the shape (mm), so a stretch keeps the shape's own side still. */
+  pad: number;
 };
 
 type Drag =
   | { kind: "pan"; x: number; y: number; moved: boolean; deselect: boolean }
-  | { kind: "move" | "scale" | "rotate"; frame: Frame; startX: number; startY: number; ghost: Container | null; moved: boolean }
-  | { kind: "node"; id: string; list: NodeList; index: number; startX: number; startY: number; moved: boolean; at: Pt };
+  | {
+      kind: "move" | "scale" | "rotate";
+      frame: Frame;
+      startX: number;
+      startY: number;
+      /** Where it was grabbed, mm (zooming mid-drag can't shift it). */
+      startW: Pt;
+      ghost: Container | null;
+      moved: boolean;
+      /** A side handle: stretch that way only, the opposite side staying put. */
+      side?: "n" | "e" | "s" | "w";
+      /** The pointer it shows while dragging. */
+      look?: CursorName;
+    }
+  | { kind: "node"; id: string; list: NodeList; index: number; startX: number; startY: number; moved: boolean; at: Pt }
+  /** The green (start) or red (end) dot of the selected shape, dragged to a new place. */
+  | { kind: "ends"; id: string; which: "start" | "end"; startX: number; startY: number; moved: boolean; at: Pt }
+  /** A lettering letter's start or end dot. */
+  | { kind: "letter"; id: string; index: number; which: "start" | "end"; startX: number; startY: number; moved: boolean; at: Pt }
+  /** One of the purple direction dots (a fill's stitch direction, a satin column's tips). */
+  | { kind: "dir"; id: string; which: 0 | 1; startX: number; startY: number; moved: boolean; at: Pt }
+  | { kind: "guide"; startX: number; startY: number; moved: boolean }
+  | { kind: "stitches"; startX: number; startY: number; moved: boolean; shift: boolean };
 
 // ---------------------------------------------------------------- textures for pictures
 
@@ -217,10 +264,84 @@ function applyView(scene: Scene) {
   world.scale.set(view.scale);
   world.position.set(view.x, view.y);
   drawGrid(scene);
+  drawRulers(scene);
   useStore.getState().setZoomScale(view.scale);
 }
 
 /** Squares across the whole visible area, centred on the hoop centre, spacing adapted to zoom. */
+/** "Preview on": the garment behind the design, in the chosen fabric color. */
+function drawProduct(scene: Scene) {
+  const g = scene.product;
+  g.clear();
+  const { garment, color } = useStore.getState().preview;
+  const fill = parseInt(color.slice(1), 16);
+  const shape = garmentShape(garment);
+  if (!shape) {
+    // Plain fabric in a chosen color (left alone when it's the standard one).
+    if (color.toLowerCase() !== "#f4f1ea") g.rect(-3000, -3000, 6000, 6000).fill({ color: fill });
+    return;
+  }
+  const px = 1 / scene.view.scale;
+  g.poly(shape.outline.flat()).fill({ color: fill }).stroke({ width: 2 * px, color: 0x000000, alpha: 0.25 });
+  for (const d of shape.details) {
+    g.moveTo(d[0][0], d[0][1]);
+    for (const q of d.slice(1)) g.lineTo(q[0], q[1]);
+    g.stroke({ width: 2 * px, color: 0x000000, alpha: 0.2 });
+  }
+}
+
+export const RULER_PX = 18;
+
+/** Rulers along the top and left edges (in inches or mm), for dragging guides from. */
+function drawRulers(scene: Scene) {
+  const g = scene.rulers;
+  g.clear();
+  const st = useStore.getState();
+  const show = st.showRulers && !!st.history.present;
+  g.visible = show;
+  scene.rulerLabels.visible = show;
+  if (!show) return;
+  const { scale, x: ox, y: oy } = scene.view;
+  const w = scene.app.screen.width;
+  const h = scene.app.screen.height;
+  const bg = C === PALETTES.dark ? 0x232125 : 0xf8f5ef;
+  const ink = C === PALETTES.dark ? 0xb5aea3 : 0x5f5950;
+  g.rect(0, 0, w, RULER_PX).fill({ color: bg }).rect(0, 0, RULER_PX, h).fill({ color: bg });
+  g.moveTo(0, RULER_PX + 0.5).lineTo(w, RULER_PX + 0.5).moveTo(RULER_PX + 0.5, 0).lineTo(RULER_PX + 0.5, h).stroke({ width: 1, color: ink, alpha: 0.5 });
+  const sp = gridSpacing(scale, st.units);
+  const labels: { text: string; x: number; y: number; vertical: boolean }[] = [];
+  const unit = st.units === "in" ? MM_PER_IN : 1;
+  for (const l of gridLines((RULER_PX - ox) / scale, (w - ox) / scale, 0, sp)) {
+    const sx = Math.round(l.mm * scale + ox) + 0.5;
+    g.moveTo(sx, l.major ? 2 : RULER_PX - 5).lineTo(sx, RULER_PX);
+    if (l.major) labels.push({ text: fmtRuler(l.mm / unit), x: sx + 2, y: 1, vertical: false });
+  }
+  for (const l of gridLines((RULER_PX - oy) / scale, (h - oy) / scale, 0, sp)) {
+    const sy = Math.round(l.mm * scale + oy) + 0.5;
+    g.moveTo(l.major ? 2 : RULER_PX - 5, sy).lineTo(RULER_PX, sy);
+    if (l.major) labels.push({ text: fmtRuler(l.mm / unit), x: 1, y: sy + 2, vertical: true });
+  }
+  g.stroke({ width: 1, color: ink, alpha: 0.8 });
+  // Reuse label objects (making new ones on every pan is slow).
+  const pool = scene.rulerLabels.children as Text[];
+  labels.forEach((lb, i) => {
+    let t = pool[i];
+    if (!t) {
+      t = new Text({ text: "", style: { fontFamily: "Space Mono, monospace", fontSize: 9, fill: ink } });
+      scene.rulerLabels.addChild(t);
+    }
+    t.text = lb.text;
+    t.style.fill = ink;
+    t.position.set(lb.x, lb.y);
+    t.rotation = lb.vertical ? Math.PI / 2 : 0;
+    if (lb.vertical) t.position.set(RULER_PX - 2, lb.y);
+    t.visible = true;
+  });
+  for (let i = labels.length; i < pool.length; i++) pool[i].visible = false;
+}
+
+const fmtRuler = (v: number) => (Math.abs(v) < 1e-9 ? "0" : Number(v.toFixed(2)).toString());
+
 function drawGrid(scene: Scene) {
   const g = scene.grid;
   g.clear();
@@ -357,6 +478,15 @@ function rotatePt(p: Pt, c: Pt, rad: number): Pt {
   return [c[0] + (p[0] - c[0]) * ca - (p[1] - c[1]) * sa, c[1] + (p[0] - c[0]) * sa + (p[1] - c[1]) * ca];
 }
 
+/** The selection's frame, if several things (a group) are selected and `p` is inside it. */
+function insideGroupFrame(scene: Scene, p: Pt): Frame | null {
+  const f = selectedFrame(scene);
+  if (!f || f.kind !== "item" || f.ids.length < 2 || f.locked) return null;
+  const xs = f.corners.map((c) => c[0]);
+  const ys = f.corners.map((c) => c[1]);
+  return p[0] >= Math.min(...xs) && p[0] <= Math.max(...xs) && p[1] >= Math.min(...ys) && p[1] <= Math.max(...ys) ? f : null;
+}
+
 function selectedFrame(scene: Scene): Frame | null {
   const st = useStore.getState();
   const doc = st.history.present;
@@ -372,7 +502,7 @@ function selectedFrame(scene: Scene): Frame | null {
     const topMid: Pt = rotatePt([c[0], c[1] - hh], c, rad);
     const up: Pt = [Math.sin(rad), -Math.cos(rad)];
     const knob: Pt = [topMid[0] + (up[0] * ROTATE_KNOB_PX) / s, topMid[1] + (up[1] * ROTATE_KNOB_PX) / s];
-    return { kind: "image", index: imgIndex, id: im.id, indices: [imgIndex], ids: [im.id], corners, center: c, knob, up, locked: im.locked };
+    return { kind: "image", index: imgIndex, id: im.id, indices: [imgIndex], ids: [im.id], corners, center: c, knob, up, locked: im.locked, pad: 0 };
   }
   const index = doc.layout.items.findIndex((it) => it.id === st.selectedId);
   const ids = [st.selectedId, ...st.extraIds].filter((id) => doc.layout.items.some((it) => it.id === id));
@@ -396,7 +526,23 @@ function selectedFrame(scene: Scene): Frame | null {
     up: [0, -1],
     // Pinned designs and shapes can't be dragged (the frame shows faded, without handles).
     locked: indices.some((i) => !!doc.layout.items[i].locked),
+    pad,
   };
+}
+
+/** Side handles show (and work) only on a frame big enough on screen for them not to crowd the corners. */
+/** The point a side stretch keeps still: the middle of the opposite side of the shape itself
+ *  (inside the frame's padding). */
+function stretchAnchor(f: Frame, side: "n" | "e" | "s" | "w"): Pt {
+  const m = sideMids(f.corners)[OPPOSITE[side]];
+  const a = sideAxis(f.corners, side);
+  return [m[0] + a[0] * f.pad, m[1] + a[1] * f.pad];
+}
+
+function sidesFit(f: Frame, px: number): boolean {
+  const w = Math.hypot(f.corners[1][0] - f.corners[0][0], f.corners[1][1] - f.corners[0][1]) / px;
+  const h = Math.hypot(f.corners[3][0] - f.corners[0][0], f.corners[3][1] - f.corners[0][1]) / px;
+  return Math.min(w, h) >= HANDLE_PX * 4;
 }
 
 function selectedObject(): ObjectItem | null {
@@ -412,7 +558,34 @@ function drawOverlay(scene: Scene, live?: { id: string; list: NodeList; index: n
   const s = scene.view.scale;
   const px = 1 / s;
   if (st.pen) drawPen(g, st.pen, cursorMm, px);
+  if (st.pen && st.edgeFit && !st.edgeFit.original) {
+    const fit = st.edgeFit.options[st.edgeFit.index];
+    const poly = flatten(fit.nodes, fit.closed);
+    if (fit.closed && poly.length) poly.push(poly[0]);
+    if (poly.length > 1) {
+      const path = () => {
+        g.moveTo(poly[0][0], poly[0][1]);
+        for (const q of poly.slice(1)) g.lineTo(q[0], q[1]);
+      };
+      path();
+      g.stroke({ width: st.satinWidth, color: C.ghost, alpha: 0.22, join: "round", cap: "round" });
+      path();
+      g.stroke({ width: 1.5 * px, color: C.ghost, alpha: 0.9 });
+    }
+  }
   if (st.pen && st.ghost) drawGhost(g, st.pen, st.ghost, px);
+  if (st.autoTrace) drawGuess(g, st.autoTrace, px);
+  if (st.autoAll) drawWholePicture(g, st.autoAll, px);
+  drawGuides(scene, g, px);
+  if (st.knife) {
+    const pts = st.knife.points;
+    const end = pts.length === 1 ? cursorMm : null;
+    if (pts.length && end) {
+      g.moveTo(pts[0][0], pts[0][1]).lineTo(end[0], end[1]).stroke({ width: 2 * px, color: KNIFE_COLOR });
+      g.circle(pts[0][0], pts[0][1], 3.5 * px).fill(KNIFE_COLOR);
+    }
+  }
+  if (st.stitchEdit) drawStitchEdit(scene, g, px);
   if (st.crosshair && cursorMm) {
     const [w, h] = [scene.app.screen.width / s, scene.app.screen.height / s];
     const [vx, vy] = [-scene.view.x / s, -scene.view.y / s];
@@ -459,13 +632,31 @@ function drawOverlay(scene: Scene, live?: { id: string; list: NodeList; index: n
       g.moveTo(top[0], top[1]).lineTo(f.knob[0], f.knob[1]).stroke({ width: 1.5 * px, color: C.select });
       const hs = HANDLE_PX * px;
       for (const [hx, hy] of f.corners) g.rect(hx - hs / 2, hy - hs / 2, hs, hs).fill(HANDLE_FILL).stroke({ width: 1.5 * px, color: C.select });
+      if (sidesFit(f, px)) {
+        const ss = hs * 0.8;
+        for (const [hx, hy] of Object.values(sideMids(f.corners))) g.rect(hx - ss / 2, hy - ss / 2, ss, ss).fill(HANDLE_FILL).stroke({ width: 1.5 * px, color: C.select });
+      }
       g.circle(f.knob[0], f.knob[1], hs / 2 + px).fill(HANDLE_FILL).stroke({ width: 1.5 * px, color: C.select });
     }
   }
 
-  // Points of a selected drawn object, its entry (green) and exit (red).
+  // Lettering: every letter's start (green) and end (red), smaller, on its own edge.
+  const letters = selectedLetters(scene);
+  if (letters) {
+    for (const part of letters.parts) {
+      for (const which of ["start", "end"] as const) {
+        const q = liveLetter && liveLetter.id === letters.id && liveLetter.index === part.index && liveLetter.which === which ? liveLetter.at : part[which];
+        g.circle(q[0], q[1], LETTER_DOT_PX * px).fill(which === "start" ? ENTRY_COLOR : EXIT_COLOR).stroke({ width: 1.2 * px, color: 0xffffff });
+      }
+    }
+    return;
+  }
+
+  // Points of a selected drawn object, its entry (green) and exit (red). A pinned shape shows its
+  // outline only (nothing on it can be dragged); with several selected, the dots aren't offered.
   const o = selectedObject();
   if (!o) return;
+  const editable = !o.locked && !st.extraIds.length && st.tool === "select";
   const lists = nodeLists(o).map((l) =>
     live && live.id === o.id && live.list === l.key
       ? { ...l, nodes: l.nodes.map((n, i) => (i === live.index ? ([live.at[0], live.at[1], n[2]] as PathNode) : n)) }
@@ -479,13 +670,13 @@ function drawOverlay(scene: Scene, live?: { id: string; list: NodeList; index: n
       g.stroke({ width: 1.2 * px, color: C.select, alpha: 0.9 });
     }
   }
-  if (o.kind === "satin") {
+  if (o.kind === "satin" && lists.length > 1) {
     const [ra, rb] = [lists[0].nodes, lists[1].nodes];
     ra.forEach((n, i) => rb[i] && g.moveTo(n[0], n[1]).lineTo(rb[i][0], rb[i][1]));
     g.stroke({ width: 1 * px, color: C.select, alpha: 0.5 });
   }
   const sel = st.selectedNode;
-  for (const l of lists) {
+  for (const l of o.locked ? [] : lists) {
     l.nodes.forEach((n, i) => {
       const on = sel && sel.id === o.id && sel.list === l.key && sel.index === i;
       const r = (NODE_PX / 2) * px;
@@ -493,23 +684,94 @@ function drawOverlay(scene: Scene, live?: { id: string; list: NodeList; index: n
       g.fill(on ? HANDLE_FILL : 0xffffff).stroke({ width: 1.5 * px, color: C.select });
     });
   }
+  // The purple direction dots and the line between them: the way the rows (or satin) run.
+  const dir = editable ? directionDots(o, tipsOut(scene)) : null;
+  if (dir) {
+    const [d0, d1] = dir.map((q, k) => (liveDir && liveDir.id === o.id && liveDir.which === k ? liveDir.at : q));
+    g.moveTo(d0[0], d0[1]).lineTo(d1[0], d1[1]).stroke({ width: 2 * px, color: DIRECTION_COLOR, alpha: 0.95 });
+    for (const q of [d0, d1]) g.circle(q[0], q[1], ENDS_PX * px).fill(DIRECTION_COLOR).stroke({ width: 1.5 * px, color: 0xffffff });
+  }
+  const ends = editable && o.kind !== "applique" ? stitchEnds(scene, o) : null;
+  if (ends) {
+    const at = (which: "start" | "end"): Pt => (liveEnd && liveEnd.id === o.id && liveEnd.which === which ? liveEnd.at : ends[which]);
+    const [s0, e0] = [at("start"), at("end")];
+    g.circle(s0[0], s0[1], ENDS_PX * px).fill(ENTRY_COLOR).stroke({ width: 1.5 * px, color: 0xffffff });
+    g.circle(e0[0], e0[1], ENDS_PX * px).fill(EXIT_COLOR).stroke({ width: 1.5 * px, color: 0xffffff });
+  }
+}
+
+/** Size of the start and end dots (radius, screen pixels). */
+const ENDS_PX = 5;
+
+/** The start (green) or red (end) dot being dragged (or let go and waiting for its new stitches),
+ *  to draw it where it will go. Each belongs to one shape. */
+let liveEnd: { id: string; which: "start" | "end"; at: Pt } | null = null;
+/** A purple direction dot being dragged. */
+let liveDir: { id: string; which: 0 | 1; at: Pt } | null = null;
+const DIRECTION_COLOR = 0x8b5cf6;
+
+/** A lettering letter's dot being dragged. */
+let liveLetter: { id: string; index: number; which: "start" | "end"; at: Pt } | null = null;
+const LETTER_DOT_PX = 3.5;
+
+/** The selected lettering (alone) and its letters, as the engine last drew them. */
+function selectedLetters(scene: Scene): { id: string; parts: NonNullable<LayoutItemInfo["letters"]> } | null {
+  const st = useStore.getState();
+  const doc = st.history.present;
+  if (!doc || !st.selectedId || st.extraIds.length || st.tool !== "select") return null;
+  const i = doc.layout.items.findIndex((it) => it.id === st.selectedId);
+  const it = doc.layout.items[i];
+  const parts = scene.design?.items?.[i]?.letters;
+  return it && it.kind === "text" && !it.locked && parts?.length ? { id: it.id, parts } : null;
+}
+
+/** The purple dots of a drawn shape: a fill's stitch direction, or a satin column's two tips
+ *  (drawn just past each end, `out` mm, clear of the start and end dots). */
+function directionDots(o: ObjectItem, out = 0): [Pt, Pt] | null {
+  return fillDirection(o) ?? columnTips(o, out);
+}
+
+/** How far past a satin's ends its purple dots sit: a few pixels at any zoom. */
+const tipsOut = (scene: Scene) => (ENDS_PX * 5) / scene.view.scale;
+
+/** Where a dragged start or end dot goes: it follows the edge nearest the pointer, like a magnet.
+ *  A fill starts on its outside edge and can end on any edge (a hole's too); a border or a satin
+ *  anywhere along it. An open line's dots move its end points. */
+function snapEnd(o: ObjectItem, which: "start" | "end", p: Pt): Pt {
+  if (o.kind === "fill") {
+    const g = o.geometry as { outline: PathNode[]; holes?: PathNode[][] };
+    const rings = [flatten(g.outline, true), ...(which === "end" ? (g.holes ?? []).map((h) => flatten(h, true)) : [])];
+    return nearestOnRings(rings, p);
+  }
+  const geo = o.geometry as { nodes?: PathNode[]; closed?: boolean };
+  if (geo.nodes && geo.closed) return nearestOnLine(flatten(geo.nodes, true), p, true);
+  // A satin starts and stops anywhere along it: a ribbon on its middle line, a column on its edge.
+  if (o.kind === "satin" && geo.nodes) return nearestOnLine(flatten(geo.nodes), p, false);
+  if (o.kind === "satin") return nearestOnLine(columnRing(o.geometry as { rail_a: PathNode[]; rail_b: PathNode[] }), p, true);
+  return p;
+}
+
+/** Where a dragged purple dot goes: along the fill's outline, or round the satin column's outline. */
+function snapDirection(o: ObjectItem, p: Pt): Pt {
+  if (o.kind === "fill") return nearestOnLine(fillRing(o), p, true);
+  return nearestOnLine(columnRing(o.geometry as { rail_a: PathNode[]; rail_b: PathNode[] }), p, true);
+}
+
+/** Where a drawn shape's stitching starts and ends (its first and last needle drop), mm. */
+function stitchEnds(scene: Scene, o: ObjectItem): { start: Pt; end: Pt } | null {
   const d = scene.design;
-  const idx = st.history.present!.layout.items.indexOf(o);
-  if (d?.records.item) {
-    const { x, y, kind, item } = d.records;
-    let first = -1;
-    let last = -1;
-    for (let i = 0; i < kind.length; i++) {
-      if (item[i] === idx && kind[i] === Kind.Stitch) {
-        if (first < 0) first = i;
-        last = i;
-      }
-    }
-    if (first >= 0) {
-      g.circle(x[first], y[first], 4 * px).fill(ENTRY_COLOR).stroke({ width: px, color: 0xffffff });
-      g.circle(x[last], y[last], 4 * px).fill(EXIT_COLOR).stroke({ width: px, color: 0xffffff });
+  const idx = useStore.getState().history.present?.layout.items.indexOf(o) ?? -1;
+  if (!d?.records.item || idx < 0) return null;
+  const { x, y, kind, item } = d.records;
+  let first = -1;
+  let last = -1;
+  for (let i = 0; i < kind.length; i++) {
+    if (item[i] === idx && kind[i] === Kind.Stitch) {
+      if (first < 0) first = i;
+      last = i;
     }
   }
+  return first >= 0 ? { start: [x[first], y[first]], end: [x[last], y[last]] } : null;
 }
 
 /** Point marker: curve = circle, line = square, cusp = diamond. */
@@ -539,13 +801,11 @@ function drawPen(g: Graphics, pen: Pen, cursor: Pt | null, px: number) {
   } else if (pen.kind === "run") {
     line(flatten(withCursor(pen.a)), 1.5 * px, 1);
   } else {
-    const nextOnA = pen.a.length === pen.b.length;
-    line(flatten(nextOnA ? withCursor(pen.a) : pen.a), 1.5 * px, 1);
-    line(flatten(nextOnA ? pen.b : withCursor(pen.b)), 1.5 * px, 1);
-    const ra = nextOnA ? pen.a : pen.a;
-    const rb = nextOnA ? pen.b : withCursor(pen.b);
-    ra.forEach((n, i) => rb[i] && g.moveTo(n[0], n[1]).lineTo(rb[i][0], rb[i][1]));
-    g.stroke({ width: 3 * px, color, alpha: 0.35 });
+    // A satin ribbon: its centre line, and a band as wide as the satin will be.
+    const poly = pen.closed ? flatten(pen.a, true) : flatten(withCursor(pen.a));
+    if (pen.closed && poly.length) poly.push(poly[0]);
+    line(poly, useStore.getState().satinWidth, 0.3);
+    line(poly, 1.5 * px, 1);
   }
   const r = 3 * px;
   for (const n of [...pen.a, ...pen.b]) nodeMark(g, n, r);
@@ -581,6 +841,130 @@ function drawGhost(g: Graphics, pen: Pen, ghost: Ghost, px: number) {
   ring(ghost.point, C.ghost);
 }
 
+const KNIFE_COLOR = 0xd23a2a;
+const GUIDE_COLOR = 0x2f8fd8;
+
+/** A guide being dragged (from a ruler, or an existing one); null when none. */
+let liveGuide: { index: number | null; axis: "x" | "y"; at: number } | null = null;
+/** Stitch editing in progress: a box being drawn, or the selected stitches being moved. */
+let liveStitches: { mode: "box" | "move"; from: Pt; to: Pt } | null = null;
+/** Shift was held when the stitch-edit box started (add to the selection). */
+let liveShift = false;
+
+function drawGuides(scene: Scene, g: Graphics, px: number) {
+  const guides = [...(useStore.getState().history.present?.layout.guides ?? [])];
+  if (liveGuide) {
+    if (liveGuide.index === null) guides.push({ axis: liveGuide.axis, at: liveGuide.at });
+    else guides[liveGuide.index] = { axis: liveGuide.axis, at: liveGuide.at };
+  }
+  if (!guides.length) return;
+  const s = scene.view.scale;
+  const x0 = -scene.view.x / s;
+  const y0 = -scene.view.y / s;
+  const x1 = x0 + scene.app.screen.width / s;
+  const y1 = y0 + scene.app.screen.height / s;
+  for (const gd of guides) {
+    if (gd.axis === "x") g.moveTo(gd.at, y0).lineTo(gd.at, y1);
+    else g.moveTo(x0, gd.at).lineTo(x1, gd.at);
+  }
+  g.stroke({ width: 1.2 * px, color: GUIDE_COLOR, alpha: 0.85 });
+}
+
+/** Every shape "whole picture" found: fills shaded in their color, ribbons as bands, lines thin. */
+function drawWholePicture(g: Graphics, a: NonNullable<ReturnType<typeof useStore.getState>["autoAll"]>, px: number) {
+  const alpha = a.busy ? 0.35 : 1;
+  for (const sh of a.shapes) {
+    const color = parseInt(sh.color.slice(1), 16);
+    if (sh.kind === "fill") {
+      const outer = flatten(sh.outline, true);
+      if (outer.length > 2) g.poly(outer.flat()).fill({ color, alpha: 0.55 * alpha }).stroke({ width: 1.5 * px, color: C.ghost, alpha });
+      continue;
+    }
+    const poly = flatten(sh.nodes, sh.closed);
+    if (poly.length < 2) continue;
+    const path = () => {
+      g.moveTo(poly[0][0], poly[0][1]);
+      for (const q of poly.slice(1)) g.lineTo(q[0], q[1]);
+      if (sh.closed) g.closePath();
+    };
+    path();
+    g.stroke({ width: sh.kind === "satin" ? sh.width_mm : 1.5 * px, color, alpha: 0.8 * alpha });
+  }
+}
+
+/** The stitch file's needle points while editing stitches: selected ones filled (and moved along). */
+function drawStitchEdit(scene: Scene, g: Graphics, px: number) {
+  const st = useStore.getState();
+  const e = st.stitchEdit!;
+  const d = scene.design;
+  const idx = st.history.present?.layout.items.findIndex((it) => it.id === e.id) ?? -1;
+  if (!d?.records.item || !d.records.src || idx < 0) return;
+  const sel = new Set(e.selected);
+  const { x, y, kind, item, src } = d.records;
+  const off = liveStitches?.mode === "move" ? [liveStitches.to[0] - liveStitches.from[0], liveStitches.to[1] - liveStitches.from[1]] : [0, 0];
+  const r = 2.2 * px;
+  // Only the points on screen, and one per few pixels: a 30,000-stitch file stays smooth to drag.
+  const s = scene.view.scale;
+  const [vx0, vy0] = [-scene.view.x / s - r, -scene.view.y / s - r];
+  const [vx1, vy1] = [vx0 + scene.app.screen.width / s + 2 * r, vy0 + scene.app.screen.height / s + 2 * r];
+  const cell = 3 * px;
+  const seen = [new Set<number>(), new Set<number>()];
+  const shown = (px0: number, py0: number, selected: boolean) => {
+    if (px0 < vx0 || px0 > vx1 || py0 < vy0 || py0 > vy1) return false;
+    const key = Math.floor((px0 - vx0) / cell) * 100003 + Math.floor((py0 - vy0) / cell);
+    const set = seen[selected ? 1 : 0];
+    if (set.has(key)) return false;
+    set.add(key);
+    return true;
+  };
+  for (let i = 0; i < kind.length; i++) {
+    if (item[i] !== idx || kind[i] !== Kind.Stitch || sel.has(src[i]) || !shown(x[i], y[i], false)) continue;
+    g.rect(x[i] - r, y[i] - r, 2 * r, 2 * r);
+  }
+  g.fill({ color: 0xffffff, alpha: 0.9 }).stroke({ width: 0.8 * px, color: C.select, alpha: 0.7 });
+  for (let i = 0; i < kind.length; i++) {
+    if (item[i] !== idx || kind[i] !== Kind.Stitch || !sel.has(src[i]) || !shown(x[i] + off[0], y[i] + off[1], true)) continue;
+    g.circle(x[i] + off[0], y[i] + off[1], r * 1.4);
+  }
+  g.fill({ color: KNIFE_COLOR }).stroke({ width: 0.8 * px, color: 0xffffff });
+  if (liveStitches?.mode === "box") {
+    const [a, b] = [liveStitches.from, liveStitches.to];
+    g.rect(Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1])).stroke({ width: px, color: C.select });
+  }
+}
+
+/** Auto-trace's guess: the outline (or ribbon) it found, with the points it would place. */
+function drawGuess(g: Graphics, a: AutoTrace, px: number) {
+  const guess = a.guesses[a.index];
+  if (!guess) return;
+  const alpha = a.busy ? 0.35 : 1;
+  const lists = guessLists(guess);
+  if (guess.kind === "fill") {
+    for (const part of [guess.outline, ...(guess.parts ?? []).map((p) => p.outline)]) {
+      const outer = flatten(part, true);
+      if (outer.length > 2) g.poly(outer.flat()).fill({ color: C.ghost, alpha: 0.18 * alpha });
+    }
+  }
+  for (const l of lists) {
+    const poly = flatten(l.nodes, l.closed);
+    if (poly.length < 2) continue;
+    const path = () => {
+      g.moveTo(poly[0][0], poly[0][1]);
+      for (const p of poly.slice(1)) g.lineTo(p[0], p[1]);
+      if (l.closed) g.closePath();
+    };
+    if (guess.kind === "satin") {
+      path();
+      g.stroke({ width: guess.width_mm, color: C.ghost, alpha: 0.3 * alpha });
+    }
+    path();
+    g.stroke({ width: 2 * px, color: C.ghost, alpha });
+  }
+  const r = 3.5 * px;
+  for (const l of lists) for (const n of l.nodes) nodeMark(g, n, r);
+  g.fill({ color: 0xffffff, alpha }).stroke({ width: 1.5 * px, color: C.ghost, alpha });
+}
+
 // ---------------------------------------------------------------- scene
 
 function buildScene(app: Application, d: Design | null, prev: View | null): Scene {
@@ -591,7 +975,8 @@ function buildScene(app: Application, d: Design | null, prev: View | null): Scen
   const pictures = new Container();
   const hoop = new Graphics();
   const stitches = new Container();
-  world.addChild(pictures, hoop, stitches);
+  const product = new Graphics();
+  world.addChild(product, pictures, hoop, stitches);
   const chunks = d ? chunkBlocks(d) : [];
   const realistic = useStore.getState().realistic;
   const real: (ThreadChunk | null)[] = [];
@@ -618,13 +1003,17 @@ function buildScene(app: Application, d: Design | null, prev: View | null): Scen
   const heat = new Container();
   const split = new Container();
   world.addChild(heat, jumps, needle, split, overlay);
+  const rulers = new Graphics();
+  const rulerLabels = new Container();
+  app.stage.addChild(rulers, rulerLabels);
   const view = prev ?? fitView(fitBounds(d), app.screen.width, app.screen.height);
   const scene: Scene = {
     app, grid, world, pictures, hoop, stitches, chunks, full, real, points, partial, jumps, needle, overlay, heat, split, design: d, view,
-    autoFit: prev === null,
+    autoFit: prev === null, product, rulers, rulerLabels,
   };
   applyView(scene);
   drawPictures(scene);
+  drawProduct(scene);
   return scene;
 }
 
@@ -632,6 +1021,7 @@ function buildScene(app: Application, d: Design | null, prev: View | null): Scen
 function refresh(scene: Scene) {
   const s = useStore.getState();
   scene.stitches.visible = s.showStitches;
+  scene.stitches.alpha = restingAlpha();
   scene.pictures.visible = s.showPictures;
   drawPoints(scene, s.showPoints);
   updatePlayhead(scene, s.stitchIdx, s.playhead, s.showJumps);
@@ -676,6 +1066,14 @@ function updatePlayhead(scene: Scene, stitchIdx: Int32Array, playhead: number, s
   }
 }
 
+/** After a pan: needle points and stitch-edit points are drawn only near the screen, so bring
+ *  in the ones that have come into view. */
+function afterPan(scene: Scene) {
+  const st = useStore.getState();
+  if (st.showPoints) drawPoints(scene, true);
+  if (st.stitchEdit) drawOverlay(scene);
+}
+
 /** Needle points (P): a dot where the needle goes down, in a colour that shows on any thread. */
 function drawPoints(scene: Scene, show: boolean) {
   const g = scene.points;
@@ -683,9 +1081,26 @@ function drawPoints(scene: Scene, show: boolean) {
   const d = scene.design;
   if (!show || !d) return;
   const { x, y, kind } = d.records;
-  const r = Math.max(0.08, 1.6 / scene.view.scale);
-  for (let i = 0; i < kind.length; i++) if (kind[i] === Kind.Stitch) g.circle(x[i], y[i], r);
-  g.fill({ color: 0xffffff, alpha: 0.9 }).stroke({ width: 0.6 / scene.view.scale, color: 0x121114, alpha: 0.9 });
+  const s = scene.view.scale;
+  const r = Math.max(0.08, 1.6 / s);
+  // A 40,000-stitch design: only points near the screen (one screen's width around it, so a pan
+  // still shows them; redrawn when the pan ends), and one per couple of pixels.
+  const [w, h] = [scene.app.screen.width / s, scene.app.screen.height / s];
+  const [vx0, vy0] = [-scene.view.x / s - w, -scene.view.y / s - h];
+  const [vx1, vy1] = [vx0 + 3 * w, vy0 + 3 * h];
+  const cell = Math.max(r, 2 / s);
+  const seen = new Set<number>();
+  for (let i = 0; i < kind.length; i++) {
+    if (kind[i] !== Kind.Stitch) continue;
+    const px = x[i];
+    const py = y[i];
+    if (px < vx0 || px > vx1 || py < vy0 || py > vy1) continue;
+    const key = Math.floor((px - vx0) / cell) * 1000003 + Math.floor((py - vy0) / cell);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    g.circle(px, py, r);
+  }
+  g.fill({ color: 0xffffff, alpha: 0.9 }).stroke({ width: 0.6 / s, color: 0x121114, alpha: 0.9 });
 }
 
 /** A copy of one item's stitches that follows the pointer while dragging; everything else dims. */
@@ -698,7 +1113,7 @@ function startGhost(scene: Scene, f: Frame): Container | null {
   const d = scene.design;
   if (d) for (const i of f.indices) for (const b of d.blocks) drawStitches(g, d, b.start, b.end, d.threads[b.thread]?.color ?? "#808080", i);
   ghost.addChild(g);
-  scene.stitches.alpha = DIM_ALPHA;
+  scene.stitches.alpha = Math.min(DIM_ALPHA, restingAlpha());
   scene.overlay.visible = false;
   scene.world.addChild(ghost);
   return ghost;
@@ -706,7 +1121,7 @@ function startGhost(scene: Scene, f: Frame): Container | null {
 
 function endGhost(scene: Scene, ghost: Container | null) {
   if (ghost && !ghost.destroyed) ghost.destroy({ children: true });
-  scene.stitches.alpha = 1;
+  scene.stitches.alpha = restingAlpha();
   scene.overlay.visible = true;
   drawPictures(scene);
 }
@@ -736,10 +1151,16 @@ export function StitchCanvas() {
   const splitPreview = useStore((s) => s.splitPreview);
   const showPoints = useStore((s) => s.showPoints);
   const showStitches = useStore((s) => s.showStitches);
+  const seeThrough = useStore((s) => s.seeThrough);
+  const edgeFit = useStore((s) => s.edgeFit);
   const showPictures = useStore((s) => s.showPictures);
   const crosshair = useStore((s) => s.crosshair);
   const ruler = useStore((s) => s.ruler);
   const angleFor = useStore((s) => s.angleFor);
+  const spaceHeld = useStore((s) => s.spaceDown);
+  useEffect(() => {
+    host.current?.classList.toggle("space-pan", spaceHeld);
+  }, [spaceHeld]);
   const selectedId = useStore((s) => s.selectedId);
   const extraIds = useStore((s) => s.extraIds);
   const selectedNode = useStore((s) => s.selectedNode);
@@ -748,6 +1169,13 @@ export function StitchCanvas() {
   const pen = useStore((s) => s.pen);
   const measure = useStore((s) => s.measure);
   const ghost = useStore((s) => s.ghost);
+  const autoTrace = useStore((s) => s.autoTrace);
+  const autoAll = useStore((s) => s.autoAll);
+  const knife = useStore((s) => s.knife);
+  const stitchEdit = useStore((s) => s.stitchEdit);
+  const guides = useStore((s) => s.history.present?.layout.guides);
+  const preview = useStore((s) => s.preview);
+  const showRulers = useStore((s) => s.showRulers);
 
   // Create the Pixi app once.
   useEffect(() => {
@@ -842,7 +1270,17 @@ export function StitchCanvas() {
     const scene = sceneRef.current;
     if (scene) drawOverlay(scene);
     if (host.current) host.current.classList.toggle("drawing", tool !== "select" || measure !== null || !!useStore.getState().ruler || !!useStore.getState().angleFor);
-  }, [selectedId, extraIds, selectedNode, tool, pen, images, measure, ghost]);
+  }, [selectedId, extraIds, selectedNode, tool, pen, images, measure, ghost, autoTrace, autoAll, knife, stitchEdit, guides, edgeFit]);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (scene) drawProduct(scene);
+  }, [preview]);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (scene) drawRulers(scene);
+  }, [showRulers, units, canvasDark, hasDoc]);
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -874,7 +1312,7 @@ export function StitchCanvas() {
     if (scene) refresh(scene);
     const st = useStore.getState();
     if (host.current) host.current.classList.toggle("drawing", st.tool !== "select" || !!st.measure || !!ruler || !!angleFor);
-  }, [showPoints, showStitches, showPictures, crosshair, ruler, angleFor]);
+  }, [showPoints, showStitches, showPictures, crosshair, ruler, angleFor, seeThrough]);
 
   // A quality check was clicked: bring its spot to the middle (zooming in if far out).
   useEffect(() => {
@@ -895,7 +1333,10 @@ export function StitchCanvas() {
     if (!scene || !zoomRequest.n) return;
     const { width, height } = scene.app.screen;
     const v = scene.view;
-    if (zoomRequest.kind === "box" && zoomRequest.box) {
+    if (zoomRequest.kind === "pan" && zoomRequest.pan) {
+      // Arrow keys while drawing: the view moves, the design stays put.
+      scene.view = { ...v, x: v.x - zoomRequest.pan[0] * v.scale, y: v.y - zoomRequest.pan[1] * v.scale };
+    } else if (zoomRequest.kind === "box" && zoomRequest.box) {
       // S (selection) and 0 (hoop): fit that area.
       scene.view = fitView(zoomRequest.box, width, height, 48);
     } else {
@@ -917,6 +1358,37 @@ export function StitchCanvas() {
     const el = host.current!;
     let drag: Drag | null = null;
     let dragPointer = -1;
+
+    // Auto-pan: while drawing, a pointer within EDGE_PX of the edge scrolls the view that way,
+    // faster the closer it is.
+    const EDGE_PX = 28;
+    const EDGE_SPEED = 14; // px per frame at the very edge
+    let edge: [number, number] = [0, 0];
+    let edgeFrame = 0;
+    let wheelFrame = 0;
+    const stepAutoPan = () => {
+      const scene = sceneRef.current;
+      if (!scene || (!edge[0] && !edge[1]) || !useStore.getState().pen) {
+        edgeFrame = 0;
+        return;
+      }
+      scene.view = { ...scene.view, x: scene.view.x - edge[0], y: scene.view.y - edge[1] };
+      scene.autoFit = false;
+      applyView(scene);
+      refresh(scene);
+      edgeFrame = requestAnimationFrame(stepAutoPan);
+    };
+    const autoPan = (sx: number, sy: number) => {
+      const r = el.getBoundingClientRect();
+      const pull = (d: number) => (d < EDGE_PX ? EDGE_SPEED * (1 - Math.max(0, d) / EDGE_PX) : 0);
+      edge = [pull(r.width - sx) - pull(sx), pull(r.height - sy) - pull(sy)];
+      if ((edge[0] || edge[1]) && !edgeFrame) edgeFrame = requestAnimationFrame(stepAutoPan);
+    };
+    const stopAutoPan = () => {
+      edge = [0, 0];
+      if (edgeFrame) cancelAnimationFrame(edgeFrame);
+      edgeFrame = 0;
+    };
     let releaseEsc: (() => void) | null = null;
 
     /** Esc during a drag lets go: the shape, point or picture goes back where it was. */
@@ -924,11 +1396,29 @@ export function StitchCanvas() {
       const scene = sceneRef.current;
       const d = drag;
       drag = null;
+      // Every way out of a drag (Esc, the window losing focus, a cancelled touch) gives back its
+      // Esc booking, so the next Esc press does something visible. (Releasing twice is harmless.)
+      const release = releaseEsc;
       releaseEsc = null;
+      release?.();
       if (el.hasPointerCapture(dragPointer)) el.releasePointerCapture(dragPointer);
       el.classList.remove("panning");
-      if (!scene || !d || d.kind === "pan") return;
-      if (d.kind === "node") return drawOverlay(scene);
+      liveGuide = null;
+      liveStitches = null;
+      refreshCursor();
+      if (!scene || !d) return;
+      if (d.kind === "pan") return afterPan(scene);
+      if (d.kind === "guide" || d.kind === "stitches") return drawOverlay(scene);
+      if (d.kind === "ends" || d.kind === "dir" || d.kind === "letter") {
+        liveEnd = null;
+        liveDir = null;
+        liveLetter = null;
+        return drawOverlay(scene);
+      }
+      if (d.kind === "node") {
+        scene.stitches.alpha = restingAlpha();
+        return drawOverlay(scene);
+      }
       endGhost(scene, d.ghost);
     };
 
@@ -955,11 +1445,19 @@ export function StitchCanvas() {
         const a = Math.round(Math.atan2(dy, dx) / (Math.PI / 12)) * (Math.PI / 12);
         return [last[0] + Math.cos(a) * len, last[1] + Math.sin(a) * len];
       }
+      const reach = SNAP_PX / scene.view.scale;
+      // Points near a guide land on it (also with Snap to grid on: the guide wins on its axis).
+      let gx: number | null = null;
+      let gy: number | null = null;
+      for (const gd of st.history.present?.layout.guides ?? []) {
+        if (gd.axis === "x" && Math.abs(p[0] - gd.at) < reach && (gx === null || Math.abs(p[0] - gd.at) < Math.abs(p[0] - gx))) gx = gd.at;
+        if (gd.axis === "y" && Math.abs(p[1] - gd.at) < reach && (gy === null || Math.abs(p[1] - gd.at) < Math.abs(p[1] - gy))) gy = gd.at;
+      }
       if (st.snapGrid) {
         const step = gridSpacing(scene.view.scale, st.units).minorMm;
-        return [Math.round(p[0] / step) * step, Math.round(p[1] / step) * step];
+        return [gx ?? Math.round(p[0] / step) * step, gy ?? Math.round(p[1] / step) * step];
       }
-      const reach = SNAP_PX / scene.view.scale;
+      if (gx !== null || gy !== null) return [gx ?? p[0], gy ?? p[1]];
       let best: Pt | null = null;
       let bestD = reach;
       for (const it of st.history.present?.layout.items ?? []) {
@@ -978,9 +1476,79 @@ export function StitchCanvas() {
       return best ?? p;
     };
 
+    /** The guide under the pointer (within a few pixels), if any. */
+    const guideAt = (scene: Scene, sx: number, sy: number): number | null => {
+      const guides = useStore.getState().history.present?.layout.guides ?? [];
+      const p = toWorld(scene, sx, sy);
+      const reach = 4 / scene.view.scale;
+      const i = guides.findIndex((gd) => Math.abs((gd.axis === "x" ? p[0] : p[1]) - gd.at) <= reach);
+      return i >= 0 ? i : null;
+    };
+    /** Stitch editing: the file index of the stitch under the pointer (within a few pixels). */
+    const stitchAt = (scene: Scene, sx: number, sy: number): number | null => {
+      const st = useStore.getState();
+      const d = scene.design;
+      const idx = st.history.present?.layout.items.findIndex((it) => it.id === st.stitchEdit?.id) ?? -1;
+      if (!d?.records.item || !d.records.src || idx < 0) return null;
+      const p = toWorld(scene, sx, sy);
+      const reach = 6 / scene.view.scale;
+      let best: number | null = null;
+      let bestD = reach;
+      const { x, y, kind, item, src } = d.records;
+      for (let i = 0; i < kind.length; i++) {
+        if (item[i] !== idx || kind[i] !== Kind.Stitch) continue;
+        const dd = Math.hypot(x[i] - p[0], y[i] - p[1]);
+        if (dd < bestD) {
+          bestD = dd;
+          best = src[i];
+        }
+      }
+      return best;
+    };
+    /** The selected shape's start or end dot under the pointer (applique and lettering have none
+     *  to move). The end dot wins where both sit together. */
+    const endAt = (scene: Scene, sx: number, sy: number): { id: string; which: "start" | "end"; at: Pt } | null => {
+      const st = useStore.getState();
+      if (st.tool !== "select" || st.extraIds.length) return null;
+      const o = selectedObject();
+      if (!o || o.locked || o.kind === "applique") return null;
+      const ends = stitchEnds(scene, o);
+      if (!ends) return null;
+      // Contour, stipple and cross-stitch fills end where their pattern does: their red dot shows it
+      // but can't be moved.
+      const fixedEnd = o.kind === "fill" && ["contour", "stipple", "cross"].includes(String((o.params as { pattern?: string }).pattern));
+      for (const which of ["end", "start"] as const) {
+        if (which === "end" && fixedEnd) continue;
+        if (near(scene, ends[which], sx, sy, ENDS_PX + 3)) return { id: o.id, which, at: ends[which] };
+      }
+      return null;
+    };
+
+    /** A letter's start or end dot under the pointer (the selected lettering's). */
+    const letterAt = (scene: Scene, sx: number, sy: number): { id: string; index: number; which: "start" | "end"; at: Pt } | null => {
+      const sel = selectedLetters(scene);
+      if (!sel || handleAt(scene, sx, sy)) return null;
+      // The end wins where a letter's end and the next one's start meet.
+      for (const which of ["end", "start"] as const)
+        for (const part of sel.parts) if (near(scene, part[which], sx, sy, LETTER_DOT_PX + 3)) return { id: sel.id, index: part.index, which, at: part[which] };
+      return null;
+    };
+
+    /** The selected shape's purple direction dot under the pointer. */
+    const dirAt = (scene: Scene, sx: number, sy: number): { id: string; which: 0 | 1; at: Pt } | null => {
+      const st = useStore.getState();
+      if (st.tool !== "select" || st.extraIds.length) return null;
+      const o = selectedObject();
+      if (!o || o.locked || handleAt(scene, sx, sy)) return null;
+      const dots = directionDots(o, tipsOut(scene));
+      if (!dots) return null;
+      for (const which of [0, 1] as const) if (near(scene, dots[which], sx, sy, ENDS_PX + 3)) return { id: o.id, which, at: dots[which] };
+      return null;
+    };
+
     const nodeAt = (scene: Scene, sx: number, sy: number) => {
       const o = useStore.getState().tool === "select" ? selectedObject() : null;
-      if (!o) return null;
+      if (!o || o.locked) return null;
       for (const l of nodeLists(o)) {
         for (let i = l.nodes.length - 1; i >= 0; i--) {
           if (near(scene, [l.nodes[i][0], l.nodes[i][1]], sx, sy, NODE_PX)) return { o, list: l.key, index: i };
@@ -989,15 +1557,94 @@ export function StitchCanvas() {
       return null;
     };
 
-    const handleAt = (scene: Scene, sx: number, sy: number): "scale" | "rotate" | null => {
+    /** The frame handle under the pointer: the turn knob, a corner (resize) or a side (stretch). */
+    const handleAt = (scene: Scene, sx: number, sy: number): { drag: "scale" | "rotate"; at: Pt; side?: "n" | "e" | "s" | "w" } | null => {
       const f = selectedFrame(scene);
       if (!f || f.locked) return null;
-      if (near(scene, f.knob, sx, sy, HANDLE_PX)) return "rotate";
-      if (f.corners.some((c) => near(scene, c, sx, sy, HANDLE_PX))) return "scale";
+      if (near(scene, f.knob, sx, sy, HANDLE_PX)) return { drag: "rotate", at: f.knob };
+      const corner = f.corners.find((c) => near(scene, c, sx, sy, HANDLE_PX));
+      if (corner) return { drag: "scale", at: corner };
+      if (sidesFit(f, 1 / scene.view.scale)) {
+        const mids = sideMids(f.corners);
+        for (const side of ["n", "e", "s", "w"] as const) if (near(scene, mids[side], sx, sy, HANDLE_PX)) return { drag: "scale", at: mids[side], side };
+      }
       return null;
     };
 
     /** What's under the pointer: a layout item (topmost) or, below everything, an unlocked picture. */
+    // ---------------------------------------------------------------- the mouse pointer
+    // One place decides it, from what a click or drag would do right here (see cursors.ts). It's
+    // worked out again whenever the pointer moves, a key is pressed or let go, or the app changes.
+    let pointerAt: { sx: number; sy: number; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean } | null = null;
+    let shownCursor: CursorName | null = null;
+
+    const cursorHere = (scene: Scene, sx: number, sy: number, keys: { ctrlKey: boolean; metaKey: boolean; shiftKey: boolean }): CursorName => {
+      const st = useStore.getState();
+      if (drag) {
+        switch (drag.kind) {
+          case "pan":
+            return "grabbing";
+          case "move":
+            return "move";
+          case "scale":
+            return drag.look ?? "resize";
+          case "rotate":
+            return "rotate";
+          case "node":
+          case "ends":
+          case "dir":
+          case "letter":
+            return "point";
+          case "guide":
+            return liveGuide?.axis === "x" ? "guide-x" : "guide-y";
+          case "stitches":
+            return liveStitches?.mode === "move" ? "move" : "stitch";
+        }
+      }
+      if (st.spaceDown) return "grab";
+      if (st.autoTrace?.busy || st.autoAll?.busy) return "busy";
+      // The same order as a click (startPointer): rulers, then the tool or mode in use, then Select.
+      if (st.showRulers && (sx < RULER_PX || sy < RULER_PX)) return sx < RULER_PX && sy < RULER_PX ? "arrow" : sy < RULER_PX ? "guide-y" : "guide-x";
+      if (st.knife) return "knife";
+      if (st.stitchEdit) {
+        const i = stitchAt(scene, sx, sy);
+        return i === null ? "stitch" : st.stitchEdit.selected.includes(i) ? "move" : "point";
+      }
+      if (st.ruler || st.measure) return "measure";
+      if (st.angleFor) return "angle";
+      if (st.tool === "text") return "text";
+      if (st.tool === "autotrace") return "autotrace";
+      if (st.tool === "run" || st.tool === "satin" || st.tool === "fill") return `draw-${st.tool}-${pointKind(keys)}`;
+      if (letterAt(scene, sx, sy) || endAt(scene, sx, sy) || dirAt(scene, sx, sy)) return "point";
+      const node = nodeAt(scene, sx, sy);
+      if (node) return "point";
+      const gi = guideAt(scene, sx, sy);
+      if (gi !== null) return st.history.present?.layout.guides?.[gi]?.axis === "x" ? "guide-x" : "guide-y";
+      const h = handleAt(scene, sx, sy);
+      if (h) return h.drag === "rotate" ? "rotate" : resizeCursorFor(h.at, selectedFrame(scene)!.center);
+      if (pick(scene, toWorld(scene, sx, sy)) || insideGroupFrame(scene, toWorld(scene, sx, sy))) return "move";
+      return st.crosshair ? "precise" : "arrow";
+    };
+
+    const refreshCursor = () => {
+      const scene = sceneRef.current;
+      if (!scene || !pointerAt) return;
+      const name = cursorHere(scene, pointerAt.sx, pointerAt.sy, pointerAt);
+      if (name === shownCursor) return;
+      shownCursor = name;
+      el.style.cursor = cursorCss(name);
+    };
+    const onKeyForCursor = (e: KeyboardEvent) => {
+      if (!pointerAt) return;
+      pointerAt = { ...pointerAt, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey };
+      refreshCursor();
+    };
+    // Only changes that can change the pointer (not, say, every frame of the stitch-out player).
+    const CURSOR_STATE = ["tool", "knife", "stitchEdit", "ruler", "measure", "angleFor", "spaceDown", "autoTrace", "autoAll", "crosshair", "showRulers", "selectedId", "extraIds", "selectedNode", "design"] as const;
+    const unsubscribeCursor = useStore.subscribe((now, before) => {
+      if (CURSOR_STATE.some((k) => now[k] !== before[k])) refreshCursor();
+    });
+
     const pick = (scene: Scene, p: Pt): { id: string } | null => {
       const doc = currentDoc();
       if (!doc) return null;
@@ -1005,7 +1652,8 @@ export function StitchCanvas() {
         const hit = hitTest(scene.design, p[0], p[1], 4 / scene.view.scale);
         if (hit !== null && doc.layout.items[hit]) return { id: doc.layout.items[hit].id };
       }
-      for (let i = doc.images.length - 1; i >= 0; i--) {
+      // Pictures hidden (B) can't be clicked or dragged.
+      for (let i = useStore.getState().showPictures ? doc.images.length - 1 : -1; i >= 0; i--) {
         const im = doc.images[i];
         if (im.locked || !im.visible) continue;
         const local = rotatePt(p, [im.x, im.y], (-im.rotate * Math.PI) / 180);
@@ -1023,15 +1671,39 @@ export function StitchCanvas() {
       scene.view = zoomAt(scene.view, factor, sx, sy);
       scene.autoFit = false;
       applyView(scene);
-      refresh(scene);
+      // A burst of wheel events redraws the zoom-dependent parts (needle points, trims, handles)
+      // once per frame, not once per event: smooth on big designs.
+      if (!wheelFrame)
+        wheelFrame = requestAnimationFrame(() => {
+          wheelFrame = 0;
+          if (sceneRef.current) refresh(sceneRef.current);
+        });
     };
 
     const onDown = (e: PointerEvent) => {
+      // A drag whose button came up somewhere we didn't hear about is over: drop it, so its Esc
+      // booking can't swallow the next Esc press.
+      // A second finger or pen while dragging: the drag goes back, and the new pointer does nothing.
+      if (drag || releaseEsc) {
+        const other = drag !== null && e.pointerId !== dragPointer;
+        cancelDrag();
+        if (other) return;
+      }
+      // Space held: the hand tool. Dragging only moves the view; nothing is selected, drawn or moved.
+      if (useStore.getState().spaceDown && (e.button === 0 || e.button === 1)) {
+        el.setPointerCapture(e.pointerId);
+        drag = { kind: "pan", x: e.clientX, y: e.clientY, moved: false, deselect: false };
+        dragPointer = e.pointerId;
+        releaseEsc ??= holdEscape(cancelDrag);
+        refreshCursor();
+        return;
+      }
       startPointer(e);
       if (drag && !releaseEsc) {
         dragPointer = e.pointerId;
         releaseEsc = holdEscape(cancelDrag);
       }
+      refreshCursor();
     };
 
     const startPointer = (e: PointerEvent) => {
@@ -1042,6 +1714,46 @@ export function StitchCanvas() {
       if (e.button === 1) {
         el.setPointerCapture(e.pointerId);
         drag = { kind: "pan", x: e.clientX, y: e.clientY, moved: false, deselect: false };
+        return;
+      }
+      // Drag a guide out of a ruler.
+      if (st.showRulers && e.button === 0 && (sx < RULER_PX || sy < RULER_PX) && !(sx < RULER_PX && sy < RULER_PX)) {
+        const p = toWorld(scene, sx, sy);
+        const axis = sy < RULER_PX ? "y" : "x";
+        liveGuide = { index: null, axis, at: axis === "x" ? p[0] : p[1] };
+        drag = { kind: "guide", startX: sx, startY: sy, moved: false };
+        el.setPointerCapture(e.pointerId);
+        return;
+      }
+      // The knife: two clicks make the cut.
+      if (st.knife && e.button === 0) {
+        // Snapped like any drawn point (shape points, guides, the grid), so a cut can start exactly on a corner.
+        const p = snapped(scene, toWorld(scene, sx, sy), e);
+        if (st.knife.points.length) void finishKnife(st.knife.points[0], p);
+        else st.setKnife({ ...st.knife, points: [p] });
+        return;
+      }
+      // Stitch editing: pick stitches (Shift adds), drag them, or drag a box round some.
+      if (st.stitchEdit && e.button === 0) {
+        const hitIndex = stitchAt(scene, sx, sy);
+        const e2 = st.stitchEdit;
+        const p = toWorld(scene, sx, sy);
+        if (hitIndex !== null && e2.selected.includes(hitIndex) && !e.shiftKey) {
+          // Dragging a selected stitch moves all the selected ones.
+          liveStitches = { mode: "move", from: p, to: p };
+          drag = { kind: "stitches", startX: sx, startY: sy, moved: false, shift: false };
+        } else {
+          // A click picks the stitch under it (Shift: adds or takes it away); a drag draws a box.
+          if (hitIndex !== null) {
+            const already = e2.selected.includes(hitIndex);
+            st.setStitchEdit({ ...e2, selected: e.shiftKey ? (already ? e2.selected.filter((i) => i !== hitIndex) : [...e2.selected, hitIndex]) : [hitIndex] });
+          }
+          liveStitches = { mode: "box", from: p, to: p };
+          drag = { kind: "stitches", startX: sx, startY: sy, moved: false, shift: e.shiftKey || hitIndex !== null };
+          liveShift = e.shiftKey;
+        }
+        el.setPointerCapture(e.pointerId);
+        drawOverlay(scene);
         return;
       }
       // Measuring a picture: collect two clicks (the panel asks for the real distance).
@@ -1065,7 +1777,20 @@ export function StitchCanvas() {
       // Text: click where it goes.
       if (st.tool === "text" && e.button === 0) {
         const p = toWorld(scene, sx, sy);
-        void addText(p[0], p[1]);
+        // On a text already there: pick it, to change its words in the panel.
+        const on = pick(scene, p);
+        const onText = on && currentLayout()?.items.find((it) => it.id === on.id && it.kind === "text");
+        if (onText) st.select(onText.id);
+        else void addText(p[0], p[1]);
+        return;
+      }
+      // Auto-trace: a click asks for guesses; a right-click uses the one shown.
+      if (st.tool === "autotrace") {
+        if (e.button === 2) void acceptGuess();
+        else if (e.button === 0) {
+          const p = toWorld(scene, sx, sy);
+          void autoTraceAt(round2(p[0]), round2(p[1]), e.shiftKey ? "add" : e.altKey ? "subtract" : "new");
+        }
         return;
       }
       // Drawing, as in Embrilliance: click = curve point, Ctrl+click = line point, Shift+click = cusp.
@@ -1079,6 +1804,38 @@ export function StitchCanvas() {
         penAdd([round2(p[0]), round2(p[1]), pointKind(e)]);
         return;
       }
+      const letterHit = e.button === 0 ? letterAt(scene, sx, sy) : null;
+      if (letterHit) {
+        drag = { kind: "letter", id: letterHit.id, index: letterHit.index, which: letterHit.which, startX: sx, startY: sy, moved: false, at: letterHit.at };
+        try {
+          el.setPointerCapture(e.pointerId);
+        } catch {
+          // A pointer that's already gone: the window still hears it.
+        }
+        return;
+      }
+      const dirHit = e.button === 0 && !endAt(scene, sx, sy) ? dirAt(scene, sx, sy) : null;
+      if (dirHit) {
+        st.selectNode(null);
+        drag = { kind: "dir", id: dirHit.id, which: dirHit.which, startX: sx, startY: sy, moved: false, at: dirHit.at };
+        try {
+          el.setPointerCapture(e.pointerId);
+        } catch {
+          // A pointer that's already gone: the window still hears it.
+        }
+        return;
+      }
+      const end = e.button === 0 ? endAt(scene, sx, sy) : null;
+      if (end) {
+        st.selectNode(null);
+        drag = { kind: "ends", id: end.id, which: end.which, startX: sx, startY: sy, moved: false, at: end.at };
+        try {
+          el.setPointerCapture(e.pointerId);
+        } catch {
+          // A pointer that's already gone: the window still hears it.
+        }
+        return;
+      }
       const node = nodeAt(scene, sx, sy);
       if (node) {
         if (e.button === 2) {
@@ -1086,22 +1843,49 @@ export function StitchCanvas() {
           return;
         }
         st.selectNode({ id: node.o.id, list: node.list, index: node.index });
-        el.setPointerCapture(e.pointerId);
+        // While a point is held, the thread fades so the outline and points are easy to see.
+        scene.stitches.alpha = Math.min(NODE_DIM_ALPHA, restingAlpha());
         const n = nodeLists(node.o).find((l) => l.key === node.list)!.nodes[node.index];
         drag = { kind: "node", id: node.o.id, list: node.list, index: node.index, startX: sx, startY: sy, moved: false, at: [n[0], n[1]] };
+        try {
+          el.setPointerCapture(e.pointerId);
+        } catch {
+          // A pointer that's already gone (the button came up first): the window still hears it.
+        }
         return;
       }
       if (e.button === 2) return;
       st.selectNode(null);
+      // Grab a guide to move it (drop it on a ruler to remove it).
+      const gi = guideAt(scene, sx, sy);
+      if (gi !== null && e.button === 0) {
+        const gd = st.history.present!.layout.guides![gi];
+        liveGuide = { index: gi, axis: gd.axis, at: gd.at };
+        drag = { kind: "guide", startX: sx, startY: sy, moved: false };
+        el.setPointerCapture(e.pointerId);
+        return;
+      }
       const handle = handleAt(scene, sx, sy);
       const frame = selectedFrame(scene);
       if (handle && frame) {
         el.setPointerCapture(e.pointerId);
-        drag = { kind: handle, frame, startX: sx, startY: sy, ghost: null, moved: false };
+        drag = {
+          kind: handle.drag,
+          frame,
+          startX: sx,
+          startY: sy,
+          startW: toWorld(scene, sx, sy),
+          ghost: null,
+          moved: false,
+          side: handle.side,
+          look: handle.drag === "rotate" ? "rotate" : resizeCursorFor(handle.at, frame.center),
+        };
         return;
       }
-      const hit = pick(scene, toWorld(scene, sx, sy));
+      let hit = pick(scene, toWorld(scene, sx, sy));
       el.setPointerCapture(e.pointerId);
+      // Inside a group's frame, a picture underneath doesn't take the click from the group.
+      if (hit && !currentLayout()?.items.some((it) => it.id === hit!.id) && insideGroupFrame(scene, toWorld(scene, sx, sy))) hit = null;
       if (hit) {
         const isItem = !!currentLayout()?.items.some((it) => it.id === hit.id);
         if (isItem) pickItem(hit.id, e.shiftKey || e.ctrlKey || e.metaKey);
@@ -1110,24 +1894,38 @@ export function StitchCanvas() {
         // Shift+click only adds to (or takes from) the selection; it doesn't start a drag.
         if (isItem && (e.shiftKey || e.ctrlKey || e.metaKey)) return;
         const f = selectedFrame(scene);
-        if (f) drag = { kind: "move", frame: f, startX: sx, startY: sy, ghost: null, moved: false };
+        if (f) drag = { kind: "move", frame: f, startX: sx, startY: sy, startW: toWorld(scene, sx, sy), ghost: null, moved: false };
         return;
       }
-      drag = { kind: "pan", x: e.clientX, y: e.clientY, moved: false, deselect: true };
+      // Inside the frame of a group (or several selected things), between its pieces: grab them
+      // all, as the frame shows them as one. (Shift+click there still adds or takes away.)
+      const together = insideGroupFrame(scene, toWorld(scene, sx, sy));
+      if (together && !(e.shiftKey || e.ctrlKey || e.metaKey)) {
+        drag = { kind: "move", frame: together, startX: sx, startY: sy, startW: toWorld(scene, sx, sy), ghost: null, moved: false };
+        return;
+      }
+      drag = { kind: "pan", x: e.clientX, y: e.clientY, moved: false, deselect: !(e.shiftKey || e.ctrlKey || e.metaKey) };
     };
 
     const onDouble = (e: MouseEvent) => {
       const scene = sceneRef.current;
       if (!scene) return;
       const st = useStore.getState();
+      if (st.tool === "autotrace") return;
       if (st.tool !== "select") {
         void penFinish();
         return;
       }
-      // Double-click a selected shape's outline to add a point there.
+      // Double-click a point to delete it (as in Embrilliance); on the outline, to add one there.
       const o = selectedObject();
-      if (!o) return;
+      if (!o || o.locked) return;
       const [sx, sy] = local(e);
+      if (letterAt(scene, sx, sy) || endAt(scene, sx, sy) || dirAt(scene, sx, sy)) return;
+      const node = nodeAt(scene, sx, sy);
+      if (node && node.o.id === o.id) {
+        deleteNode(o.id, node.list, node.index);
+        return;
+      }
       const p = toWorld(scene, sx, sy);
       for (const l of nodeLists(o)) {
         const span = spanAt(l.nodes, l.closed, p, 6 / scene.view.scale);
@@ -1141,24 +1939,51 @@ export function StitchCanvas() {
     const onMove = (e: PointerEvent) => {
       const scene = sceneRef.current;
       if (!scene) return;
+      // Only the pointer that started a drag moves it.
+      if (drag && e.pointerId !== dragPointer) return;
       const [sx, sy] = local(e);
+      pointerAt = { sx, sy, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey };
+      refreshCursor();
       const st = useStore.getState();
+      // Drawing near the edge of the design area: the view scrolls that way (Embrilliance's auto-pan).
+      if (st.pen && !drag) autoPan(sx, sy);
+      else stopAutoPan();
+      if (st.knife && !drag) {
+        cursorMm = snapped(scene, toWorld(scene, sx, sy), e);
+        drawOverlay(scene);
+        return;
+      }
+      if (drag?.kind === "guide" && liveGuide) {
+        drag.moved = true;
+        const p = toWorld(scene, sx, sy);
+        const v = liveGuide.axis === "x" ? p[0] : p[1];
+        // Guides land on the grid's small squares when the grid is on.
+        const step = st.showGrid ? gridSpacing(scene.view.scale, st.units).minorMm : 0;
+        liveGuide = { ...liveGuide, at: step ? Math.round(v / step) * step : Math.round(v * 10) / 10 };
+        drawOverlay(scene);
+        return;
+      }
+      if (drag?.kind === "stitches" && liveStitches) {
+        if (!drag.moved && Math.hypot(sx - drag.startX, sy - drag.startY) < DRAG_THRESHOLD_PX) return;
+        drag.moved = true;
+        liveStitches = { ...liveStitches, to: toWorld(scene, sx, sy) };
+        drawOverlay(scene);
+        return;
+      }
       if ((st.tool !== "select" || st.measure || st.ruler || st.angleFor || st.crosshair) && !drag) {
         cursorMm = snapped(scene, toWorld(scene, sx, sy), e);
         cursorKind = pointKind(e);
         if (st.pen || st.measure || st.ruler || st.angleFor || st.crosshair) drawOverlay(scene);
         return;
       }
-      if (!drag) {
-        const h = nodeAt(scene, sx, sy) ? "node" : handleAt(scene, sx, sy);
-        el.style.cursor =
-          h === "node" ? "pointer" : h === "scale" ? "nwse-resize" : h === "rotate" ? "alias" : pick(scene, toWorld(scene, sx, sy)) ? "move" : "";
-        return;
-      }
+      if (!drag) return; // (the pointer was decided above)
       if (drag.kind === "pan") {
         const dx = e.clientX - drag.x;
         const dy = e.clientY - drag.y;
-        if (dx || dy) drag.moved = true;
+        if (dx || dy) {
+          drag.moved = true;
+          if (useStore.getState().spaceDown) markSpacePanned();
+        }
         scene.view = { ...scene.view, x: scene.view.x + dx, y: scene.view.y + dy };
         scene.autoFit = false;
         drag.x = e.clientX;
@@ -1174,51 +1999,178 @@ export function StitchCanvas() {
         drawOverlay(scene, { id: drag.id, list: drag.list, index: drag.index, at: drag.at });
         return;
       }
-      const f = drag.frame;
-      if (f.locked) return;
-      drag.ghost ??= startGhost(scene, f);
-      const s = scene.view.scale;
-      const [ccx, ccy] = toScreen(scene, f.center);
-      const target = f.kind === "image" ? scene.pictures.children.find((c) => c.label === f.id) : drag.ghost;
+      if (drag.kind === "letter") {
+        const d = drag;
+        const part = selectedLetters(scene)?.parts.find((x) => x.index === d.index);
+        if (!part) return;
+        d.at = nearestOnLine(part.ring, toWorld(scene, sx, sy), true);
+        liveLetter = { id: d.id, index: d.index, which: d.which, at: d.at };
+        drawOverlay(scene);
+        return;
+      }
+      if (drag.kind === "ends" || drag.kind === "dir") {
+        const o = selectedObject();
+        if (!o || o.id !== drag.id) return;
+        const p = toWorld(scene, sx, sy);
+        if (drag.kind === "ends") {
+          drag.at = snapEnd(o, drag.which, p);
+          liveEnd = { id: drag.id, which: drag.which, at: drag.at };
+        } else {
+          drag.at = snapDirection(o, p);
+          liveDir = { id: drag.id, which: drag.which, at: drag.at };
+        }
+        drawOverlay(scene);
+        return;
+      }
+      if (drag.kind === "guide" || drag.kind === "stitches") return;
+      if (drag.frame.locked) return;
+      placeGhost(scene, drag, sx, sy, e.shiftKey);
+    };
+
+    /** Show a move, resize or turn in progress: the ghost (or the picture itself) follows the pointer.
+     *  If a render replaced the scene mid-drag, the ghost is made again on the new one. */
+    const placeGhost = (scene: Scene, d: Extract<Drag, { frame: Frame }>, sx: number, sy: number, shift: boolean) => {
+      const f = d.frame;
+      if (d.ghost && (d.ghost.destroyed || d.ghost.parent !== scene.world)) d.ghost = null;
+      d.ghost ??= startGhost(scene, f);
+      // Worked out in mm, from where it was grabbed: zooming or panning mid-drag keeps it under the pointer.
+      const [wx, wy] = toWorld(scene, sx, sy);
+      const [gx, gy] = d.startW;
+      const [ccx, ccy] = f.center;
+      const target = f.kind === "image" ? scene.pictures.children.find((c) => c.label === f.id) : d.ghost;
       if (!target) return;
-      if (drag.kind === "move") {
-        target.position.set(f.center[0] + (sx - drag.startX) / s, f.center[1] + (sy - drag.startY) / s);
-      } else if (drag.kind === "scale") {
-        const k = Math.hypot(sx - ccx, sy - ccy) / Math.max(1, Math.hypot(drag.startX - ccx, drag.startY - ccy));
+      if (d.kind === "move") {
+        target.position.set(f.center[0] + wx - gx, f.center[1] + wy - gy);
+      } else if (d.kind === "scale" && d.side) {
+        // A side handle: stretch across that side only; the opposite side stays where it is.
+        const anchor = stretchAnchor(f, d.side);
+        const k = stretchFactor(anchor, [gx, gy], [wx, wy], sideAxis(f.corners, d.side));
+        const across = d.side === "e" || d.side === "w";
+        target.position.set(anchor[0] + (ccx - anchor[0]) * k, anchor[1] + (ccy - anchor[1]) * k);
+        if (f.kind === "image") {
+          const im = currentDoc()!.images[f.index];
+          target.width = im.width_mm * (across ? k : 1);
+          target.height = im.height_mm * (across ? 1 : k);
+        } else target.scale.set(across ? k : 1, across ? 1 : k);
+      } else if (d.kind === "scale") {
+        const k = Math.hypot(wx - ccx, wy - ccy) / Math.max(1 / scene.view.scale, Math.hypot(gx - ccx, gy - ccy));
         if (f.kind === "image") {
           const im = currentDoc()!.images[f.index];
           target.width = im.width_mm * Math.max(0.05, k);
           target.height = im.height_mm * Math.max(0.05, k);
         } else target.scale.set(Math.max(0.05, k));
       } else {
-        let a = Math.atan2(sy - ccy, sx - ccx) - Math.atan2(drag.startY - ccy, drag.startX - ccx);
-        if (e.shiftKey) a = (Math.round((a * 180) / Math.PI / 15) * 15 * Math.PI) / 180;
+        let a = Math.atan2(wy - ccy, wx - ccx) - Math.atan2(gy - ccy, gx - ccx);
+        if (shift) a = (Math.round((a * 180) / Math.PI / 15) * 15 * Math.PI) / 180;
         target.rotation = (f.kind === "image" ? (currentDoc()!.images[f.index].rotate * Math.PI) / 180 : 0) + a;
       }
     };
 
     const onUp = (e: PointerEvent) => {
       const scene = sceneRef.current;
+      // Another pointer coming up doesn't end (or drop) this drag.
+      if (drag && e.pointerId !== dragPointer) return;
       if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
       el.classList.remove("panning");
       releaseEsc?.();
       releaseEsc = null;
       const d = drag;
       drag = null;
+      refreshCursor();
       if (!scene || !d) return;
       if (d.kind === "pan") {
         if (!d.moved && d.deselect) {
           useStore.getState().select(null);
           drawOverlay(scene);
-        }
+        } else if (d.moved) afterPan(scene);
+        return;
+      }
+      if (d.kind === "guide") {
+        const g = liveGuide;
+        liveGuide = null;
+        if (!g) return;
+        const [ux, uy] = local(e);
+        const guides = [...(currentLayout()?.guides ?? [])];
+        const onRuler = ux < RULER_PX || uy < RULER_PX || ux > scene.app.screen.width || uy > scene.app.screen.height;
+        if (g.index === null) {
+          if (!onRuler) void setGuides([...guides, { axis: g.axis, at: Math.round(g.at * 100) / 100 }]);
+        } else if (onRuler) void setGuides(guides.filter((_, i) => i !== g.index));
+        else if (d.moved) void setGuides(guides.map((gd, i) => (i === g.index ? { axis: g.axis, at: Math.round(g.at * 100) / 100 } : gd)));
+        drawOverlay(scene);
+        return;
+      }
+      if (d.kind === "stitches") {
+        const ls = liveStitches;
+        liveStitches = null;
+        const st = useStore.getState();
+        if (ls && st.stitchEdit && d.moved) {
+          if (ls.mode === "move") moveSelectedStitches(ls.to[0] - ls.from[0], ls.to[1] - ls.from[1]);
+          else {
+            // Box select: every stitch of the file inside the box.
+            const des = scene.design;
+            const idx = st.history.present?.layout.items.findIndex((it) => it.id === st.stitchEdit!.id) ?? -1;
+            const [x0, x1] = [Math.min(ls.from[0], ls.to[0]), Math.max(ls.from[0], ls.to[0])];
+            const [y0, y1] = [Math.min(ls.from[1], ls.to[1]), Math.max(ls.from[1], ls.to[1])];
+            const inBox: number[] = [];
+            if (des?.records.item && des.records.src) {
+              const { x, y, kind, item, src } = des.records;
+              for (let i = 0; i < kind.length; i++)
+                if (item[i] === idx && kind[i] === Kind.Stitch && x[i] >= x0 && x[i] <= x1 && y[i] >= y0 && y[i] <= y1) inBox.push(src[i]);
+            }
+            const keep = d.shift && (useStore.getState().stitchEdit?.selected ?? []).length > 0 && liveShift;
+            const selected = keep ? [...new Set([...st.stitchEdit.selected, ...inBox])] : inBox;
+            st.setStitchEdit({ ...st.stitchEdit, selected });
+          }
+        } else if (ls?.mode === "box" && st.stitchEdit && !d.shift) st.setStitchEdit({ ...st.stitchEdit, selected: [] });
+        liveShift = false;
+        drawOverlay(scene);
         return;
       }
       if (d.kind === "node") {
+        scene.stitches.alpha = restingAlpha();
         if (d.moved) moveNode(d.id, d.list, d.index, d.at[0], d.at[1]);
         else drawOverlay(scene);
         return;
       }
+      if (d.kind === "ends") {
+        // The dot stays where it was let go until the new stitches arrive (then it's on them).
+        if (d.moved) void moveStitchEnd(d.id, d.which, d.at).finally(() => {
+          liveEnd = null;
+          if (sceneRef.current) drawOverlay(sceneRef.current);
+        });
+        else liveEnd = null;
+        drawOverlay(scene);
+        return;
+      }
+      if (d.kind === "letter") {
+        if (d.moved)
+          void setLetterEnd(d.id, d.index, d.which, d.at).finally(() => {
+            liveLetter = null;
+            if (sceneRef.current) drawOverlay(sceneRef.current);
+          });
+        else liveLetter = null;
+        drawOverlay(scene);
+        return;
+      }
+      if (d.kind === "dir") {
+        const o = selectedObject();
+        const dots = o && o.id === d.id ? directionDots(o) : null;
+        if (d.moved && o && dots) {
+          const line: [Pt, Pt] = d.which === 0 ? [d.at, dots[1]] : [dots[0], d.at];
+          void (o.kind === "fill" ? setFillDirection(d.id, line) : setSatinTips(d.id, line)).finally(() => {
+            liveDir = null;
+            if (sceneRef.current) drawOverlay(sceneRef.current);
+          });
+        } else liveDir = null;
+        drawOverlay(scene);
+        return;
+      }
       const f = d.frame;
+      // A render may have replaced the scene since the last pointer move: place the ghost again.
+      if (d.moved && !f.locked && (!d.ghost || d.ghost.destroyed || d.ghost.parent !== scene.world)) {
+        const [ux, uy] = local(e);
+        placeGhost(scene, d, ux, uy, e.shiftKey);
+      }
       const ghost = d.ghost;
       if (!d.moved || f.locked) return endGhost(scene, ghost);
       if (f.kind === "image") {
@@ -1239,7 +2191,13 @@ export function StitchCanvas() {
       const layout = currentLayout();
       if (!ghost || !layout) return endGhost(scene, ghost);
       let next = null;
-      if (f.ids.length > 1) {
+      if (d.kind === "scale" && d.side) {
+        // Stretched from a side: about the opposite side, which stays put (several things together).
+        const kx = Math.round(ghost.scale.x * 1000) / 1000;
+        const ky = Math.round(ghost.scale.y * 1000) / 1000;
+        const anchor = shapeStretchAnchor(f.ids, d.side) ?? stretchAnchor(f, d.side);
+        if (kx !== 1 || ky !== 1) next = transformTogether(layout, f.ids, selectionGeometry(f.ids).centers, anchor, { stretch: [kx, ky] });
+      } else if (f.ids.length > 1) {
         // Several things move, grow or turn together, about the frame's centre.
         const g = selectionGeometry(f.ids);
         const k = Math.round(ghost.scale.x * 1000) / 1000;
@@ -1267,30 +2225,95 @@ export function StitchCanvas() {
     };
 
     const onLeave = () => {
+      stopAutoPan();
       cursorMm = null;
+      pointerAt = null;
       const scene = sceneRef.current;
       if (scene && useStore.getState().pen) drawOverlay(scene);
     };
-    const noMenu = (e: Event) => e.preventDefault();
+    /** Right-click: a menu of what can be done with the thing under the mouse (selecting it
+     *  first), or with the canvas. While drawing or tracing, a right-click keeps its own meaning
+     *  (finish the shape, use the guess), and on a point it switches the point's kind. */
+    const onMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      const scene = sceneRef.current;
+      const st = useStore.getState();
+      if (!scene || !st.history.present) return;
+      if (st.pen || st.knife || st.ruler || st.measure || st.angleFor || st.autoTrace || st.autoAll || drag) return;
+      if (st.tool !== "select" && st.tool !== "text") return;
+      const [sx, sy] = local(e);
+      if (st.stitchEdit) {
+        return openContextMenu(e, [{ id: "stitch.deleteSelected" }, "separator", { label: "Done editing stitches", run: endStitchEdit }], "Stitches");
+      }
+      if (nodeAt(scene, sx, sy)) return;
+      const p = toWorld(scene, sx, sy);
+      const hit = pick(scene, p) ?? pinnedPictureAt(p);
+      const doc = currentDoc()!;
+      const item = hit ? doc.layout.items.find((it) => it.id === hit.id) : undefined;
+      if (item) {
+        if (st.selectedId !== item.id && !st.extraIds.includes(item.id)) pickItem(item.id, false);
+        const now = useStore.getState();
+        const several = !!now.selectedId && now.extraIds.length > 0;
+        drawOverlay(scene);
+        return openContextMenu(e, itemMenu(item, several), several ? `${now.extraIds.length + 1} things` : itemLabel(item, doc.layout.items.indexOf(item)));
+      }
+      const img = hit ? doc.images.find((im) => im.id === hit.id) : undefined;
+      if (img) {
+        st.select(img.id);
+        drawOverlay(scene);
+        return openContextMenu(e, [...pictureMenu(), "separator", { label: "Hide this picture", run: () => setPicture(img.id, { visible: false }) }], img.name || "Picture");
+      }
+      openContextMenu(e, canvasMenu());
+    };
+    /** A pinned picture lets clicks through, but a right-click still finds it (to unpin it). */
+    const pinnedPictureAt = (p: Pt): { id: string } | null => {
+      const doc = currentDoc();
+      if (!doc || !useStore.getState().showPictures) return null;
+      for (let i = doc.images.length - 1; i >= 0; i--) {
+        const im = doc.images[i];
+        if (!im.visible) continue;
+        const l = rotatePt(p, [im.x, im.y], (-im.rotate * Math.PI) / 180);
+        if (Math.abs(l[0] - im.x) <= im.width_mm / 2 && Math.abs(l[1] - im.y) <= im.height_mm / 2) return { id: im.id };
+      }
+      return null;
+    };
+    // A cancelled gesture (the system took the touch) puts things back rather than dropping them there.
+    const onCancel = (e: PointerEvent) => {
+      if (drag && e.pointerId === dragPointer) cancelDrag();
+    };
+    // Switching to another window: the drag goes back and the view stops scrolling by itself.
+    const onBlur = () => {
+      cancelDrag();
+      stopAutoPan();
+    };
 
     el.addEventListener("wheel", onWheel, { passive: false });
     el.addEventListener("pointerdown", onDown);
     el.addEventListener("pointermove", onMove);
-    el.addEventListener("pointerup", onUp);
-    el.addEventListener("pointercancel", onUp);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onCancel);
+    window.addEventListener("blur", onBlur);
     el.addEventListener("pointerleave", onLeave);
     el.addEventListener("dblclick", onDouble);
-    el.addEventListener("contextmenu", noMenu);
+    el.addEventListener("contextmenu", onMenu);
+    window.addEventListener("keydown", onKeyForCursor);
+    window.addEventListener("keyup", onKeyForCursor);
     return () => {
+      unsubscribeCursor();
+      window.removeEventListener("keydown", onKeyForCursor);
+      window.removeEventListener("keyup", onKeyForCursor);
       releaseEsc?.();
+      stopAutoPan();
+      if (wheelFrame) cancelAnimationFrame(wheelFrame);
       el.removeEventListener("wheel", onWheel);
       el.removeEventListener("pointerdown", onDown);
       el.removeEventListener("pointermove", onMove);
-      el.removeEventListener("pointerup", onUp);
-      el.removeEventListener("pointercancel", onUp);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onCancel);
+      window.removeEventListener("blur", onBlur);
       el.removeEventListener("pointerleave", onLeave);
       el.removeEventListener("dblclick", onDouble);
-      el.removeEventListener("contextmenu", noMenu);
+      el.removeEventListener("contextmenu", onMenu);
     };
   }, []);
 

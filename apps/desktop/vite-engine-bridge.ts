@@ -10,6 +10,23 @@ import type { Plugin } from "vite";
 
 const ENGINE_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../engine");
 
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+/** Only this machine's own preview page may use the engine: another web site open in the same
+ *  browser could otherwise post to it (it can write files), and so could a site that points its
+ *  own name at 127.0.0.1. */
+export function allowedRequest(headers: { host?: string; origin?: string }): boolean {
+  const hostOf = (h: string) => h.replace(/:\d+$/, "").toLowerCase();
+  if (!headers.host || !LOCAL_HOSTS.has(hostOf(headers.host))) return false;
+  if (headers.origin === undefined) return true; // not from a web page (curl, scripts)
+  try {
+    const o = new URL(headers.origin);
+    return LOCAL_HOSTS.has(o.hostname.toLowerCase()) && o.host.toLowerCase() === headers.host.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
 export function engineBridge(): Plugin {
   let child: ChildProcessWithoutNullStreams | null = null;
   let buffer = "";
@@ -52,6 +69,10 @@ export function engineBridge(): Plugin {
       server.middlewares.use("/__engine", (req, res) => {
         if (req.method !== "POST") {
           res.statusCode = 405;
+          return res.end();
+        }
+        if (!allowedRequest(req.headers)) {
+          res.statusCode = 403;
           return res.end();
         }
         let body = "";

@@ -6,9 +6,21 @@ import { useStore } from "../store";
 /** − 100% + Fit, bottom-right of the canvas. Clicking the percentage goes to real size. */
 export function ZoomControls() {
   const scale = useStore((s) => s.zoomScale);
+  const seeThrough = useStore((s) => s.seeThrough);
+  const hasDoc = useStore((s) => s.history.present !== null);
   const tip = (id: string) => `${command(id).title} (${formatShortcut(command(id).shortcut)})`;
   return (
     <div className="zoom-controls" role="group" aria-label="Zoom">
+      {hasDoc && (
+        <button
+          className={`see-through${seeThrough ? " on" : ""}`}
+          aria-pressed={seeThrough}
+          onClick={() => command("view.seeThrough").run()}
+          title={`${seeThrough ? "Stitches are see-through: click to show them solid" : "Make the stitches see-through, to work over your picture"} (${formatShortcut(command("view.seeThrough").shortcut)})`}
+        >
+          ◐ See-through stitches
+        </button>
+      )}
       <button onClick={() => command("view.zoomOut").run()} title={tip("view.zoomOut")} aria-label="Zoom out">
         −
       </button>

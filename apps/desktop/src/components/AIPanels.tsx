@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { acceptAll, acceptOrder, acceptProposal, aiOn, applicable, dropOrder, dropProposal, helpAsk, helpSearch, type AdviceChange, type HelpResult } from "../ai";
+import { acceptAll, acceptOrder, acceptProposal, aiOn, applicable, dropOrder, dropProposal, helpAsk, helpSearch, sendTitle, type AdviceChange, type HelpResult } from "../ai";
 import { itemLabel } from "../design/layout";
 import type { ObjectItem } from "../design/types";
 import { selectLayout, useStore } from "../store";
@@ -7,7 +7,8 @@ import { useModal } from "./ThreadDialogs";
 
 const TYPE_NAME = { run: "a running stitch line", satin: "a satin column", fill: "a fill" } as const;
 
-/** Before anything goes to a cloud service: exactly what will be sent, and roughly what it costs. */
+/** Before anything leaves this computer (a cloud service, or a model on another machine):
+ *  exactly what will be sent, and roughly what it costs. */
 export function SendPreview() {
   const preview = useStore((s) => s.aiPreview);
   const setPreview = useStore((s) => s.setAIPreview);
@@ -21,10 +22,14 @@ export function SendPreview() {
     <dialog ref={ref} className="modal send-preview" onClose={() => preview && done(false)} aria-labelledby="send-title">
       {e && (
         <>
-          <h2 id="send-title">Send this to {e.provider === "anthropic" ? "Anthropic" : "your AI service"}?</h2>
+          <h2 id="send-title">{sendTitle(e)}</h2>
           <p className="hint">
             Model {e.model}. About {e.tokens_in.toLocaleString()} tokens in and up to {e.tokens_out_max.toLocaleString()} out
-            {e.cost_usd_max !== null ? `: at most about $${e.cost_usd_max.toFixed(3)} on your account.` : ". Add your service's prices in Settings → AI to see a cost estimate."}
+            {e.provider === "ollama"
+              ? "."
+              : e.cost_usd_max !== null
+                ? `: at most about $${e.cost_usd_max.toFixed(3)} on your account.`
+                : ". Add your service's prices in Settings → AI to see a cost estimate."}
           </p>
           {e.images.length > 0 && (
             <div className="send-images">
