@@ -21,7 +21,8 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:"
+      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:",
+      "dangerousDisableAssetCspModification": ["style-src"]
     }
   },
   "bundle": {
@@ -51,7 +52,8 @@
     "category": "GraphicsAndDesign",
     "licenseFile": "../../../LICENSE",
     "resources": {
-      "../../../samples/": "samples/"
+      "../../../samples/": "samples/",
+      "binaries/THIRD-PARTY-NOTICES.txt": "THIRD-PARTY-NOTICES.txt"
     },
     "fileAssociations": [
       {
@@ -64,6 +66,9 @@
         "mimeType": "application/x-ludd"
       }
     ],
+    "macOS": {
+      "minimumSystemVersion": "14.0"
+    },
     "windows": {
       "nsis": {
         "installMode": "currentUser",

@@ -6,20 +6,28 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Tests only read the code.
+permissions:
+  contents: read
+
 jobs:
   test:
     name: Tests (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        # Every system the Release workflow builds for (Mac: Apple chip and Intel).
+        os: [windows-latest, macos-latest, macos-15-intel, ubuntu-22.04]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@v6
       - name: Engine tests
         working-directory: engine
-        run: uv run pytest -q
+        # --locked: fail if uv.lock is out of date, instead of quietly testing other versions.
+        run: uv run --locked pytest -q
       - uses: actions/setup-node@v5
         with:
           node-version: 22
@@ -36,6 +44,8 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: astral-sh/setup-uv@v6
       - uses: actions/setup-node@v5
         with:
@@ -49,7 +59,13 @@ jobs:
         with:
           workspaces: apps/desktop/src-tauri
       - name: Freeze engine sidecar
+        # Also starts the frozen engine and checks it works (scripts/smoke_engine.py).
         run: pnpm build:engine
+      - name: Rust lockfile is up to date
+        run: cargo metadata --locked --format-version 1 --manifest-path apps/desktop/src-tauri/Cargo.toml > /dev/null
+        shell: bash
+      - name: Rust tests
+        run: cargo test --locked --lib --manifest-path apps/desktop/src-tauri/Cargo.toml
       - name: Build installer
         # Test build: no update files (those are signed, and only the Release workflow has the key).
         run: pnpm tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}'

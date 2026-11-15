@@ -7,7 +7,7 @@
     "dev": "pnpm --filter @threadline/desktop dev",
     "test": "pnpm --filter @threadline/desktop test",
     "typecheck": "pnpm --filter @threadline/desktop typecheck",
-    "build:engine": "uv run --project engine python scripts/build_engine.py"
+    "build:engine": "uv run --locked --project engine python scripts/build_engine.py"
   },
   "packageManager": "pnpm@12.11.2"
 }
