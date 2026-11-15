@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "slug": "ludd",
+  "name": "LUDD (Threadline)",
+  "archetype": "custom",
+  "audience": "public",
+  "tier": "subscription",
+  "containsPII": false,
+  "parent": null,
+  "platforms": ["GitHub", "Windows", "macOS", "Linux"],
+  "builders": {
+    "codeWriter": "claude"
+  },
+  "routing": {
+    "profile": "balanced",
+    "planner": "opus",
+    "codeWriter": "sonnet",
+    "subagentWorker": "haiku",
+    "auditor": "argon",
+    "localTracker": "ollama",
+    "appRuntime": "hydrogen",
+    "diffOnly": true,
+    "quietTests": true,
+    "maxOutputLines": 30,
+    "autoHandoff": true
+  },
+  "budget": {
+    "monthlyCapUsd": 0,
+    "spentThisMonthUsd": 0
+  },
+  "phase": 2,
+  "status": "active",
+  "nextAction": "With the owner's OK, push main and confirm CI is green on Windows, both Macs and Linux",
+  "blockedOnHuman": "Decide the 20 open items in docs/QA-RESPONSE.md; approve pushing to GitHub",
+  "lastSessionAt": "2026-11-15T02:06:12Z",
+  "health": {
+    "tests": "passing",
+    "build": "passing",
+    "lastAuditedPhase": 0
+  },
+  "deploy": {
+    "target": "local",
+    "url": null
+  }
+}

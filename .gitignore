@@ -7,6 +7,7 @@ apps/desktop/src-tauri/binaries/
 engine/.venv/
 engine/build/
 __pycache__/
+*.tsbuildinfo
 *.pyc
 .pytest_cache/
 
@@ -25,6 +26,21 @@ fixtures/*
 /Embroidery Studio Research & Build Plan.md
 /compass_artifact_*.md
 
-# Release signing keys never go in the repository
+# Release signing keys and code-signing certificates never go in the repository
 *.key
 *.key.pub
+*.password.txt
+*.pfx
+*.p12
+*.p8
+
+# Command Center / project management
+build/
+.env
+.env.local
+.data/
+.mcp.json
+*.db
+*.log
+_logs/*.log
+!_logs/.gitkeep
