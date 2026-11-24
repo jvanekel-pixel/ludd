@@ -644,12 +644,16 @@ export async function addDesign(path?: string) {
   }
 }
 
+/** Ctrl+Z. While drawing it removes the last point placed, like Backspace, and leaves the
+ * history alone (QA2 U3: it threw the shape away and also undid the edit before it). */
 export function undoEdit() {
-  useStore.getState().setPen(null);
+  if (useStore.getState().pen) return penUndoPoint();
   void showHistory(undo(latestHistory()));
 }
 
+/** Ctrl+Y. Does nothing while drawing, so it can't change the design under a half-drawn shape. */
 export function redoEdit() {
+  if (useStore.getState().pen) return;
   void showHistory(redo(latestHistory()));
 }
 
@@ -2080,9 +2084,9 @@ const guessingFill = () => guessing() && useStore.getState().autoTrace!.guesses[
 const hasTarget = () => canEdit() && !drawing() && targetId() !== null;
 const hasSelection = () => engineReady() && useStore.getState().selectedId !== null;
 const noSelection = () => hasDesign() && useStore.getState().selectedId === null;
-const canUndo = () => engineReady() && latestHistory().past.length > 0;
-const canRedo = () => engineReady() && latestHistory().future.length > 0;
 const drawing = () => useStore.getState().pen !== null;
+const canUndo = () => drawing() || (engineReady() && latestHistory().past.length > 0);
+const canRedo = () => !drawing() && engineReady() && latestHistory().future.length > 0;
 // Letter keys don't switch tools mid-shape (A sits by Tab and Shift); the tool buttons still do.
 const notDrawing = () => engineReady() && !drawing();
 const nudge = (dx: number, dy: number) => () => {
