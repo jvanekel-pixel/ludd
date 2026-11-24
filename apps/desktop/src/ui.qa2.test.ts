@@ -287,6 +287,8 @@ describe("U9: a delete that fails keeps the selection", () => {
 });
 
 describe("U3 (decision 9): Ctrl+Z while drawing removes the last point", () => {
+  // On a Mac the shortcuts use Command, not Ctrl (commands.ts matchesShortcut).
+  const mod = /Mac|iPhone|iPad/.test(navigator.platform) ? { metaKey: true } : { ctrlKey: true };
   const pen = (n: number) => ({ kind: "fill" as const, a: sq(0, 0, 10).slice(0, n), b: [] });
 
   it("takes off one point at a time and leaves the history alone", async () => {
@@ -294,15 +296,15 @@ describe("U3 (decision 9): Ctrl+Z while drawing removes the last point", () => {
     await A.commit({ ...useStore.getState().history.present!.layout, items: [...items(), fill("a", 20)] });
     expect(ids()).toEqual(["z", "a"]);
     useStore.getState().setPen(pen(3));
-    onKeyDown(key("z", { ctrlKey: true }));
+    onKeyDown(key("z", mod));
     expect(useStore.getState().pen?.a).toHaveLength(2);
-    onKeyDown(key("z", { ctrlKey: true }));
-    onKeyDown(key("z", { ctrlKey: true }));
+    onKeyDown(key("z", mod));
+    onKeyDown(key("z", mod));
     expect(useStore.getState().pen).toBeNull();
     await A.whenIdle();
     expect(ids()).toEqual(["z", "a"]);
     // Drawing is over, so the next Ctrl+Z undoes the last edit as usual.
-    onKeyDown(key("z", { ctrlKey: true }));
+    onKeyDown(key("z", mod));
     await A.whenIdle();
     expect(ids()).toEqual(["z"]);
   });
@@ -314,7 +316,7 @@ describe("U3 (decision 9): Ctrl+Z while drawing removes the last point", () => {
     await A.whenIdle();
     expect(ids()).toEqual(["z"]);
     useStore.getState().setPen(pen(2));
-    onKeyDown(key("y", { ctrlKey: true }));
+    onKeyDown(key("y", mod));
     await A.whenIdle();
     expect(ids()).toEqual(["z"]);
     expect(useStore.getState().pen?.a).toHaveLength(2);
