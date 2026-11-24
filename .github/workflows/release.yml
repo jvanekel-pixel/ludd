@@ -101,6 +101,11 @@ jobs:
         # Also starts the frozen engine and checks it works (scripts/smoke_engine.py).
         run: pnpm build:engine
 
+      - name: Rust tests
+        # After the freeze: tauri-build needs the sidecar to exist (QA2 T7, so each system's Rust
+        # code is tested before its installer is built).
+        run: cargo test --locked --lib --manifest-path apps/desktop/src-tauri/Cargo.toml
+
       # Optional Windows code signing. Without a certificate the installer still works, but
       # Windows SmartScreen shows "Windows protected your PC" (More info > Run anyway) until the
       # app builds a reputation. Add WINDOWS_CERTIFICATE (base64 .pfx) and
