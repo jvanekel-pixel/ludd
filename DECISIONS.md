@@ -93,3 +93,10 @@ Durable log so future sessions do not re-litigate these. Newest decisions go bel
 - Why: each fix would change existing designs, add a large mechanism, or needs hardware we don't have.
 - Alternatives rejected: change defaults now.
 - Revisit if: a user hits one of them in practice.
+
+### D-018: Dependabot updates are reviewed and merged in combined PRs (2026-11-15)
+- Decision: Dependabot groups only minor/patch updates; majors come one per PR. tauri-action and @types/node majors are ignored. Updates that must move together (Tauri JS + Rust plugins; Actions on neighbouring lines; dev tools sharing pnpm-lock.yaml) are merged as one combined PR after CI is green. Merged so far: #10 (Python), #16 (Tauri plugins + safe npm), #17 (five Actions), #18 (TypeScript 7, vitest 5, jsdom 31, @types/node 22). All other Dependabot PRs are closed; none are open.
+- Why: each of those pairs fails alone (Tauri version check, lockfile conflicts), and tauri-action 1.0 would break release.yml.
+- Alternatives rejected: merging Dependabot PRs one at a time as they come.
+- Revisit if: the release workflow is moved to tauri-action 1.x (needs release.yml changes and a draft release check), or Vite is upgraded (then @vitejs/plugin-react 6, closed as #12, can follow).
+- Open when work resumes: the CI run on main after #17 and #18 (e415eb3) was not checked; run `pnpm install` locally before the next build; Pillow 13 (passed all tests earlier) can come back as its own PR.
