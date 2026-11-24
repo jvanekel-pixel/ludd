@@ -848,7 +848,7 @@ def optimize_order(layout: dict[str, Any]) -> dict[str, Any]:
         t = it.get("thread") or {}
         o = (it.get("threads") or [None])[0] or {}
         t = {**t, **o}
-        return (t.get("color", "").lower(), t.get("brand", ""), t.get("catalog", ""))
+        return _thread_key({k: str(v) for k, v in t.items() if v is not None})  # as the file groups them (QA2 P5)
 
     shapes: dict[int, Block] = {}
     box = {k: (min(p[0] for p in v), min(p[1] for p in v), max(p[0] for p in v), max(p[1] for p in v)) for k, v in own.items()}

@@ -308,8 +308,9 @@ def test_qa_a_project_names_no_file_outside_itself(tmp_path):
         {"id": "t", "kind": "text", "text": "Hi", "font": {"path": str(secret), "family": "Arial", "style": "Regular"}},
     ]}, "images": [{"id": "i", "path": str(secret)}]}
     p = project.open_project(_zip(tmp_path / "h.ludd", hostile))
-    assert "path" not in p["layout"]["items"][0] and "path" not in p["layout"]["items"][1]["font"]
-    assert p["images"] == []
+    # The design item, left with no file, is dropped with a note (QA2 P4); the text keeps no font path.
+    assert [it["id"] for it in p["layout"]["items"]] == ["t"] and "path" not in p["layout"]["items"][0]["font"]
+    assert p["notes"] and p["images"] == []
     out = project.save(str(tmp_path / "resaved"), p)
     with zipfile.ZipFile(out["path"]) as z:
         assert not any(SECRET_WORDS.encode() in z.read(n) for n in z.namelist())
@@ -460,3 +461,91 @@ def test_added_files_survive_the_original_being_deleted_before_the_first_save(tm
     pes.unlink()
     info = project.save(str(tmp_path / "late.ludd"), make_project(img, pes))
     assert info["designs"] == 1 and info["images"] == 1
+
+
+def test_qa2_p1_a_tiny_project_cant_make_gigabytes_of_picture_data(tmp_path):
+    """QA2 P1: pictures sharing one embedded member each got their own ~53 MB data URL (12 entries
+    in a 39 KB file: 624 MB); nothing limited the count or the total unpacked size."""
+    import hashlib
+
+    png = PNG + b"\0" * (39 << 20)
+    member = "images/" + hashlib.sha256(png).hexdigest()[:32] + ".png"
+    many = {**GOOD, "images": [{"id": str(i), "embedded": member} for i in range(12)]}
+    path = tmp_path / "many.ludd"
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("project.json", json.dumps(many))
+        z.writestr(member, png)
+    assert path.stat().st_size < 1 << 20
+    with pytest.raises(ProjectError, match="more picture data"):
+        project.open_project(str(path))
+    lots = {**GOOD, "images": [{"id": str(i), "embedded": member} for i in range(project.MAX_PICTURES + 1)]}
+    with pytest.raises(ProjectError, match="more than"):
+        project.open_project(_zip(tmp_path / "lots.ludd", lots))
+    # Two pictures of the same small file still open, sharing one data URL.
+    small = "images/" + hashlib.sha256(PNG).hexdigest()[:32] + ".png"
+    two = {**GOOD, "images": [{"id": "a", "embedded": small}, {"id": "b", "embedded": small}]}
+    p = project.open_project(_zip(tmp_path / "two.ludd", two, {small: PNG}))
+    assert len(p["images"]) == 2 and p["images"][0]["data_url"] is p["images"][1]["data_url"]
+
+
+def test_qa2_p1_total_unpacked_size_is_limited(tmp_path, monkeypatch):
+    monkeypatch.setattr(project, "MAX_PROJECT_BYTES", 1000)
+    with pytest.raises(ProjectError, match="too big"):
+        project.open_project(_zip(tmp_path / "big.ludd", GOOD, {"designs/x.pes": b"x" * 2000}))
+
+
+@pytest.mark.parametrize("item", [
+    {"id": "a", "path": None},
+    {"id": "a", "kind": "sequins"},
+    {"id": "a", "kind": "run", "transform": {"scale_x": "2"}},
+    {"id": "a", "kind": "run", "transform": {"rotate": None}},
+    {"id": "a", "kind": "run", "ops": "oops"},
+    {"id": "a", "kind": "run", "ops": [5]},
+    {"id": "a", "kind": "run", "threads": ["red"]},
+    {"id": "a", "kind": "run", "thread": "red"},
+    {"id": "a", "kind": "run", "params": [1]},
+])
+def test_qa2_p4_a_damaged_item_is_left_out_with_a_note_not_a_blank_canvas(tmp_path, item):
+    """QA2 P4: any dict item opened, then every render failed with "Please report this"."""
+    good = {"id": "ok", "kind": "run", "geometry": {"nodes": [[0, 0, "c"], [10, 0, "c"]]}, "params": {}}
+    p = project.open_project(_zip(tmp_path / "d.ludd", {**GOOD, "layout": {"items": [item, good]}}))
+    assert [it["id"] for it in p["layout"]["items"]] == ["ok"]
+    assert "1 part of this project was damaged" in p["notes"][0]
+    assert layout.render(p["layout"]).blocks
+
+
+def test_qa2_p2_private_copies_are_found_again_after_the_engine_restarts(tmp_path, files, monkeypatch):
+    """QA2 P2: which original a private copy came from was only in memory, so after a crash
+    restart (or Restart engine) a design whose original was gone couldn't be shown or saved."""
+    from threadline_engine import kept
+
+    img, pes = files
+    proj = make_project(img, pes)
+    project.load_image(str(img))
+    layout.render_summary(proj["layout"])
+    img.unlink()
+    pes.unlink()
+    # A new engine: nothing in memory.
+    monkeypatch.setattr(kept, "_copies", {})
+    monkeypatch.setattr(kept, "_loaded", False)
+    monkeypatch.setattr(layout, "_cache", {})
+    assert layout.render(proj["layout"]).blocks
+    out = project.save(str(tmp_path / "after-restart"), proj)
+    assert out["designs"] == 1 and out["images"] == 1
+    # The index names copies in its own folder only.
+    (kept._dir() / kept.INDEX).write_text(json.dumps({"x": "../../secret.txt", "y": "C:/secret.txt"}))
+    monkeypatch.setattr(kept, "_copies", {})
+    monkeypatch.setattr(kept, "_loaded", False)
+    assert kept.readable("x") == "x" and kept.readable("y") == "y"
+
+
+def test_qa2_d12_guides_and_color_sets_survive_save_and_reopen(tmp_path, files):
+    """QA2 D12: nothing tested that the layout's guides and color sets come back."""
+    img, pes = files
+    proj = make_project(img, pes)
+    proj["layout"]["guides"] = {"x": [10.5, -3], "y": [0]}
+    proj["layout"]["colorways"] = [{"name": "Spring", "threads": {"b": {"color": "#00aa00", "name": "Leaf"}}}]
+    out = project.save(str(tmp_path / "guides"), proj)
+    back = project.open_project(out["path"])["layout"]
+    assert back["guides"] == proj["layout"]["guides"]
+    assert back["colorways"] == proj["layout"]["colorways"]

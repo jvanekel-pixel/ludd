@@ -57,11 +57,26 @@ class Off(Provider):
     pass
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Never follow a redirect: urllib would send the key (and the picture) on to the new address,
+    even another server or plain http, and a local Ollama could send it off this computer
+    without the "before you send" preview."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
+        raise AIError(
+            f"The AI service tried to send LUDD on to {host_of(newurl) or newurl}. LUDD doesn't follow that, "
+            "so your key stays with the address in Settings. Check the address there."
+        )
+
+
+_opener = urllib.request.build_opener(_NoRedirect())
+
+
 def _post(url: str, body: dict[str, Any], headers: dict[str, str]) -> dict[str, Any]:
     data = json.dumps(body).encode("utf-8")
     req = urllib.request.Request(url, data=data, headers={"content-type": "application/json", **headers}, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT_S) as r:
+        with _opener.open(req, timeout=TIMEOUT_S) as r:
             return json.loads(r.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
         detail = ""

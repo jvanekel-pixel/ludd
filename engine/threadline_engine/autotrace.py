@@ -726,7 +726,7 @@ def region(path: str, placement: dict[str, Any], at: list[float], spacing_mm: fl
         raise TraceError(f"Spread must be between {SPREAD_MIN} and {SPREAD_MAX}")
     pic = prepare(path)
     place = Placement.from_dict(placement)
-    seed = _seed_px(pic, place, at)
+    seed = _seed_px(pic, place, at) if min(pic.w, pic.h) >= MIN_PICTURE_PX else None
     if seed is None:
         return {"candidates": [], "ms": round((time.perf_counter() - t0) * 1000, 1)}
     adds = [p for p in (_seed_px(pic, place, a) for a in add or []) if p and not pic.ink[p[1], p[0]]]
@@ -880,6 +880,7 @@ def _segments(skel: np.ndarray) -> list[tuple[list[tuple[int, int]], bool]]:
 
 # A connected dark line that is mostly at least this wide is a shape to fill, not a line (bold
 # lettering): one fill per letter instead of a patchwork of fills and satin pieces.
+MIN_PICTURE_PX = 4  # a picture smaller than this has nothing to trace
 BOLD_MM = 2.8
 SOLID_MM = 3.0  # parts of a dark area wider than this are fills too
 MIN_FILL_WIDTH_MM = 1.0  # thinner color areas (soft edges, glows) aren't sewn as fills
@@ -904,8 +905,16 @@ def _solid_dark(pic: Pic, ppm: float) -> np.ndarray:
     small = np.nonzero(st[:, cv2.CC_STAT_AREA] < solid_r * solid_r)[0]
     if n > 1 and len(small):
         core[np.isin(lab, small[small > 0])] = 0
-    disk = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * solid_r + 3, 2 * solid_r + 3))
-    solid = (cv2.dilate(core, disk) > 0) & ink
+    if not core.any():
+        solid = np.zeros_like(ink)
+    elif solid_r <= 30:
+        disk = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * solid_r + 3, 2 * solid_r + 3))
+        solid = (cv2.dilate(core, disk) > 0) & ink
+    else:
+        # A picture placed very small has many pixels per mm, and a dilate's cost grows with the
+        # disk: 14 s at 2 mm wide (QA2 T4). The distance to the core is the same test at a fixed cost.
+        dist = cv2.distanceTransform((core == 0).astype(np.uint8), cv2.DIST_L2, cv2.DIST_MASK_PRECISE)
+        solid = (dist <= solid_r + 1) & ink
     # Each connected dark shape's typical stroke width, from the middle (ridge) of its strokes.
     ridge = ink & (pic.ink_dt >= cv2.dilate(pic.ink_dt, np.ones((3, 3), np.uint8)) - 1e-3)
     lab, val = pic.ink_labels[ridge], pic.ink_dt[ridge]
@@ -1006,6 +1015,8 @@ def digitize_all(path: str, placement: dict[str, Any], spacing_mm: float = 3.0, 
         raise TraceError(f"Point spacing must be between {MIN_SPACING_MM} and {MAX_SPACING_MM:.0f} mm")
     pic = prepare(path)
     place = Placement.from_dict(placement)
+    if min(pic.w, pic.h) < MIN_PICTURE_PX:
+        return {"shapes": [], "ms": round((time.perf_counter() - t0) * 1000, 1)}
     ppm = place.px_per_mm(pic)
     reach = max(2, round(3 * ppm))
     min_px = min_area_mm2 * ppm * ppm

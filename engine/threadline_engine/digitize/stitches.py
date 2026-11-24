@@ -229,9 +229,9 @@ class RunParams:
     @classmethod
     def from_dict(cls, d: dict[str, Any] | None) -> "RunParams":
         d = d or {}
-        p = cls(style=str(d.get("style", "single")), stitch_mm=float(d.get("stitch_mm", 2.5)),
-                motif=str(d.get("motif", "wave")), motif_mm=float(d.get("motif_mm", 4.0)),
-                motif_width_mm=float(d.get("motif_width_mm", 2.5)))
+        p = cls(style=str(d.get("style", "single")), stitch_mm=_finite(d, "stitch_mm", 2.5),
+                motif=str(d.get("motif", "wave")), motif_mm=_finite(d, "motif_mm", 4.0),
+                motif_width_mm=_finite(d, "motif_width_mm", 2.5))
         if p.style not in ("single", "triple", "bean", "motif"):
             raise DigitizeError(f"Unknown running stitch style: {p.style}")
         if p.style == "motif":
@@ -291,15 +291,19 @@ class SatinParams:
     @classmethod
     def from_dict(cls, d: dict[str, Any] | None) -> "SatinParams":
         d = d or {}
-        u = d.get("underlay", ["center"])
+        u = d.get("underlay")
+        if u is None:
+            u = ["center"]  # missing or null: the default (QA2 S6)
+        if u != "auto" and (not isinstance(u, (list, tuple)) or not all(isinstance(x, str) for x in u)):
+            raise DigitizeError("The setting underlay must be a list of underlay names")
         p = cls(
-            spacing_mm=float(d.get("spacing_mm", 0.4)),
-            pull_comp_mm=float(d.get("pull_comp_mm") if d.get("pull_comp_mm") is not None else 0.2),
+            spacing_mm=_finite(d, "spacing_mm", 0.4),
+            pull_comp_mm=_finite(d, "pull_comp_mm", 0.2),
             underlay=None if u == "auto" else tuple(u),
             underlay_level=str(d.get("underlay_level", "normal")),
             comp_by_width=bool(d.get("comp_by_width", False)),
             auto_widen=bool(d.get("auto_widen", False)),
-            split_mm=float(d.get("split_mm", 0) or 0),
+            split_mm=_finite(d, "split_mm", 0.0),
         )
         if p.split_mm and not 2 <= p.split_mm <= 12:
             raise DigitizeError("Split satin stitches longer than 2 to 12 mm")
@@ -581,8 +585,7 @@ def satin_from_pairs(pairs: list[tuple[Point, Point]], params: SatinParams) -> t
     underlay = params.underlay
     if underlay is None:
         underlay = auto_satin_underlay(sorted(widths)[len(widths) // 2], params.underlay_level)
-    split = params.split_mm if params.split_mm and params.split_mm <= SATIN_MAX_WIDTH_MM else 0.0
-    if max(widths) > SATIN_MAX_WIDTH_MM and not split:
+    if max(widths) > SATIN_MAX_WIDTH_MM and not params.split_mm:
         warnings.append(f"Parts of this satin are {max(widths):.1f} mm wide. Stitches over {SATIN_MAX_WIDTH_MM:.0f} mm "
                         "lie loose and can snag: tick Split long stitches, or use a fill there.")
     if not params.auto_widen and min(widths) < SATIN_MIN_WIDTH_MM:
@@ -614,12 +617,20 @@ def satin_from_pairs(pairs: list[tuple[Point, Point]], params: SatinParams) -> t
         under += fwd + back
     # Top stitching, each side pushed out by half the pull compensation.
     top: list[Point] = []
+    longest_piece = 0.0
     for i, (a, b) in enumerate(pairs):
         comp = width_comp(params.pull_comp_mm, dist(a, b)) if params.comp_by_width else params.pull_comp_mm
         a2, b2 = inset(a, b, -comp / 2)
         p, q = (a2, b2) if i % 2 == 0 else (b2, a2)
         # Split a long stitch so it can't snag, staggering the splits so they don't line up.
-        top += [p, *_split_across(p, q, params.split_mm, i), q]
+        across = [p, *_split_across(p, q, params.split_mm, i), q]
+        longest_piece = max(longest_piece, *(dist(u, v) for u, v in zip(across, across[1:])))
+        top += across
+    if params.split_mm and longest_piece > SATIN_MAX_WIDTH_MM:
+        # Split is on but Longest is set over 7 mm, so some pieces are still long (QA2 S5: this
+        # used to say "tick Split long stitches", which was already ticked).
+        warnings.append(f"Split long stitches is set to {params.split_mm:g} mm, so some stitches are {longest_piece:.1f} mm "
+                        f"and can snag: set Longest to {SATIN_MAX_WIDTH_MM:.0f} mm or less.")
     if params.split_mm and under:
         # The underlay's stitches across the column (and the step up to the top stitching) are
         # split too, or "Split long stitches" couldn't clear the long-stitch check on wide satins.
@@ -728,6 +739,8 @@ def fill_parts(outline: Sequence, holes: Sequence[Sequence] = ()) -> list[Polygo
     if len(shell) < 3:
         raise DigitizeError("A fill needs at least three points")
     check_points(shell)
+    for h in hole_rings:
+        check_points(h, "hole")  # a bad hole used to vanish silently and be sewn over (QA2 S7)
     parts = valid_parts(shell, hole_rings)
     if not parts or sum(p.area for p in parts) < MIN_PART_MM2:
         raise DigitizeError("This shape is too small to fill")
@@ -1135,7 +1148,7 @@ def generate(obj: dict[str, Any]) -> tuple[list[Rec], list[str]]:
         recs, warnings = running(nodes, RunParams.from_dict(p), bool(g.get("closed")), _start_point(p.get("start_mm"))), []
     elif kind == "satin" and g.get("nodes") is not None:
         # A ribbon: a centre line and a width (what the Satin tool draws).
-        recs, warnings = satin_ribbon(g["nodes"], float(g.get("width_mm", 3.0)), SatinParams.from_dict(p), bool(g.get("closed")),
+        recs, warnings = satin_ribbon(g["nodes"], _finite(g, "width_mm", 3.0), SatinParams.from_dict(p), bool(g.get("closed")),
                                       _start_point(p.get("start_mm")), _start_point(p.get("end_mm")))
     elif kind == "satin":
         # A column: two edges clicked rung by rung (older projects).

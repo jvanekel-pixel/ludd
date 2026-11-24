@@ -1,3 +1,5 @@
+import re
+
 import pytest
 
 from threadline_engine import threads
@@ -175,3 +177,18 @@ def test_qa_bad_spools_and_colors_get_a_plain_message():
         threads.my_add(["red"])
     with pytest.raises(threads.ThreadError):
         threads.match([None], "janome")
+
+
+def test_qa2_t2_importing_a_chart_never_replaces_a_differently_named_one(tmp_path, isolated_data_dir):
+    """QA2 T2: ids came from the Latin letters of the name only, so every Cyrillic/Japanese name
+    was "chart" and "Isacord 40" / "Isacord-40!" collided: each import silently replaced the last."""
+    f = tmp_path / "a.csv"
+    f.write_text("code,name,hex\n1,Red,#ff0000\n", encoding="utf-8")
+    names = ["Нитки Мадейра", "糸チャート", "Isacord 40", "Isacord-40!", "CON", "nul"]
+    ids = [threads.import_csv(str(f), n)["id"] for n in names]
+    assert len(set(ids)) == len(names)
+    listed = {c["name"] for c in threads.list_charts()}
+    assert set(names) <= listed
+    assert all(re.fullmatch(r"[a-z0-9-]+", i) for i in ids)
+    # Importing the same name again still updates that chart in place
+    assert threads.import_csv(str(f), "Isacord 40")["id"] == ids[2]

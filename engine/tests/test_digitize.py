@@ -673,3 +673,47 @@ def test_qa_no_object_can_ask_for_millions_of_stitches():
             generate({**g, "params": {}})
     with pytest.raises(DigitizeError, match="isn't a number"):
         generate({"kind": "run", "geometry": {"nodes": [c(0, 0), [None, 1, "c"]]}, "params": {}})
+
+
+def _sq(x0, y0, x1, y1):
+    return [c(x0, y0), c(x1, y0), c(x1, y1), c(x0, y1)]
+
+
+def test_qa2_s5_no_tick_split_advice_when_split_is_on():
+    """QA2 S5: with Longest over 7 mm the warning told you to tick the box already ticked."""
+    rib = {"kind": "satin", "geometry": {"nodes": [c(0, 0), c(30, 0)], "width_mm": 12}}
+    for split, warned in ((0, "tick Split"), (7, None), (8, None), (12, "set Longest")):
+        _, w = generate({**rib, "params": {"split_mm": split}})
+        hit = [m for m in w if "wide" in m or "Longest" in m]
+        assert (warned in hit[0]) if warned else not hit, (split, w)
+
+
+@pytest.mark.parametrize("params,geom", [
+    ({"width_mm": None}, None), ({"spacing_mm": None}, None), ({"underlay": None}, None), ({"underlay": 5}, "x"),
+    ({"spacing_mm": "x"}, "x"), ({"split_mm": "x"}, "x"),
+])
+def test_qa2_s6_null_or_text_satin_settings_are_plain_errors_or_defaults(params, geom):
+    """QA2 S6: null or text satin/run settings crashed as "engine bug"."""
+    g = {"nodes": [c(0, 0), c(30, 0)], "width_mm": params.pop("width_mm", 3)}
+    obj = {"kind": "satin", "geometry": g, "params": params}
+    if geom:
+        with pytest.raises(DigitizeError):
+            generate(obj)
+    else:
+        assert generate(obj)[0]
+    run = {"kind": "run", "geometry": {"nodes": [c(0, 0), c(30, 0)]}}
+    assert generate({**run, "params": {"stitch_mm": None}})[0]
+    with pytest.raises(DigitizeError):
+        generate({**run, "params": {"stitch_mm": "x"}})
+
+
+def test_qa2_s7_bad_hole_points_are_refused_not_sewn_over():
+    """QA2 S7: a hole with a NaN point vanished (the fill sewed over it); a 1e9 point was kept."""
+    from threadline_engine.digitize.applique import AppliqueParams, applique
+
+    for bad in (float("nan"), 1e9):
+        hole = [c(5, 5), c(10, 5), c(10, bad), c(5, 10)]
+        with pytest.raises(DigitizeError, match="hole"):
+            fill(_sq(0, 0, 20, 20), [hole], FillParams())
+        with pytest.raises(DigitizeError, match="hole"):
+            applique(_sq(0, 0, 20, 20), AppliqueParams(), [hole])

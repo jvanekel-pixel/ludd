@@ -93,6 +93,8 @@ def _pieces(outline: Sequence, holes: Sequence[Sequence] = ()) -> list[Polygon]:
     if len(shell) < 3:
         raise DigitizeError("An applique needs at least three points")
     check_points(shell, "applique")
+    for h in hole_rings:
+        check_points(h, "hole")  # QA2 S7
     parts = [p for p in valid_parts(shell, hole_rings) if p.area >= MIN_PIECE_MM2]
     if not parts:
         raise DigitizeError("This applique shape is too small to sew")
