@@ -8,10 +8,10 @@
  },
  "applique_with_hole_run_tack": {
   "jumps": 5,
-  "records": 655,
-  "sha1": "bbcfa4c5cb6f1bc6695b9b2b36408de145f35af8",
+  "records": 658,
+  "sha1": "f4684c6f97269bb5ef1924d161ab27ec28c10ddb",
   "stitches": 648,
-  "trims": 0
+  "trims": 3
  },
  "fill_bowtie": {
   "jumps": 1,
@@ -162,9 +162,9 @@
  },
  "satin_ribbon_auto_comp_widen": {
   "jumps": 0,
-  "records": 269,
-  "sha1": "cdaabf35b1c077cf191bc2edcfd864ed9c37d593",
-  "stitches": 269,
+  "records": 270,
+  "sha1": "c53aeec0b6cce1355733c892e8677d04e0dc072c",
+  "stitches": 270,
   "trims": 0
  },
  "satin_ribbon_closed_square": {
@@ -183,9 +183,9 @@
  },
  "satin_ribbon_split": {
   "jumps": 0,
-  "records": 531,
-  "sha1": "d81e1c99b243afaabf72d03fa4f0d9cc10a40843",
-  "stitches": 531,
+  "records": 536,
+  "sha1": "e4569d1aa13cc7895f4cdc47307ca255c0cfc104",
+  "stitches": 536,
   "trims": 0
  }
 }

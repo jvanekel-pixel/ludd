@@ -128,7 +128,12 @@ def tie_off(recs: list[Rec]) -> list[Rec]:
     a, b = s[-1], s[-2]
     u = _unit(b[0] - a[0], b[1] - a[1])
     t = min(TIE_MM, dist((a[0], a[1]), (b[0], b[1])) * 0.8)
-    return recs + [(a[0] + u[0] * t, a[1] + u[1] * t, STITCH), (a[0], a[1], STITCH)]
+    # The lock goes right after the last stitch, before any trailing trim or jump: after a jump
+    # it would sew one long stitch back from where the needle jumped to (QA2 S1).
+    i = len(recs) - 1
+    while recs[i][2] != STITCH:
+        i -= 1
+    return recs[: i + 1] + [(a[0] + u[0] * t, a[1] + u[1] * t, STITCH), (a[0], a[1], STITCH)] + recs[i + 1 :]
 
 
 class Zone:
@@ -139,15 +144,16 @@ class Zone:
         self.poly = poly
         self.cover = poly.buffer(1e-6)
         shapely.prepare(self.cover)
-        self._rings: list[LineString] | None = None
+        self._rings: dict[float, list[LineString]] = {}
 
-    def rings(self) -> list[LineString]:
-        """The edges (outside and holes) of the shape shrunk by 0.3 mm, which travel can follow."""
-        if self._rings is None:
-            zone = self.poly.buffer(-0.3)
-            self._rings = [] if zone.is_empty or zone.geom_type != "Polygon" else [
-                LineString(r.coords) for r in [zone.exterior, *zone.interiors]]
-        return self._rings
+    def rings(self, inset: float = 0.3) -> list[LineString]:
+        """The edges (outside and holes) of the shape shrunk by `inset` mm, which travel can follow.
+        Every piece counts: a neck under twice the inset splits the shrunk shape, and giving up
+        then turned all travel in the fill into trimmed jumps (QA2 S1)."""
+        if inset not in self._rings:
+            self._rings[inset] = [LineString(r.coords) for piece in polygons(self.poly.buffer(-inset))
+                                  for r in [piece.exterior, *piece.interiors]]
+        return self._rings[inset]
 
 
 def _zone(inside: "Polygon | Zone") -> Zone:
@@ -158,9 +164,15 @@ def _edge_route(a: Point, b: Point, inside: "Polygon | Zone") -> list[Point] | N
     """A path from a to b that follows one edge of the shape (outside or a hole), staying inside,
     or None. Used to travel around holes instead of jumping over them."""
     z = _zone(inside)
+    # 0.3 mm in from the edge first; only when that can't connect a and b (they sit either side
+    # of a neck narrower than 0.6 mm) hug the edge itself, which still crosses the neck.
+    return _ring_route(a, b, z, 0.3) or _ring_route(a, b, z, 0.05)
+
+
+def _ring_route(a: Point, b: Point, z: "Zone", inset: float) -> list[Point] | None:
     pa, pb = ShapelyPoint(a), ShapelyPoint(b)
     best: list[Point] | None = None
-    for line in z.rings():
+    for line in z.rings(inset):
         total = line.length
         # Step straight onto the ring, follow it, step straight off. The coverage check below
         # rejects routes whose straight legs would leave the shape.
@@ -613,7 +625,9 @@ def satin_from_pairs(pairs: list[tuple[Point, Point]], params: SatinParams) -> t
         step = max(1, round(2.0 / params.spacing_mm))  # about 2 mm apart
         zz = [inset(a, b, 0.5) for a, b in pairs[::step]]
         fwd = [p for i, ab in enumerate(zz) for p in ([ab[0]] if i % 2 == 0 else [ab[1]])]
-        back = [p for i, ab in enumerate(reversed(zz)) for p in ([ab[1]] if i % 2 == 0 else [ab[0]])]
+        # The way back takes, at each rung, the side the way out didn't, so the two passes cross
+        # (an X). Counting from the far end retraced the same legs when the count was even (QA2 S2).
+        back = [ab[1] if i % 2 == 0 else ab[0] for i, ab in reversed(list(enumerate(zz)))]
         under += fwd + back
     # Top stitching, each side pushed out by half the pull compensation.
     top: list[Point] = []
@@ -626,6 +640,10 @@ def satin_from_pairs(pairs: list[tuple[Point, Point]], params: SatinParams) -> t
         across = [p, *_split_across(p, q, params.split_mm, i), q]
         longest_piece = max(longest_piece, *(dist(u, v) for u, v in zip(across, across[1:])))
         top += across
+    if params.split_mm:
+        # At a sharp corner of a wide ribbon or border the step along the outer edge, from one
+        # stitch to the next, can be longer than Longest too: add needle points along it (QA2 S4).
+        top = _subdivide(top, params.split_mm)
     if params.split_mm and longest_piece > SATIN_MAX_WIDTH_MM:
         # Split is on but Longest is set over 7 mm, so some pieces are still long (QA2 S5: this
         # used to say "tick Split long stitches", which was already ticked).
@@ -1086,7 +1104,9 @@ def _fill_part(poly: Polygon, params: FillParams, end_here: bool = True) -> tupl
         edge = poly.boundary
         q = edge.interpolate(edge.project(ShapelyPoint(end_near)))
         if dist(out[-1][:2], (q.x, q.y)) > 0.3:
-            out += travel(out[-1][:2], (q.x, q.y), poly.buffer(params.pull_comp_mm / 2 + 0.05))
+            last = travel(out[-1][:2], (q.x, q.y), poly.buffer(params.pull_comp_mm / 2 + 0.05))
+            if all(r[2] == STITCH for r in last):  # never end a fill on a jump (QA2 S1)
+                out += last
     return out, warnings
 
 
