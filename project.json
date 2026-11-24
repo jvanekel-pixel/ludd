@@ -35,8 +35,8 @@
   },
   "phase": 2,
   "status": "active",
-  "nextAction": "Owner OK to push branch claude/qa2-decisions-e5fc5b (QA pass 2 decisions 1-10 implemented) and open a PR; then tag v1.0.1 when the owner asks",
-  "blockedOnHuman": "Approve pushing claude/qa2-decisions-e5fc5b and opening its PR",
+  "nextAction": "QA pass 2 and its 10 decisions are merged (PRs #20, #21). Owner checks the AI model download once (Settings > AI tracing); then tag v1.0.1 when the owner asks",
+  "blockedOnHuman": null,
   "lastSessionAt": "2026-11-24T18:00:00Z",
   "health": {
     "tests": "passing",
