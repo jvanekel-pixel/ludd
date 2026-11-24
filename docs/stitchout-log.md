@@ -60,6 +60,10 @@ The user is testing on the machine once the software is about 95% done (decided 
 | 1.0.1 | **Auto-trace fitted round shapes** | A traced area next to a shape already made, "fitted around your shapes" | No gap and no double layer where they meet (0.3 mm tuck) |
 | 1.0.1 | **Cut out with a shape** | A circle cut out of a fill (Shift+O), the circle sewn on top | Clean hole edge; the circle covers it with no fabric showing |
 | 1.0.1 | **Lettering hand-overs and satin stops** | "Hello" at 25 mm, Satin look; a satin leaf with its stop dragged to the middle of one side | Short jumps between letters (no trims where letters touch); the satin finishes at the chosen side with nothing showing across it |
+| 1.0.1 (QA2 1) | **Fill with a thin neck** | Two fills joined by a strip about 0.4 mm wide (for example a traced shape with a hairline join), default underlay, then the same with its red end dot set | No thread across bare fabric and no trims inside the one fill; the last stitch isn't a long loose one |
+| 1.0.1 (QA2 2) | **Zigzag underlay crosses** | Two 6 mm satin ribbons, 20 mm and 22 mm long, Automatic underlay | Both lie flat and even; the underlay looks the same in both (an X, not one diagonal sewn twice) |
+| 1.0.1 (QA2 3) | **Trims between applique edges** | A 60 × 20 mm applique with two holes, Have the machine cut jump threads on | No thread left lying between the edges; any extra stops resume cleanly |
+| 1.0.1 (QA2 4) | **Sharp corners with Split long stitches** | An 8 mm ribbon with a 30° corner, and a star applique (25 mm points) with an 8 mm border | Corners full, with no loose stitch at the outer tip |
 | 1.0.1 | Dragged start, end and direction dots | A rectangle fill with its red dot dragged to the middle of an edge and its purple dots set to 20°; a satin fill with its tips moved; a closed line started mid-side | The fill's last stitch is at that spot with no thread showing across the fill; rows run at 20°; the satin runs between the chosen tips |
 
 ## Log

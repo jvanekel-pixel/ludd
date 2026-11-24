@@ -2,6 +2,17 @@
 
 ## 1.0.1 (Oct 11, 2026)
 
+### QA pass 2 decisions (2026-11-24)
+The owner's ten decisions from docs/QA-REPORT-2.md. Items 1-4 change stitch output (rows in docs/stitchout-log.md):
+- **Thin necks in fills**: travel inside a fill follows its edges even where part of the shape is narrower than about 0.6 mm (it jumped, with a trim, across bare fabric and bounced between the two halves). A fill never ends on a jump, and the lock stitches at the end of a shape always come before any trim or jump (they could make one 10-15 mm stitch).
+- **Zigzag underlay**: the way back always crosses the way out, like an X (on about half of wide satins it sewed the same zigzag twice).
+- **Applique**: a move of more than 3 mm between edges (holes, separate pieces) is marked for trimming, as in fills. With cut-stops on, that can add machine stops.
+- **Sharp corners**: with Split long stitches on, wide satin ribbons and applique borders get an extra needle point at sharp corners, so no stitch passes the Longest setting (they reached 8.6 mm).
+- **Edited stitch files keep their edits on the right stitches**: once a placed stitch file has edits (colors changed, colors or stitches deleted, stops or trims added, stitches moved), it sews from LUDD's private copy taken when it was added, even if the original is saved again in another program. Without edits it still follows the file. Old projects open as before.
+- **Samples**: the ready-to-sew sample PES/JEF files are made again from their projects, and a test checks that each sample project still sews like its PES.
+- **Ctrl+Z while drawing** removes the last point you placed (like Backspace) and leaves the rest of your work alone; Ctrl+Y does nothing until the shape is finished.
+- **Behind the scenes**: a test fails when a Tauri plugin's Rust and JavaScript halves are on different versions; CI builds and tests the Rust code on a Mac on every push, and releases run the Rust tests on every system; this changelog uses US spelling throughout.
+
 ### QA pass 2 (2026-11-24)
 A second full review (docs/QA-REPORT-2.md). Fixed:
 - **One tool at a time**: the knife, stitch editing, the measuring tool (M) and the angle line (I) no longer stay on together (two clicks "to measure" cut the shape). Starting one ends the others; picking a drawing tool ends stitch editing; the angle line ends when its fill is deleted or undone.
@@ -38,9 +49,9 @@ A review of the whole app after the changes above; fixed:
 - **Engine answers that arrive late** (moving a dot, satin tips, Satin fill, Shift+W, Break into shapes, Cut out) are dropped if the shape was changed or undone meanwhile, instead of overwriting the newer edit.
 - **Groups**: a picture underneath doesn't take a drag inside the group's frame; Shift+click on empty space keeps the selection.
 - **Arrow keys** nudge the selected shape even while a drawing tool is still chosen (they moved the view instead). Esc while drawing a hole goes back to the tool and the fill. K (add points) works right after drawing.
-- **Commands** are only offered where they work: Cut a hole and Set the stitch angle for fills, Add a satin border for fills and closed lines, the knife for fills, lines and ribbons, Cut out with two or more selected. Alt+T also recolors several selected one-colour stitch files.
-- **Order & colors**: a changed colour can be put back (**Back to …**); right-clicking a row selects it alone; Match… leaves the basting box and knockdown alone (its count was off); with neither on, no stray "Basting box" row. The thread picker forgets the last search and mixed colour when it closes and never shows the previous thread's matches; "Found in" sees newly added spools; words like "facade" aren't taken for colour codes. The context menu scrolls instead of closing in a short window, and opening it no longer resets an open thread picker.
-- **Knife and Cut out** pieces get their own start, end and direction (each used to copy the whole shape's); Cut out pieces keep the colour change, pin and group.
+- **Commands** are only offered where they work: Cut a hole and Set the stitch angle for fills, Add a satin border for fills and closed lines, the knife for fills, lines and ribbons, Cut out with two or more selected. Alt+T also recolors several selected one-color stitch files.
+- **Order & colors**: a changed color can be put back (**Back to …**); right-clicking a row selects it alone; Match… leaves the basting box and knockdown alone (its count was off); with neither on, no stray "Basting box" row. The thread picker forgets the last search and mixed color when it closes and never shows the previous thread's matches; "Found in" sees newly added spools; words like "facade" aren't taken for color codes. The context menu scrolls instead of closing in a short window, and opening it no longer resets an open thread picker.
+- **Knife and Cut out** pieces get their own start, end and direction (each used to copy the whole shape's); Cut out pieces keep the color change, pin and group.
 - **Stitch Advisor** looks at shapes where they are now (moved, turned, resized), not where they were drawn.
 - **Auto-trace**: a drawn shape inside another's hole is no longer ignored when fitting guesses around your shapes.
 - Picture right-click menu: "See-through stitches (all)" and "Show pictures (all)" say they're for every picture, plus **Hide this picture**. The panel's ⋯ menu has Change thread, Center in the hoop, Sew first / last, and for lettering Change the words and Break into shapes.
@@ -56,7 +67,7 @@ A review of the whole app after the changes above; fixed:
 - **Fixed: a group couldn't be dragged from the space between its pieces**: a click inside the group's frame grabbed the background. Dragging anywhere inside the frame now moves the whole group.
 
 ### PES files sit in the middle of the hoop on the machine
-- **Fixed: on the PE550D a PES file saved by LUDD showed whole in the file list, but once opened it sat up and to the left, mostly outside the hoop, and couldn't be moved back.** LUDD wrote the design centred on (0, 0); Brother machines read a PES design from its top-left corner, as Embrilliance and PE-Design write it. PES files now run from (0, 0) like theirs, and the machine centres them in the hoop. Save your designs for the machine again (the stitches are the same, only their position in the file changed). JEF files were not affected.
+- **Fixed: on the PE550D a PES file saved by LUDD showed whole in the file list, but once opened it sat up and to the left, mostly outside the hoop, and couldn't be moved back.** LUDD wrote the design centered on (0, 0); Brother machines read a PES design from its top-left corner, as Embrilliance and PE-Design write it. PES files now run from (0, 0) like theirs, and the machine centers them in the hoop. Save your designs for the machine again (the stitches are the same, only their position in the file changed). JEF files were not affected.
 
 ### Satins start and stop anywhere; lettering has a start and end per letter
 - **Fixed: a satin's start and stop dots were stuck at its two ends.** A satin (ribbon, column or satin fill) now starts and stops wherever you drag its dots along it: to stop part way it's sewn in two parts that meet there, and every move between parts runs along its middle under satin sewn later. On a wide satin it ends on the side the dot is on.
@@ -73,9 +84,9 @@ A review of the whole app after the changes above; fixed:
 - A fill's start, end and direction dots move, turn and resize with it (before, a fill's start point stayed behind when it was moved).
 
 ### Right-click menus
-- **Right-click anything** for what you can do with it, each with its shortcut: a shape (change thread, cut / copy / duplicate / remove, add points, cut a hole, knife, satin border, outline, sew first / earlier / later / last, turn, mirror, centre in the hoop, repeat, pin, rename, zoom to it, Stitch Advisor), several shapes (group, merge, cut out, text on a line), lettering (change the words, one file per name), a stitch file (edit its stitches), a picture (auto-trace, pin / unpin, see-through, hide, remove) and the empty canvas (paste, select all, draw, shapes, add a picture, zoom, view options). Right-clicking selects the thing first. A right-click still finishes a shape while drawing, uses the guess in Auto-trace and switches a point's kind.
+- **Right-click anything** for what you can do with it, each with its shortcut: a shape (change thread, cut / copy / duplicate / remove, add points, cut a hole, knife, satin border, outline, sew first / earlier / later / last, turn, mirror, center in the hoop, repeat, pin, rename, zoom to it, Stitch Advisor), several shapes (group, merge, cut out, text on a line), lettering (change the words, one file per name), a stitch file (edit its stitches), a picture (auto-trace, pin / unpin, see-through, hide, remove) and the empty canvas (paste, select all, draw, shapes, add a picture, zoom, view options). Right-clicking selects the thing first. A right-click still finishes a shape while drawing, uses the guess in Auto-trace and switches a point's kind.
 - **Rows in the panel too**: a step in the Sewing order, a color in Threads (change it, remove its stitches, match all, color options) and a picture in Pictures.
-- New commands, also on the keyboard: **Change thread…** (Alt+T), **Sew earlier / later** (Ctrl+[ / Ctrl+]), **Sew first / last** (Ctrl+Shift+[ / ]), **Centre in the hoop** (Ctrl+Shift+M), **Change the words** of lettering (Ctrl+Alt+W).
+- New commands, also on the keyboard: **Change thread…** (Alt+T), **Sew earlier / later** (Ctrl+[ / Ctrl+]), **Sew first / last** (Ctrl+Shift+[ / ]), **Center in the hoop** (Ctrl+Shift+M), **Change the words** of lettering (Ctrl+Alt+W).
 
 ### The tool you chose stays chosen
 - Auto-trace, Text and a hole (O) no longer drop you back to Select: after using a guess you can click the next shape straight away, and after placing text you can click to place more (clicking a text picks it). V or Esc still go back to Select.
@@ -86,9 +97,9 @@ A review of the whole app after the changes above; fixed:
 - **Or mix your own color**: a color picker under the list, for a thread you don't have a chart for. The thread's own color code shows next to its name.
 
 ### Auto-trace sees the whole design
-- **Guesses fit around what you've already made**: a guess that runs over shapes you've drawn or traced comes cut around them (tucked 0.3 mm under, so there's no gap and nothing is sewn twice), labelled "fitted around your shapes"; Tab still offers the whole area, "over your shapes". Click on a shape you've made to trace that spot again as it is.
+- **Guesses fit around what you've already made**: a guess that runs over shapes you've drawn or traced comes cut around them (tucked 0.3 mm under, so there's no gap and nothing is sewn twice), labeled "fitted around your shapes"; Tab still offers the whole area, "over your shapes". Click on a shape you've made to trace that spot again as it is.
 - **The AI tracing model is told what's already there**: the shapes nearest your click are "not this" to it, so its outline stops at them instead of swallowing them.
-- **The Stitch Advisor sees the neighbours**: each shape's picture now shows the shapes around it in their thread colors, so its advice fits the design as a whole.
+- **The Stitch Advisor sees the neighbors**: each shape's picture now shows the shapes around it in their thread colors, so its advice fits the design as a whole.
 
 ### Settings in a small window
 - Settings (and every dialog) scrolls with the mouse wheel when the window is too short to show all of it; before, the bottom of Settings could be out of reach.
@@ -102,7 +113,7 @@ A review of the whole app after the changes above; fixed:
 - Resizing several things together keeps each one exactly in place relative to the others.
 
 ### Optimize jumps, density slider
-- **Optimize jumps** (Ctrl+Alt+J, next to Sew in the shortest order): keeps the sewing order and chooses where each piece starts and ends, so same-colour pieces hand over to each other like magnets (on the Flower sample, 132 mm of jumps became 45 mm, all tucked under the centre). Lines and satins are turned round, borders start at the nearest point, fills start at the nearest edge.
+- **Optimize jumps** (Ctrl+Alt+J, next to Sew in the shortest order): keeps the sewing order and chooses where each piece starts and ends, so same-color pieces hand over to each other like magnets (on the Flower sample, 132 mm of jumps became 45 mm, all tucked under the center). Lines and satins are turned round, borders start at the nearest point, fills start at the nearest edge.
 - **Density is adjustable again in view**: a Lighter ↔ Denser slider with its number under it (mm between rows and rows per mm, or per inch), updating as you drag, plus the exact spacing to type, under Light / Normal / Dense for fills and satins.
 
 ### Satin fill, holes, Shapes menu
@@ -118,8 +129,8 @@ A review of the whole app after the changes above; fixed:
 
 ### Realistic thread, redone
 - **Thread looks like thread at every zoom.** Each stitch is shaded round with a glossy highlight and visible twist, lit from one direction (upper left) whichever way it was sewn; stitches dip into the fabric at the needle holes, so fill patterns show; every shape casts a soft shadow on the fabric and on the shapes under it, so later layers look raised. Zoomed out, threads are smoothed instead of sparkling.
-- **The design sits on light fabric by default**, in dark mode too (as the shadows and colours need); Settings → Always show the design on light fabric turns it off.
-- **A stitch file opens in the middle of the hoop.** Many PES files start at a corner, so they used to appear off to one side (they always sewed centred). Added designs land in the middle too, a little down and right of the last one.
+- **The design sits on light fabric by default**, in dark mode too (as the shadows and colors need); Settings → Always show the design on light fabric turns it off.
+- **A stitch file opens in the middle of the hoop.** Many PES files start at a corner, so they used to appear off to one side (they always sewed centered). Added designs land in the middle too, a little down and right of the last one.
 
 ### Mouse pointers
 - **LUDD has its own mouse pointers**, and each one says what a click or drag will do there: select and move, drag a point, resize, turn, move a guide, move the view, and a crosshair with a badge for each drawing tool (line, satin, fill, text, knife, measuring, stitch angle, stitch editing). While drawing, the middle of the crosshair shows the kind of point the next click makes. Auto-trace has a wand. See "The mouse pointer" in the manual.
@@ -134,7 +145,7 @@ The Medium and Low findings, area by area (details in `docs/qa-phase4/`).
 - **Whole picture, cleaner results**: one thread per real color (all dark parts share one black, JPEG shades merge); bold lettering is one fill per letter; no thin ring fills from soft edges; satin outlines reach the ends of the lines.
 - **Leave out the background** works on dark backgrounds too, keeps shapes that touch the edge, and no longer sews the paper inside letters and rings.
 - **Whole picture's bar** has its own Points every and Spread; the preview follows them and the picture's place.
-- **Pictures**: 16-bit grey PNGs trace correctly; huge pictures use far less memory (one too big says so); a picture changed in another program after you added it is no longer traced or saved instead of the one you see.
+- **Pictures**: 16-bit gray PNGs trace correctly; huge pictures use far less memory (one too big says so); a picture changed in another program after you added it is no longer traced or saved instead of the one you see.
 - **AI tracing**: if the model can't run, Auto-trace says so and still shows its usual guesses; a broken-off download says what went wrong and leaves nothing behind.
 
 **Stitches & fills**
@@ -174,7 +185,7 @@ The Medium and Low findings, area by area (details in `docs/qa-phase4/`).
 **Splitting & saving for the machine**
 - **Split**: the overlap setting is the real overlap; empty hoopings are left out; pink crosses go on bare fabric; single-stitch dots are kept; fewer lock stitches at the seam; earlier files are never replaced.
 - **"Make it N% smaller"** for a design just a little too big for the hoop.
-- **JEF**: long stitches are sewn in pieces (no needle-up jumps) and the design is centred on the hoop.
+- **JEF**: long stitches are sewn in pieces (no needle-up jumps) and the design is centered on the hoop.
 - **Safer files**: never half-written; accented thread names stay readable in PES; over 255 PES color steps or nothing to sew is refused with an explanation.
 - **Cut-stops**: Save for machine says when long jumps aren't marked for trimming (so won't be cut). Thick spots inside bought designs are a note, not a warning.
 - **One file per name** saves the other names when one fails, and says which. **Batch convert** into the folder it reads from works.
@@ -201,7 +212,7 @@ The Medium and Low findings, area by area (details in `docs/qa-phase4/`).
 **Installer & updates**
 - **On a Mac**, double-clicking a .ludd opens it, Cmd+Q asks about unsaved changes, and LUDD needs macOS 14 or newer (it says so at install).
 - **Updates**: unticking "Tell me when a new version is out" on the first-run card is respected; offline, Check for updates says to check the connection.
-- **The installer includes the licences** of the libraries and fonts LUDD uses.
+- **The installer includes the licenses** of the libraries and fonts LUDD uses.
 - Behind the scenes: every build starts the packaged engine once to check it; CI tests Windows, both kinds of Mac and Linux; more stitch-outs are pinned by tests.
 
 **Small fixes**
@@ -229,13 +240,13 @@ The Medium and Low findings, area by area (details in `docs/qa-phase4/`).
 - **Printing** (template and thread list) keeps its styling in the installed app. (C22)
 - **Text on a line** warns when the text is longer than the line.
 - **Stitch editing**: moved stitches turn and resize with the design afterwards.
-- MobileSAM's licence is Apache-2.0 (it said MIT).
+- MobileSAM's license is Apache-2.0 (it said MIT).
 
 ### Fixes from the QA review (docs/QA-REPORT.md), phase 1: stitch-out and data safety
 - **Splitting across hoopings keeps every stop** (applique placement and tack-down, stops you added) in each hooping's file. Before, they were dropped and the satin border sewed onto bare garment. (C1)
 - **Splitting keeps the layering across hoopings**: runs are cut at the seams, and a run is sewn whole only where that can't put a lower layer on top of a higher one in a later hooping. (C5)
 - **Fewer jumps & trims**, rebuilt: no more crash on thin running stitches (C2); about 100× faster (no work unless two same-thread shapes are joined; covers cached; C3); judged on the final sewing order, so Sort colors can't leave travel stitches on top (C6).
-- **Deleting every stitch of a colour** removes that colour from the file; the thread list no longer shifts (C4). Deleting everything is refused with a message.
+- **Deleting every stitch of a color** removes that color from the file; the thread list no longer shifts (C4). Deleting everything is refused with a message.
 - **Wave fill** rows no longer cross each other (they ripple together; C15).
 - **Applique holes** get their own placement, tack-down, satin edge and cutting line (C8).
 - **Missing fonts**: a project whose font isn't installed opens, showing that text in a standard font with a warning (C7).
@@ -256,7 +267,7 @@ The Medium and Low findings, area by area (details in `docs/qa-phase4/`).
 - **Rulers and guides**: drag guides from the rulers (Ctrl+R), drop them back to remove; points snap to them; saved in the project.
 
 ### Other 1.0.1 changes
-- **Fixed: the design area stayed blank (grey) in the installed app.** The installed app runs under a strict security policy that forbids building code at run time, which the drawing library (PixiJS) does by default; the development version doesn't have the policy, so it never showed there. LUDD now loads PixiJS's add-on for this, so the policy stays strict. A test fails if that ever goes missing, and if the design area can't start for any other reason LUDD now says so instead of showing grey.
+- **Fixed: the design area stayed blank (gray) in the installed app.** The installed app runs under a strict security policy that forbids building code at run time, which the drawing library (PixiJS) does by default; the development version doesn't have the policy, so it never showed there. LUDD now loads PixiJS's add-on for this, so the policy stays strict. A test fails if that ever goes missing, and if the design area can't start for any other reason LUDD now says so instead of showing gray.
 - **The Windows installer shows the LUDD logo**: on its welcome and finish pages, in the banner on the other steps, and as its icon. (`scripts/make_installer_art.py` makes the pictures.)
 - The PDF manual (`docs/LUDD-User-Manual.pdf`) and the script that makes it.
 - **The right panel is reorganized into folding sections** (two levels, no tabs). What you select opens its own section (Fill, Satin, Line, Applique, Lettering, Stitch file, Picture) with everyday settings in view and smaller folds inside for Underlay, Advanced stitch settings, lettering Shape and Advanced, and a stitch file's Rotation and position. Then Size and points, Design (with the fabric and File details), Threads, Sewing order, Check before stitching and Pictures. Closed headings show a one-line summary; nothing selected opens Design and Threads; open/closed is remembered per kind of selection; Ctrl+click a heading opens only that one, Alt+click opens or closes everything inside. A header that stays in view names the selection and holds turn, mirror, duplicate and a ⋯ menu (Repeat, Pin, Remove).

@@ -30,9 +30,9 @@
   },
   "phase": 2,
   "status": "active",
-  "nextAction": "Implement the 10 QA pass 2 decisions (docs/QA-REPORT-2.md; all as recommended, 9 = a) with tests, docs and stitch-out rows; then tag v1.0.1 when the owner asks",
-  "blockedOnHuman": null,
-  "lastSessionAt": "2026-11-24T14:00:00Z",
+  "nextAction": "Owner OK to push branch claude/qa2-decisions-e5fc5b (QA pass 2 decisions 1-10 implemented) and open a PR; then tag v1.0.1 when the owner asks",
+  "blockedOnHuman": "Approve pushing claude/qa2-decisions-e5fc5b and opening its PR",
+  "lastSessionAt": "2026-11-24T18:00:00Z",
   "health": {
     "tests": "passing",
     "build": "passing",

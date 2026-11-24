@@ -103,7 +103,7 @@ checks), so you rarely need to open one just to look.
 - **Add design** (Ctrl+Shift+O): places another stitch file into the design you have open, to
   combine designs. Dragging a file onto an open design adds it, too.
 - **⋯ → Open a sample design** (Ctrl+Shift+E): five designs that come with LUDD, to try things
-  on (three of them also as PES and JEF files). They open as new designs, so Save asks where to
+  on (three of them also as PES and JEF files, which sew exactly like their projects). They open as new designs, so Save asks where to
   keep yours.
 - **New** (Ctrl+N, or Shift+D as in Embrilliance): an empty design on the fabric you used last.
 
@@ -269,7 +269,7 @@ selected, the arrow keys nudge it even while a drawing tool is chosen.
 | **Alt** while clicking | keeps the new point on 15° steps from the last one |
 | **Enter**, **right-click** or **double-click** | finishes the shape |
 | **Ctrl+right-click** | finishes a line and closes it into a loop |
-| **Backspace** | removes the last point |
+| **Backspace** or **Ctrl+Z** | removes the last point (Ctrl+Z doesn't undo anything else while you draw; Ctrl+Y waits until the shape is done) |
 | **Esc** | cancels the shape (press again to go back to Select) |
 | **C** while drawing | switches the last point: curve → straight → corner |
 | **Shift+G** | snaps new points to the grid (on/off) |
@@ -492,7 +492,10 @@ stitches** (in its section, ⋯, or Ctrl+Alt+E). Every needle point shows.
 - **Delete** (or Backspace) removes the selected stitches (with none selected it does nothing, so
   the design is safe).
 - **Esc** or **Done** finishes. Every edit (a whole drag, too) is one Ctrl+Z.
-The edits are kept with the design in the project; the original file isn't changed.
+The edits are kept with the design in the project; the original file isn't changed. Once a placed
+file has edits, LUDD sews it from its own copy, made when you added it: if the original is saved
+again in another program, your edits still land on the right stitches. To use the new version, add
+it again and redo the edits.
 
 ### Order & colors
 One list in the panel for what sews when and in which thread (it used to be two sections,
@@ -559,7 +562,7 @@ ones; shapes already drawn keep theirs.
 | **Random** | ✓ | | | Moves needle points a little at random (0–50%) so no lines show across the fill. |
 | **Edge pad** | ✓ | ✓ | | Pull compensation: widens the shape because stitches pull the fabric in. **Auto** chooses from the fabric (and, for satins, the width). |
 | **Reverse** | ✓ | | | Sews the fill from the other end. |
-| **Split long stitches** | | ✓ | | Splits satin stitches longer than the length you set (underlay too), so they can't snag. |
+| **Split long stitches** | | ✓ | | Splits satin stitches longer than the length you set (underlay too, and the outer edge at sharp corners), so they can't snag. |
 | **Style** | | | Single · Triple · Bean · Motif | One pass, three passes end to end, each stitch three times, or a motif (below). |
 | **Lock stitches** | ✓ | ✓ | ✓ | Tiny tie-in and tie-off stitches so the thread can't unravel. (An applique always locks round its stops.) |
 
@@ -697,7 +700,10 @@ Make any closed shape an **Applique** (its section → Stitch as). The machine s
 2. a **tack-down** (zigzag, or straight for felt and non-fraying fabric), then stops: trim the
    fabric close to the stitching;
 3. a **satin border** over the raw edge (its width and density are adjustable; a border wider
-   than 7 mm is split automatically so its stitches can't snag).
+   than 7 mm is split automatically so its stitches can't snag, sharp corners included).
+
+Moving from one edge to the next (a hole, or another piece) more than 3 mm away is marked for
+trimming, as in fills; with "Have the machine cut jump threads" on, the PE550D stops there to cut.
 
 A piece with **holes** (O while it's selected, or a fill with holes turned into an applique) gets
 all three round each hole's edge too, and the cut file has a cutting line for every hole.
@@ -892,7 +898,7 @@ Shortcuts are also shown in every menu and on every button's tooltip.
 
 | Do this | Press |
 | --- | --- |
-| Undo / redo | Ctrl+Z / Ctrl+Y (or Ctrl+Shift+Z) |
+| Undo / redo | Ctrl+Z / Ctrl+Y (or Ctrl+Shift+Z). While drawing, Ctrl+Z removes the last point and Ctrl+Y does nothing |
 | Select several | Shift+click or Ctrl+click |
 | Select everything | Ctrl+A |
 | Group / ungroup | Ctrl+G / Ctrl+U |
@@ -937,7 +943,7 @@ Shortcuts are also shown in every menu and on every button's tooltip.
 | Keep the new point on 15° steps | hold Alt |
 | Finish the shape | Enter, right-click or double-click |
 | Finish a line and close it | Ctrl+right-click |
-| Remove the last point | Backspace |
+| Remove the last point | Backspace or Ctrl+Z (while drawing) |
 | Switch the last point: curve, straight, corner | C (while drawing) |
 | Drop the shape (even a single point) | Esc |
 | Move around without grabbing anything | hold Space and drag |
