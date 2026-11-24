@@ -11,6 +11,7 @@ import ctypes
 import math
 import os
 import sys
+import tempfile
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -125,6 +126,25 @@ def save(patch: dict[str, Any]) -> dict[str, Any]:
 # ---------------------------------------------------------------- the API key
 
 
+def _write_private(path: Path, data: bytes) -> None:
+    """Write the key file atomically and owner-only from the start: mkstemp creates the temp
+    file as 0600, so there is no moment when other users could read it, and a crash mid-write
+    leaves the old key rather than half a file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=f".{path.stem}-", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+            fh.flush()
+            os.fsync(fh.fileno())
+        if sys.platform != "win32":
+            os.chmod(tmp, 0o600)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
 def set_key(key: str | None) -> dict[str, Any]:
     f = _key_file()
     if key is not None and not isinstance(key, str):
@@ -133,10 +153,7 @@ def set_key(key: str | None) -> dict[str, Any]:
         if not key or not key.strip():
             f.unlink(missing_ok=True)
             return public()
-        f.parent.mkdir(parents=True, exist_ok=True)
-        f.write_bytes(_protect(key.strip().encode("utf-8")))
-        if sys.platform != "win32":
-            os.chmod(f, 0o600)
+        _write_private(f, _protect(key.strip().encode("utf-8")))
     except OSError as exc:
         raise AISettingsError(f"Couldn't save the key: {exc.strerror or exc}") from exc
     return public()

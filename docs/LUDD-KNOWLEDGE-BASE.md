@@ -294,8 +294,8 @@ the real machine for every case (stitch-out tests are queued; see L-016).
 ### F-401 Zoom and pan — YES
 Wheel zooms at the pointer; drag empty space or middle button to pan; **hold Space and drag** to
 pan without grabbing anything (also mid-shape). While drawing, arrow keys move the view 1 cm and the
-view scrolls at the edge. `A` all · `S` selection · `0` hoop · `1` real size · `2`–`9` × real size ·
-`+`/`-`.
+view scrolls at the edge. `A` all · `S` selection (everything selected, 2026-11-24; it was only
+one item) · `0` hoop · `1` real size · `2`–`9` × real size · `+`/`-`.
 
 ### F-402 Views — YES
 `T` realistic thread (lit, shaded, shadows; on by default) · `P` stitch points · `N` stitches
@@ -733,7 +733,8 @@ original file isn't changed) and turn/resize with the design.
 ### F-2001 AI add-on modes — YES
 Settings → AI add-on: **Off** (nothing sent) · **On this computer** (Ollama; e.g. `ollama pull
 qwen2.5vl:7b`; the owner has this set up) · **Cloud** (Anthropic or OpenAI-compatible, own key,
-https only; key stored encrypted on Windows). Before anything is sent, LUDD shows what, where and the
+https only; key stored encrypted on Windows; on a Mac or Linux in a file only the user can read, from
+the moment it's written, 2026-11-24). Before anything is sent, LUDD shows what, where and the
 maximum cost: the text, any pictures, and (under its own heading) LUDD's fixed instructions to the AI.
 If the service tries to redirect LUDD to another address, LUDD refuses (your key stays with the
 address in Settings) and says to check the address (2026-11-24).
@@ -864,6 +865,7 @@ Use this to answer "did that change?" or "why is it different?". Full detail: `d
 
 | Date | Change |
 | --- | --- |
+| 2026-11-24 | **Phase 1 audit fixes**: `S` zooms to everything selected (was one item); the AI key file is written whole and private from the start on Mac/Linux. No stitch changes. |
 | 2026-11-24 | **QA pass 2 decisions** (changes stitches): fills with a thin neck travel along their edges and never end on a jump; zigzag underlay crosses back in an X; long moves between applique edges are trimmed; Split long stitches holds at sharp corners of ribbons and applique borders; a placed stitch file with edits sews from LUDD's copy taken when it was added; sample PES/JEF made again; Ctrl+Z while drawing removes the last point, Ctrl+Y waits; CI builds the Mac code. |
 | 2026-11-24 | **QA pass 2** (docs/QA-REPORT-2.md): the knife, stitch editing, the ruler and the angle line no longer stay on together; picking a tool ends stitch editing; knife, merge, outline and Optimize jumps drop an answer if the design changed meanwhile; Auto-trace keeps the next guess while the last one is added; Ctrl+X cuts the only shape; a failed delete keeps the selection; damaged parts of a project are left out with a note; private copies are found again after an engine restart; AI services can't redirect your key elsewhere; thread charts with similar or non-Latin names no longer replace each other; tiny pictures trace fast or say they're too small; plain messages for odd satin and line settings and bad hole points; Settings knows if AI tracing really runs. |
 | 2026-11-14 | **QA decisions**: pinned shapes ignore arrows, R and Alt+H/V; Browse designs has **Refresh**; the AI send preview shows LUDD's fixed instructions; the AI tracing model download is pinned and checked; US spelling in the app (Center, Millimeters, Licenses); GitHub Actions pinned by commit and Dependabot added. |
