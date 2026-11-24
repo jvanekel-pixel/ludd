@@ -132,6 +132,27 @@ def test_key_is_stored_scrambled_and_never_shown():
     assert settings.public()["has_key"] is False
 
 
+def test_key_file_is_replaced_whole_and_owner_only(monkeypatch):
+    import os
+    import sys
+
+    settings.set_key("sk-first")
+    f = settings._key_file()
+    # A failed write leaves the old key, never half a file, and no temp file behind.
+    real_fsync = os.fsync
+    monkeypatch.setattr(os, "fsync", lambda fd: (_ for _ in ()).throw(OSError(28, "No space left on device")))
+    with pytest.raises(settings.AISettingsError):
+        settings.set_key("sk-second")
+    monkeypatch.setattr(os, "fsync", real_fsync)
+    assert settings.get_key() == "sk-first"
+    assert [p.name for p in f.parent.iterdir() if p.suffix == ".tmp"] == []
+    settings.set_key("sk-second")
+    assert settings.get_key() == "sk-second"
+    if sys.platform != "win32":
+        assert (f.stat().st_mode & 0o777) == 0o600
+    settings.set_key(None)
+
+
 def test_cloud_without_a_key_explains():
     settings.save({"mode": "cloud"})
     with pytest.raises(AIError, match="API key"):

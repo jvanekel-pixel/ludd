@@ -261,6 +261,20 @@ describe("Edits that overlap a render", () => {
     expect(g.centers.f1[0]).toBeCloseTo(15);
     await A.whenIdle();
   });
+
+  it("S zooms to every selected item, not just one", async () => {
+    const engine = fakeEngine();
+    setDoc(engine, file("f1"), file("f2"));
+    useStore.setState({
+      design: { ...useStore.getState().design!, items: [{ id: "f1", bounds_mm: [0, 0, 10, 10] }, { id: "f2", bounds_mm: [40, 5, 50, 20] }] as never },
+    });
+    useStore.getState().setSelection("f1", ["f2"]);
+    run("view.zoomSelected");
+    const z = useStore.getState().zoomRequest;
+    expect(z.kind).toBe("box");
+    expect(z.box).toEqual([0, 0, 50, 20]);
+    await A.whenIdle();
+  });
 });
 
 describe("Documents and files", () => {

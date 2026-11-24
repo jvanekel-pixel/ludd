@@ -188,7 +188,7 @@ does. Existing files are never replaced.
   a shape (as in Embrilliance). A quick tap of Space still plays and pauses the stitch-out.
 - While drawing, the **arrow keys** move the view 1 cm, and taking the pointer to the edge of the
   design area scrolls that way, so you can keep drawing past the edge of the screen.
-- **A** zoom to all · **S** zoom to the selection · **0** zoom to the hoop · **1** real size ·
+- **A** zoom to all · **S** zoom to the selection (everything selected) · **0** zoom to the hoop · **1** real size ·
   **2–9** two to nine times real size · **+ / −** zoom in and out · the − / % / + / Fit buttons at
   the bottom right.
 

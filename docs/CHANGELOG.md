@@ -2,6 +2,12 @@
 
 ## 1.0.1 (Oct 11, 2026)
 
+### Phase 1 audit fixes (2026-11-24)
+From docs/PHASE1-AUDIT-REVIEW.md. No stitch output changed.
+- **S (Zoom to the selection)** with several things selected zooms to all of them (it zoomed to just one).
+- **AI key**: the key file is written whole and readable only by you from the moment it's created (on a Mac or Linux it was briefly readable by other users, and a crash mid-save could leave half a file). Moving the key into the system keychain is still on the backlog.
+- **Behind the scenes**: the developer-only browser preview's engine bridge refuses requests over 1 GB and no longer waits for an answer to a message that never gets one.
+
 ### QA pass 2 decisions (2026-11-24)
 The owner's ten decisions from docs/QA-REPORT-2.md. Items 1-4 change stitch output (rows in docs/stitchout-log.md):
 - **Thin necks in fills**: travel inside a fill follows its edges even where part of the shape is narrower than about 0.6 mm (it jumped, with a trim, across bare fabric and bounced between the two halves). A fill never ends on a jump, and the lock stitches at the end of a shape always come before any trim or jump (they could make one 10-15 mm stitch).

@@ -1794,6 +1794,11 @@ function zoomSelected() {
   const l = currentLayout();
   const img = s.history.present?.images.find((im) => im.id === s.selectedId);
   if (img) return s.requestZoom("box", { box: [img.x - img.width_mm / 2, img.y - img.height_mm / 2, img.x + img.width_mm / 2, img.y + img.height_mm / 2] });
+  const ids = selectionIds();
+  if (ids.length > 1) {
+    const box = selectionGeometry(ids).box;
+    if (box) return s.requestZoom("box", { box });
+  }
   const id = targetId();
   const i = l && id ? l.items.findIndex((it) => it.id === id) : -1;
   const b = i >= 0 ? s.design?.items?.[i]?.bounds_mm : null;

@@ -27,6 +27,24 @@ export function allowedRequest(headers: { host?: string; origin?: string }): boo
   }
 }
 
+/** Largest request the bridge reads. Projects carry their pictures, so this is generous, but a
+ *  runaway or hostile post can't fill memory. */
+export const MAX_BODY_BYTES = 1024 * 1024 * 1024;
+
+/** What to do with a posted body: refuse it, pass a notification (no id, so no answer will come)
+ *  straight through, or make a call and wait for its answer. */
+export function planRequest(body: string): { kind: "bad" } | { kind: "notify"; msg: object } | { kind: "call"; msg: { id: unknown } } {
+  let msg: unknown;
+  try {
+    msg = JSON.parse(body);
+  } catch {
+    return { kind: "bad" };
+  }
+  if (!msg || typeof msg !== "object" || Array.isArray(msg)) return { kind: "bad" };
+  if (!("id" in msg) || (msg as { id?: unknown }).id === undefined || (msg as { id?: unknown }).id === null) return { kind: "notify", msg };
+  return { kind: "call", msg: msg as { id: unknown } };
+}
+
 export function engineBridge(): Plugin {
   let child: ChildProcessWithoutNullStreams | null = null;
   let buffer = "";
@@ -76,16 +94,36 @@ export function engineBridge(): Plugin {
           return res.end();
         }
         let body = "";
+        let size = 0;
+        let tooBig = false;
         req.setEncoding("utf8");
-        req.on("data", (c: string) => (body += c));
+        req.on("data", (c: string) => {
+          if (tooBig) return;
+          size += Buffer.byteLength(c);
+          if (size > MAX_BODY_BYTES) {
+            tooBig = true;
+            body = "";
+            res.statusCode = 413;
+            res.end();
+            req.destroy();
+            return;
+          }
+          body += c;
+        });
         req.on("end", () => {
-          let msg: { id?: number };
-          try {
-            msg = JSON.parse(body);
-          } catch {
+          if (tooBig) return;
+          const plan = planRequest(body);
+          if (plan.kind === "bad") {
             res.statusCode = 400;
             return res.end();
           }
+          if (plan.kind === "notify") {
+            // No id: the engine sends no answer, so nothing waits for one.
+            engine().stdin.write(JSON.stringify(plan.msg) + "\n");
+            res.statusCode = 204;
+            return res.end();
+          }
+          const msg = plan.msg;
           // Re-number so concurrent browser tabs can't collide.
           const theirs = msg.id;
           const ours = nextId++;
