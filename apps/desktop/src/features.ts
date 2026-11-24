@@ -160,6 +160,7 @@ export async function addOffset(spec: OffsetSpec) {
       spacing: useStore.getState().autoSpacing,
       holes: spec.holes,
     }, LONG_MS); // a second or two round a whole dense design; more on a slow computer
+    if (!stillSame(l.items.filter((it) => ids.includes(it.id)))) return info("The design changed while adding the outline: try again.");
     if (!r.rings.length)
       return info(
         spec.distance_mm < 0
@@ -204,12 +205,30 @@ function withoutDots<T extends object>(params: T): T {
   return rest as T;
 }
 
+/** Only one of the knife, stitch editing, the ruler and the angle line is on at a time (the canvas
+ *  gives clicks to just one, and Esc lets go of the newest): starting one ends the others. */
+export function endOtherModes(keep: "knife" | "stitchEdit" | "ruler" | "angle") {
+  const s = useStore.getState();
+  if (keep !== "knife" && s.knife) s.setKnife(null);
+  if (keep !== "stitchEdit" && s.stitchEdit) endStitchEdit();
+  if (keep !== "ruler" && s.ruler) s.setRuler(null);
+  if (keep !== "angle" && s.angleFor) s.setAngleFor(null);
+}
+
+/** Whether these items are still exactly as they were before an engine call (not changed, undone
+ *  or removed meanwhile): if not, the engine's answer was worked out for the old ones. */
+function stillSame(before: LayoutItem[]): boolean {
+  const now = currentLayout();
+  return !!now && before.every((b) => now.items.find((it) => it.id === b.id) === b);
+}
+
 /** The knife: draw a line across the selected shape to cut it there. */
 export function startKnife() {
   const s = useStore.getState();
   const o = currentLayout()?.items.find((it) => it.id === s.selectedId);
   if (!o || !isObject(o) || (o.kind === "satin" && !("nodes" in o.geometry)))
     return info("Select a fill, line or satin ribbon first, then use the knife and draw a line across it.");
+  endOtherModes("knife");
   if (s.tool !== "select") s.setTool("select");
   armKnife(o.id);
   info("Click two points: the knife cuts along that line (extended across the shape). Esc cancels.");
@@ -232,6 +251,8 @@ export async function finishKnife(a: [number, number], b: [number, number]) {
   if (!o || !isObject(o)) return;
   try {
     const r = await engine().call<{ geometries: Record<string, unknown>[] }>("shape.split", { obj: o, a, b, spacing: s.autoSpacing });
+    // The shape changed meanwhile (an undo, a nudge): the cut was worked out for the old one.
+    if (!stillSame([o])) return info("The design changed while cutting: try the cut again.");
     // Each piece keeps everything of the original but its shape and name: colour changes, stops
     // and trims (left out by the engine if they no longer fit), pin and group.
     const parts = r.geometries.map(
@@ -266,6 +287,7 @@ export async function mergeSelected() {
   if (items.length < 2) return info("Select two or more fills that touch (Shift+click), then merge them.");
   try {
     const r = await engine().call<{ geometry: Record<string, unknown> }>("shape.merge", { objs: items, spacing: useStore.getState().autoSpacing });
+    if (!stillSame(items)) return info("The design changed while merging: try again.");
     const primary = useStore.getState().selectedId;
     const first = items.find((it) => it.id === primary) ?? items[0];
     const l = currentLayout()!;
@@ -361,6 +383,8 @@ export async function optimizeJumps() {
       LONG_MS,
     );
     const ids = Object.keys(r.changes);
+    // Starts and ends were chosen for the whole design as it was (each next to its neighbours).
+    if (currentLayout() !== l) return info("The design changed while optimizing jumps: try again.");
     if (!ids.length || r.after_mm >= r.before_mm - 0.5) return info("The jumps between same-color pieces are already as short as this can make them.");
     const now = currentLayout();
     if (!now) return;
@@ -388,6 +412,7 @@ export function startStitchEdit() {
   const s = useStore.getState();
   const it = currentLayout()?.items.find((x) => x.id === s.selectedId);
   if (!it || isObject(it) || isText(it)) return info("Select a placed stitch file first (drawn shapes are edited by their points).");
+  endOtherModes("stitchEdit");
   if (s.tool !== "select") s.setTool("select");
   s.setStitchEdit({ id: it.id, selected: [] });
   releaseEdit?.();

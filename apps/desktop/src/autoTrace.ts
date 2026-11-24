@@ -214,6 +214,9 @@ export async function acceptGuess(as: AcceptAs = "best") {
   const g = s.autoTrace?.guesses[s.autoTrace.index];
   if (!g || !s.autoTrace || s.autoTrace.busy) return;
   s.setAutoTrace({ ...s.autoTrace, busy: true }); // a second Enter doesn't add it twice
+  // The guesses on screen now: a click on the next shape (or Esc) meanwhile replaces them.
+  const mine = s.autoTrace.guesses;
+  const stillMine = () => useStore.getState().autoTrace?.guesses === mine;
   const thread = g.color ? { color: g.color, name: "", brand: "", catalog: "" } : s.drawThread;
   let ok: boolean;
   if (g.kind === "satin") {
@@ -239,6 +242,8 @@ export async function acceptGuess(as: AcceptAs = "best") {
         kept++;
       }
     }
+    // Esc while the satins were worked out: nothing is added.
+    if (!useStore.getState().autoTrace) return;
     ok = await addTraced(shapes, thread);
     if (ok && kept) info(`${kept === parts.length ? "It has" : "Some parts have"} holes, so ${kept === 1 ? "that part stays" : "those stay"} a fill.`);
   } else {
@@ -254,11 +259,13 @@ export async function acceptGuess(as: AcceptAs = "best") {
   // Only when it was really added: if the edit failed, the guess stays on screen to try again.
   if (!ok) {
     const now = useStore.getState().autoTrace;
-    if (now) useStore.getState().setAutoTrace({ ...now, busy: false });
+    if (now && stillMine()) useStore.getState().setAutoTrace({ ...now, busy: false });
     return;
   }
-  dismissAutoTrace();
   notePick(g.id);
+  // A newer guess (the next shape clicked while this one was added) stays on screen.
+  if (useStore.getState().autoTrace && !stillMine()) return;
+  dismissAutoTrace();
   info("Added. Click the next shape to trace it, or press V to drag its points.");
 }
 

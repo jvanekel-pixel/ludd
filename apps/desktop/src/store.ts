@@ -426,7 +426,8 @@ export const useStore = create<State & Actions>()((set) => ({
       const stitchEdit = s.stitchEdit && hasItem(s.stitchEdit.id) ? s.stitchEdit : null;
       const autoTrace = s.autoTrace && hasImage(s.autoTrace.imageId) ? s.autoTrace : null;
       const autoAll = s.autoAll && hasImage(s.autoAll.imageId) ? s.autoAll : null;
-      return { history, selectedId: exists ? s.selectedId : null, extraIds, measure, selectedNode, knife, stitchEdit, autoTrace, autoAll };
+      const angleFor = s.angleFor && hasItem(s.angleFor.id) ? s.angleFor : null;
+      return { history, selectedId: exists ? s.selectedId : null, extraIds, measure, selectedNode, knife, stitchEdit, autoTrace, autoAll, angleFor };
     }),
   setTool: (tool) =>
     set((s) => ({
@@ -435,6 +436,7 @@ export const useStore = create<State & Actions>()((set) => ({
       autoTrace: null,
       autoAll: null,
       knife: null,
+      stitchEdit: null,
       // A drawing tool starts with nothing selected (none of it hidden behind the panel either).
       selectedId: tool === "select" ? s.selectedId : null,
       extraIds: tool === "select" ? s.extraIds : [],

@@ -788,6 +788,12 @@ function OrderSection({ sel }: { sel: SelKind }) {
   const [matching, setMatching] = useState(false);
   /** A row being dragged to a new place in the order, and where it would land. */
   const [drag, setDrag] = useState<{ id: string; to: number } | null>(null);
+  /** Puts a dragged row back: the panel going away, or the row's item gone (New, Open, an undo). */
+  const putBackDrag = useRef<(() => void) | null>(null);
+  useEffect(() => () => putBackDrag.current?.(), []);
+  useEffect(() => {
+    if (drag && !layout?.items.some((it) => it.id === drag.id)) putBackDrag.current?.();
+  }, [drag, layout]);
   if (!layout || (!layout.items.length && !design)) return null;
 
   const selected = new Set([selectedId, ...extraIds].filter((x): x is string => !!x));
@@ -827,6 +833,8 @@ function OrderSection({ sel }: { sel: SelKind }) {
     setDrag({ id, to });
     const panel = list.current?.closest<HTMLElement>(".info-panel");
     const move = (ev: PointerEvent) => {
+      // No button down: the mouse came up where we didn't hear it, so the drag is over.
+      if (ev.buttons === 0) return drop();
       const others = [...(list.current?.querySelectorAll<HTMLElement>("li[data-row]") ?? [])].filter((r) => r.dataset.row !== id);
       to = others.filter((r) => {
         const b = r.getBoundingClientRect();
@@ -846,12 +854,14 @@ function OrderSection({ sel }: { sel: SelKind }) {
       window.removeEventListener("pointercancel", putBack);
       window.removeEventListener("blur", putBack);
       release();
+      putBackDrag.current = null;
       setDrag(null);
       if (keep && to !== from) moveItemTo(id, to);
     };
     const drop = () => end(true);
     const putBack = () => end(false);
     const release = holdEscape(putBack);
+    putBackDrag.current = putBack;
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", drop);
     window.addEventListener("pointercancel", putBack);
