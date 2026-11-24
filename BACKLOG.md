@@ -14,6 +14,9 @@ Parked ideas, tech debt and nice-to-haves. Do not build these without the owner 
 - [x] Delete the old git-ignored root `LUDD-User-Manual.pdf` (version 1.0); `docs/LUDD-User-Manual.pdf` is current (item 20) (done)
 - [ ] Clean the root of brand source PDFs/PNGs, research notes and the CSV (all git-ignored) into one folder
 - [ ] Working tree shows LF to CRLF warnings; decide on `.gitattributes` line-ending policy
+- [ ] AI key storage (`engine/threadline_engine/ai/settings.py`): create `ai-key.bin` atomically with `0o600` and use OS keychain on macOS/Linux instead of base64
+- [ ] Multi-select Zoom to Selection (`apps/desktop/src/actions.ts`): update `zoomSelected()` (`S`) to use `selectionGeometry(selectionIds()).box` when multiple items are selected
+- [ ] Dev Vite engine bridge (`apps/desktop/vite-engine-bridge.ts`): ignore/clean up JSON-RPC notifications (no `id`) instead of leaking `pending` entries and cap request body size
 
 ## Nice-to-haves from the QA decision list
 - [ ] Progress bar and Cancel for whole-picture auto-digitize (item 3)

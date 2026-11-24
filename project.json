@@ -7,7 +7,12 @@
   "tier": "subscription",
   "containsPII": false,
   "parent": null,
-  "platforms": ["GitHub", "Windows", "macOS", "Linux"],
+  "platforms": [
+    "GitHub",
+    "Windows",
+    "macOS",
+    "Linux"
+  ],
   "builders": {
     "codeWriter": "claude"
   },
@@ -32,14 +37,16 @@
   "status": "active",
   "nextAction": "Check the model download checksums once (Settings > AI tracing > Download); triage the 4 Dependabot PRs; then the second QA pass (docs/QA-PROMPT.md)",
   "blockedOnHuman": null,
-  "lastSessionAt": "2026-11-15T02:40:06Z",
+  "lastSessionAt": "2026-11-15T18:02:01.451Z",
   "health": {
     "tests": "passing",
     "build": "passing",
-    "lastAuditedPhase": 0
+    "lastAuditedPhase": 1,
+    "lastAuditedAt": "2026-11-15T18:02:01.451Z"
   },
   "deploy": {
     "target": "local",
     "url": null
-  }
+  },
+  "blockedSinceAt": null
 }
