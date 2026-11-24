@@ -83,7 +83,26 @@ pass, with a test), **Decision** (owner list below), **Backlog**.
 
 ## Decision list for the owner
 
-These change stitch output, behavior you might rely on, or process. Nothing here has been changed.
+These change stitch output, behavior you might rely on, or process.
+
+**Owner's decision (2026-11-24): all ten approved as recommended; item 9 is (a), Ctrl+Z removes
+the last point.** In short:
+
+| # | Decision |
+|---|---|
+| 1 | Fix: travel inside a fill follows its edges even with a thin neck; a fill never ends on a jump (no long lock stitch) |
+| 2 | Fix: the zigzag underlay's return pass always crosses the first |
+| 3 | Fix: moves over 3 mm between applique edges get a trim, as fills do |
+| 4 | Fix: add a needle point at sharp corners so no stitch passes the Longest setting |
+| 5 | Edited stitch files sew from LUDD's copy taken when they were added (edits stay on their stitches) |
+| 6 | Regenerate the samples and add a test pinning each sample project against its PES |
+| 7 | Add a fast test that fails when a Tauri plugin's crate and npm package differ in major.minor |
+| 8 | Add a Rust build/test on macOS to CI |
+| 9 | (a) Ctrl+Z while drawing removes the last point placed, like Backspace |
+| 10 | Convert the 1.0.1 changelog's older prose to US spelling |
+
+Items 1-4 change stitch output: each gets a row in docs/stitchout-log.md.
+
 
 1. **S1 Thin necks in fills.** Route travel inside a fill along the shape's edges even when part
    of it is narrower than ~0.6 mm, and never end a fill on a jump. *Changes stitches only for such

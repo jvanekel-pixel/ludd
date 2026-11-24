@@ -16,7 +16,7 @@ Parked ideas, tech debt and nice-to-haves. Do not build these without the owner 
 - [ ] Working tree shows LF to CRLF warnings; decide on `.gitattributes` line-ending policy
 
 ## From QA pass 2 (docs/QA-REPORT-2.md, 2026-11-24)
-- [ ] Owner decisions 1-10 in docs/QA-REPORT-2.md (thin necks, zigzag underlay, applique trims, sharp corners, edited stitch files changed on disk, samples, Dependabot/Tauri pairs, Mac Rust in CI, Ctrl+Z while drawing, old changelog spelling)
+- [x] Owner decisions 1-10 in docs/QA-REPORT-2.md: decided 2026-11-24 (all as recommended, 9 = a); being implemented (PLAN.md Phase 2)
 - [ ] Stipple at small loop sizes on hoop-sized shapes is slow (6.5 s); wave's stitch-count estimate is low (S8)
 - [ ] test_helpdocs: check each documented key against the command it describes, bare keys too (D9)
 - [ ] knowledgeBase.test.ts: compare the whole command table, so removed or renamed commands fail (D10)
