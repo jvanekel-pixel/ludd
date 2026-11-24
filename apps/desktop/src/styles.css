@@ -386,6 +386,11 @@ dialog.threads-dialog { width: min(680px, calc(100vw - 32px)); }
 .info-panel fieldset.underlay legend { font-size: 12px; color: var(--muted); }
 .info-panel button.wide { width: 100%; margin: 0.25rem 0; }
 .info-panel .measure { margin: 0.4rem 0; }
+.info-panel dd small { color: var(--muted); }
+.info-panel .thread-use { list-style: none; margin: 0.2rem 0; padding: 0; }
+.info-panel .thread-use li { display: flex; align-items: center; gap: 0.4rem; padding: 0.1rem 0; }
+.info-panel .thread-use .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.info-panel .thread-use .amount { color: var(--muted); font-variant-numeric: tabular-nums; }
 .swatch.small {
   display: inline-grid; place-items: center; width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0;
   font-size: 10px; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.2);

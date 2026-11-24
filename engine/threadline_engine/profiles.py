@@ -33,6 +33,7 @@ BUILTIN_MACHINES: list[dict[str, Any]] = [
         "max_stitch_mm": None,
         "max_stitches": None,
         "max_colors": None,
+        "speed_spm": 650,
         "notes": (
             "Cuts automatically only at the end of each color (Operation Manual 888-M36, p. 26); "
             "it has no jump stitch trim setting. Use cut-stops to cut jump threads."
@@ -54,6 +55,7 @@ BUILTIN_MACHINES: list[dict[str, Any]] = [
         "max_stitch_mm": 12.7,
         "max_stitches": None,
         "max_colors": None,
+        "speed_spm": 650,
         "notes": "Generic profile; check hoop sizes and trim support against your model.",
     },
 ]
@@ -84,7 +86,7 @@ def _validate(p: dict[str, Any], source: str) -> dict[str, Any]:
     for h in p["hoops"]:
         if not all(_positive(h[k]) for k in ("width_mm", "height_mm")):
             raise ProfileError(f"{source}: hoop {h['id']}: width_mm and height_mm must be numbers above 0")
-    for k in ("max_stitch_mm", "max_stitches", "max_colors"):
+    for k in ("max_stitch_mm", "max_stitches", "max_colors", "speed_spm"):
         if p.get(k) is not None and not _positive(p[k]):
             raise ProfileError(f"{source}: {k} must be a number above 0, or null for no limit")
     return {
@@ -93,6 +95,7 @@ def _validate(p: dict[str, Any], source: str) -> dict[str, Any]:
         "max_stitch_mm": None,
         "max_stitches": None,
         "max_colors": None,
+        "speed_spm": None,
         "notes": "",
         **p,
         "hoops": [{"name": h["id"], **h} for h in p["hoops"]],

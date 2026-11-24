@@ -55,5 +55,5 @@ Why it matters: after the core is verified, only owner-chosen backlog items shou
 - [ ] SVG, DXF and PDF import
 - [ ] Guided first-design tutorial and contextual hints / F1 help per tool
 - [ ] Push compensation along stitch direction (after a patent check)
-- [ ] Stitch time and thread usage estimate
+- [x] Stitch time and thread usage estimate (F-406, 2026-11-24)
 - [ ] Write the project, fabric and thread-chart JSON Schemas (optional: AGENTS.md no longer promises them, decision item 11)

@@ -131,6 +131,7 @@ One line per common question. Status, then where to read more.
 | watch a simulated stitch-out? | YES | F-404 |
 | see realistic 3D thread? | YES | F-402 |
 | rulers, guides, grid, snap, measure? | YES | F-403, F-405 |
+| tell me how long a design takes to sew, and how much thread it uses? | YES (estimate) | F-406 |
 | right-click menus? | YES | F-104 |
 | dark mode? | YES | F-2101 |
 | work on a Mac / Linux? | YES | section 1 |
@@ -315,6 +316,17 @@ when nothing is selected, slider (marks = color changes), speed 2–5,000 stitch
 ### F-405 Measure — YES
 `M`: click two points; shows distance and across/down. `M` or Esc puts it away. Starting it ends
 the knife, stitch editing and the angle line (only one of these is on at a time, 2026-11-24).
+
+### F-406 Sewing time and thread estimate — YES (added 2026-11-24)
+Panel → **Design** shows **Sewing time** ("about 14 min + 4 thread changes") and **Thread** (top
+thread, and the bobbin). **Thread used** (in the Design section) lists each color with about how
+much it uses, to check there's enough on the spool. How it's worked out: stitches ÷ the machine's top
+speed (PE550D and the generic Janome profile: 650 stitches a minute; a profile without
+`speed_spm` is taken as 600); thread changes (color changes plus stops) are counted, not timed. Thread
+is the length of every stitch and of every jump not cut by a trim, plus about 1 mm per stitch for
+going into the fabric; the bobbin is about a third of that. Lengths follow Settings → Units (m or yd).
+These are estimates: machines slow down on long stitches, and fabric and tension change thread use,
+so allow a little extra of both. Not shown for an empty design.
 
 ---
 
@@ -865,6 +877,7 @@ Use this to answer "did that change?" or "why is it different?". Full detail: `d
 
 | Date | Change |
 | --- | --- |
+| 2026-11-24 | **Sewing time and thread estimate** (F-406): the Design section shows about how long the design sews on your machine, how many thread changes, and about how much top and bobbin thread it uses, per color under **Thread used**. Machine profiles can set `speed_spm`. |
 | 2026-11-24 | **Phase 1 audit fixes**: `S` zooms to everything selected (was one item); the AI key file is written whole and private from the start on Mac/Linux. No stitch changes. |
 | 2026-11-24 | **QA pass 2 decisions** (changes stitches): fills with a thin neck travel along their edges and never end on a jump; zigzag underlay crosses back in an X; long moves between applique edges are trimmed; Split long stitches holds at sharp corners of ribbons and applique borders; a placed stitch file with edits sews from LUDD's copy taken when it was added; sample PES/JEF made again; Ctrl+Z while drawing removes the last point, Ctrl+Y waits; CI builds the Mac code. |
 | 2026-11-24 | **QA pass 2** (docs/QA-REPORT-2.md): the knife, stitch editing, the ruler and the angle line no longer stay on together; picking a tool ends stitch editing; knife, merge, outline and Optimize jumps drop an answer if the design changed meanwhile; Auto-trace keeps the next guess while the last one is added; Ctrl+X cuts the only shape; a failed delete keeps the selection; damaged parts of a project are left out with a note; private copies are found again after an engine restart; AI services can't redirect your key elsewhere; thread charts with similar or non-Latin names no longer replace each other; tiny pictures trace fast or say they're too small; plain messages for odd satin and line settings and bad hole points; Settings knows if AI tracing really runs. |
