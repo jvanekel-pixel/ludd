@@ -94,10 +94,27 @@ def prune(days: float = KEEP_DAYS) -> int:
     return gone
 
 
+def has_edits(item: dict) -> bool:
+    """A placed stitch file with edits tied to its colour and stitch numbers: recolours, deleted
+    colours or stitches, inserted stops or trims, moved stitches. Such an item sews from the copy
+    taken when the file was added (as_added), so a file re-saved elsewhere later can't put those
+    edits on other stitches (QA2 P3). "Trim jumps" doesn't name any stitch, so it doesn't count."""
+    threads = item.get("threads")
+    ops = item.get("ops")
+    return bool((isinstance(threads, list) and any(threads))
+                or (isinstance(ops, list) and any(not isinstance(o, dict) or o.get("op") != "jumps_to_trims" for o in ops)))
+
+
+def pinned(items: list) -> set[str]:
+    """Paths of placed stitch files that sew from their private copy: any item on that file has
+    edits (two items on one file always sew the same bytes)."""
+    return {it["path"] for it in items if isinstance(it, dict) and isinstance(it.get("path"), str) and has_edits(it)}
+
+
 def readable(path: str, as_added: bool = False) -> str:
     """The original if it's still there, otherwise the private copy (if one was kept).
 
-    With `as_added` (pictures), the private copy comes first: it holds the bytes the canvas shows,
+    With `as_added` (pictures, and stitch files with edits: has_edits), the private copy comes first: it holds the bytes the canvas shows,
     so a picture edited elsewhere after it was added doesn't get traced or saved instead of what's
     on screen. Adding the picture again (project.load_image) reads the original afresh."""
     _load()

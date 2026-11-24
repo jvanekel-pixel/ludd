@@ -59,9 +59,11 @@ _cache: dict[str, tuple[tuple, pe.EmbPattern]] = {}
 _CACHE_MAX = 32  # stitch files kept in memory (the least recently used go first)
 
 
-def _load(path: str) -> pe.EmbPattern:
-    """Load a stitch file, cached until it changes on disk (its time, size or the copy read)."""
-    p = Path(kept.readable(path))
+def _load(path: str, as_added: bool = False) -> pe.EmbPattern:
+    """Load a stitch file, cached until it changes on disk (its time, size or the copy read).
+    `as_added`: the item has edits, so read the private copy (what was on screen when they were
+    made), never a newer file on disk (QA2 P3)."""
+    p = Path(kept.readable(path, as_added))
     try:
         st = p.stat()
     except OSError as exc:
@@ -925,6 +927,7 @@ def render(layout: dict[str, Any]) -> Rendered:
 
     # "Trim jumps longer than …" for the whole design (older projects keep it as an op per item).
     jt_mm = _mm(layout.get("jumps_to_trims")) if layout.get("jumps_to_trims") is not None else None
+    pinned = kept.pinned(items)
 
     for idx, it in enumerate(items):
         if it.get("kind") == "text":
@@ -963,7 +966,7 @@ def render(layout: dict[str, Any]) -> Rendered:
                          for n, w in enumerate(obj_warnings)]
             all_blocks.extend(blk for blk in blocks if blk.recs)
             continue
-        src = _load(it["path"])
+        src = _load(it["path"], it["path"] in pinned)
         blocks = _split_blocks(src, idx)
         center_b = _stitch_bounds([r for b in blocks for r in b.recs])
         center = ((center_b[0] + center_b[2]) / 2, (center_b[1] + center_b[3]) / 2) if center_b else (0.0, 0.0)

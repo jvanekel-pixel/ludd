@@ -637,3 +637,41 @@ def test_qa4_source_cache_notices_a_changed_file_and_stays_small(tmp_path, monke
     for i in range(6):
         layout.render(lay({"path": _row_file(tmp_path, name=f"r{i}.pes")}))
     assert len(layout._cache) <= 3
+
+
+def _rows(path, colors):
+    """One row of stitches per colour, row k at y = 10 k mm."""
+    p = pe.EmbPattern()
+    for k, col in enumerate(colors):
+        p.add_thread(pe.EmbThread(col, col))
+        if k:
+            p.color_change()
+            p.move_abs(0, 100 * k)
+        for x in range(0, 201, 25):
+            p.stitch_abs(x, 100 * k)
+    p.end()
+    pe.write(p, str(path), {"version": 6})
+
+
+def test_qa2_p3_edits_stay_on_their_stitches_when_the_file_is_re_saved_elsewhere(tmp_path):
+    """Decision 5: recolours, deleted colours and deleted stitches refer to the file's colour and
+    stitch numbers; re-saving the placed file elsewhere put them on other stitches, silently."""
+    from threadline_engine import project
+
+    f = tmp_path / "rows.pes"
+    _rows(f, ["#ff0000", "#0000ff"])
+    edited = {"path": str(f), "threads": [None, {"color": "#00ff00", "name": "Green"}],
+              "ops": [{"op": "delete_stitches", "indices": [3, 4, 5]}, {"op": "delete_block", "block": 0}]}
+    before = layout.render_summary(lay(edited))
+    assert [t["name"] for t in before["threads"]] == ["Green"]
+    _rows(f, ["#ffff00", "#ff0000", "#0000ff"])  # re-saved in another program, one colour added
+    os.utime(f, (os.path.getatime(f), os.path.getmtime(f) + 5))
+    after = layout.render_summary(lay(edited))
+    assert after["threads"] == before["threads"] and stitches(after) == stitches(before)
+    # Saving embeds those same bytes, and the project reopens and sews the same.
+    proj = {"layout": lay(edited)}
+    saved = project.save(str(tmp_path / "p"), proj)
+    reopened = project.open_project(saved["path"])
+    assert stitches(layout.render_summary(reopened["layout"])) == stitches(before)
+    # Without edits the item follows the file on disk, as before.
+    assert len(layout.render_summary(lay({"path": str(f)}))["blocks"]) == 3
