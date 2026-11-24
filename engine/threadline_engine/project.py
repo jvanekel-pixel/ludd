@@ -19,6 +19,7 @@ import base64
 import binascii
 import hashlib
 import json
+import math
 import os
 import sys
 import tempfile
@@ -55,6 +56,10 @@ MAX_IMAGE_PIXELS = 120_000_000  # 120 megapixels: far more than tracing needs
 # fill the memory or the disk).
 MAX_MEMBER_BYTES = {"project.json": 32 * 1024 * 1024, "images": MAX_IMAGE_BYTES, "designs": 64 * 1024 * 1024,
                     "fonts": 64 * 1024 * 1024}
+MAX_PICTURES = 64  # far more than anyone traces from; a hostile file can't list thousands (QA2 P1)
+MAX_PICTURES_SHOWN = 440 * 1024 * 1024  # data URLs sent to the window: about 8 of the largest pictures
+MAX_PROJECT_BYTES = 768 * 1024 * 1024  # all members together, unpacked (QA2 P1)
+ITEM_KINDS = ("file", "run", "satin", "fill", "applique", "text")
 STALE_TEMP_S = 3600  # a save's temp file older than this was left by a save that never finished
 
 
@@ -420,6 +425,10 @@ def open_project(path: str, trust_paths: bool = False) -> dict[str, Any]:
         if any(not isinstance(it, dict) for it in layout["items"]) or any(
                 not isinstance(im, dict) for im in project.get("images") or []):
             raise ProjectError(f"{label} is damaged: its layout can't be read")
+        if len(project.get("images") or []) > MAX_PICTURES:
+            raise ProjectError(f"{label} is damaged: it lists more than {MAX_PICTURES} pictures")
+        if sum(zi.file_size for zi in z.infolist()) > MAX_PROJECT_BYTES:
+            raise ProjectError(f"{label} is too big to open (over {MAX_PROJECT_BYTES // (1024 * 1024)} MB unpacked)")
         try:
             cache = _cache_dir()
         except OSError as exc:
@@ -461,7 +470,15 @@ def open_project(path: str, trust_paths: bool = False) -> dict[str, Any]:
                     font["path"] = extract(f_embedded, "fonts")
                 elif not trust_paths:
                     font.pop("path", None)  # found by family and style instead
+        kept_items = [it for it in layout["items"] if not _damaged(it)]
+        if len(kept_items) < len(layout["items"]):
+            n = len(layout["items"]) - len(kept_items)
+            project["notes"] = [f"{n} part{'s' if n != 1 else ''} of this project {'were' if n != 1 else 'was'} damaged "
+                                "and left out. Save under a new name to keep the original file as it is."]
+            layout["items"] = kept_items
         images = []
+        urls: dict[str, str] = {}  # one data URL per picture file, however many entries share it
+        shown = 0
         for img in project.get("images") or []:
             embedded = img.pop("embedded", None)
             if not embedded:
@@ -470,7 +487,13 @@ def open_project(path: str, trust_paths: bool = False) -> dict[str, Any]:
             else:
                 img["path"] = extract(embedded, "images")
             try:
-                img["data_url"] = load_image(img["path"])["data_url"]
+                if img["path"] not in urls:
+                    urls[img["path"]] = load_image(img["path"])["data_url"]
+                img["data_url"] = urls[img["path"]]
+                shown += len(img["data_url"])
+                if shown > MAX_PICTURES_SHOWN:
+                    raise ProjectError(f"{label} has more picture data than LUDD can show at once; "
+                                       "remove some pictures from it in the LUDD that saved it")
             except ProjectError:
                 if embedded:
                     raise
@@ -480,6 +503,28 @@ def open_project(path: str, trust_paths: bool = False) -> dict[str, Any]:
         project["images"] = images
     project["path"] = str(p)
     return project
+
+
+def _number(v: Any) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def _damaged(it: dict[str, Any]) -> bool:
+    """An item that would stop the whole design drawing ("Please report this"): an unknown kind
+    (from a newer LUDD), a design file that isn't there, or settings of the wrong type (QA2 P4)."""
+    kind = it.get("kind") or "file"
+    if kind not in ITEM_KINDS or (kind == "file" and not isinstance(it.get("path"), str)):
+        return True
+    t = it.get("transform")
+    if t is not None and (not isinstance(t, dict) or any(
+            k in t and not _number(t[k]) for k in ("x", "y", "rotate", "scale_x", "scale_y"))):
+        return True
+    ops, threads = it.get("ops"), it.get("threads")
+    if ops is not None and (not isinstance(ops, list) or not all(isinstance(o, dict) for o in ops)):
+        return True
+    if threads is not None and (not isinstance(threads, list) or not all(t is None or isinstance(t, dict) for t in threads)):
+        return True
+    return any(it.get(k) is not None and not isinstance(it[k], dict) for k in ("thread", "params", "geometry"))
 
 
 def _file_digest(p: Path) -> str:

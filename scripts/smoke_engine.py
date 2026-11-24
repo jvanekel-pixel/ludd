@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import struct
 import subprocess
 import sys
@@ -105,6 +106,11 @@ def smoke(command: list[str]) -> None:
             shapes = eng.call("trace.digitize_all", path=str(png), placement=place)["shapes"]
             assert shapes, "trace.digitize_all found nothing in a black disc"
             print(f"smoke: auto-trace ok ({len(shapes)} shape(s))")
+            # ONNX Runtime (AI tracing) must really load, except on Intel Macs, which have no build of it.
+            intel_mac = sys.platform == "darwin" and platform.machine() == "x86_64"
+            ort = eng.call("ai.trace_model")["runtime"]
+            assert ort or intel_mac, "ONNX Runtime doesn't load in this engine (AI tracing would be unavailable)"
+            print(f"smoke: ONNX Runtime {'loads' if ort else 'left out (Intel Mac)'}")
             # Stops by itself (the packaged engine then deletes its unpacked files).
             assert eng.call("engine.shutdown") is True
             code = eng.p.wait(timeout=30)

@@ -7,6 +7,7 @@ Built-in charts come from pyembroidery's machine palettes; users import others
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import math
 import re
@@ -139,9 +140,36 @@ def _charts_dir() -> Path:
     return data_dir() / "threads"
 
 
+_RESERVED = re.compile(r"(con|prn|aux|nul|com[0-9]|lpt[0-9])(-|$)")
+
+
 def _slug(name: str) -> str:
+    """A file-safe id for a chart name. A name with no Latin letters or digits (Cyrillic, Japanese,
+    ...) gets a short hash, so two such charts don't share an id; Windows device names (CON, NUL,
+    ...) can't be file names, so they get a prefix."""
     s = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
-    return s or "chart"
+    if not s:
+        s = "chart-" + hashlib.sha1(name.encode("utf-8")).hexdigest()[:8]
+    elif _RESERVED.match(s):
+        s = "chart-" + s
+    return s
+
+
+def _free_id(chart_id: str, name: str) -> str:
+    """`chart_id`, or `chart_id-2`, `-3`, ... if another chart (by name) already has it. Importing
+    a chart under the same name again still replaces it, so a chart can be updated."""
+    n = 1
+    candidate = chart_id
+    while True:
+        f = _charts_dir() / f"{candidate}.json"
+        try:
+            old = read_json(f) if f.exists() else None
+        except (OSError, ValueError):
+            old = None
+        if old is None or not isinstance(old, dict) or old.get("name") == name:
+            return candidate
+        n += 1
+        candidate = f"{chart_id}-{n}"
 
 
 def _usable(c: Any) -> bool:
@@ -285,6 +313,7 @@ def import_csv(path: str, name: str, brand: str = "") -> dict[str, Any]:
     chart_id = _slug(name)
     if chart_id in BUILTIN_CHARTS or chart_id == MY_THREADS:
         chart_id += "-custom"
+    chart_id = _free_id(chart_id, name)
     chart = {"id": chart_id, "name": name, "brand": brand.strip() or name, "builtin": False, "threads": threads}
     try:
         write_json(_charts_dir() / f"{chart_id}.json", chart)

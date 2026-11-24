@@ -27,7 +27,9 @@ Why it matters: about 100 modified and 70 new files sit uncommitted, so until th
 - [x] Knowledge base for the help agent (docs/LUDD-KNOWLEDGE-BASE.md)
 - [x] Owner approves committing the uncommitted working tree; commit in logical groups (5 local commits, not pushed)
 - [x] Owner decides the 20 open items listed in docs/QA-RESPONSE.md (decided 2026-11-14; applied in ed160f1)
-- [ ] Run the second QA pass using docs/QA-PROMPT.md and fix what it finds
+- [x] Run the second QA pass using docs/QA-PROMPT.md and fix what it finds (docs/QA-REPORT-2.md; clear bugs fixed 2026-11-24, uncommitted)
+- [x] Owner decides the 10 items on the QA pass 2 decision list (docs/QA-REPORT-2.md; all as recommended, 9 = a, 2026-11-24)
+- [ ] Implement the 10 QA pass 2 decisions, with tests, docs and stitch-out rows
 - [x] Push to GitHub and confirm CI is green on Windows, both Macs and Linux (green at 46b0de4, incl. the Windows installer job)
 - [ ] Tag v1.0.1, check the draft release's `latest.json` URLs, owner publishes
 

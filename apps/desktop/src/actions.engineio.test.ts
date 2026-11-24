@@ -104,3 +104,14 @@ describe("QA security: AI wording", () => {
     expect(keySavedText({ key_protection: "windows" })).toContain("encrypted");
   });
 });
+
+describe("QA2 P4: parts of a damaged project left out by the engine are said", () => {
+  it("shows the engine's note after opening", async () => {
+    const opened = docWith("p");
+    const note = "1 part of this project was damaged and left out.";
+    const engine = fakeEngine({ "project.open": { layout: opened.layout, images: [], path: "C:/p/d.ludd", notes: [note] } });
+    useStore.setState({ engine: engine as never, machines: [machine("pe550d", ["b1"])], machineId: "pe550d", hoopId: "b1" });
+    await A.openDesign("C:/p/d.ludd", true);
+    expect(useStore.getState().notice?.text).toContain("damaged and left out");
+  });
+});

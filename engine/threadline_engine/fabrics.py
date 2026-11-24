@@ -71,7 +71,10 @@ def apply(obj: dict[str, Any], fabric_id: str | None) -> dict[str, Any]:
         return obj
     f = get(fabric_id)
     p = dict(obj.get("params") or {})
-    base = float(p.get("spacing_mm", 0.4))
+    try:
+        base = float(p["spacing_mm"]) if p.get("spacing_mm") is not None else 0.4
+    except (TypeError, ValueError):
+        base = math.nan  # left for the stitch type to refuse in plain words (QA2 S6)
     # Kept within what each stitch type accepts (satin 0.15-3 mm, fill 0.2-5 mm).
     lo, hi = (0.15, 3.0) if kind == "satin" else (0.2, 5.0)
     if math.isfinite(base) and base > 0:

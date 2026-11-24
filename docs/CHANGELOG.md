@@ -2,6 +2,21 @@
 
 ## 1.0.1 (Oct 11, 2026)
 
+### QA pass 2 (2026-11-24)
+A second full review (docs/QA-REPORT-2.md). Fixed:
+- **One tool at a time**: the knife, stitch editing, the measuring tool (M) and the angle line (I) no longer stay on together (two clicks "to measure" cut the shape). Starting one ends the others; picking a drawing tool ends stitch editing; the angle line ends when its fill is deleted or undone.
+- **Late engine answers**: the knife, merge, outlines and Optimize jumps no longer bring back an undone shape or lose a nudge made while they worked; they say "The design changed while …: try again". In Auto-trace, clicking the next shape while the last one is still being added keeps the new guess on screen.
+- **Ctrl+X** with nothing selected on a one-shape design now cuts the shape (it only copied). If a delete fails, what was selected stays selected.
+- **Sewing order**: dragging a row ends properly when the mouse is let go outside the window or the panel closes. **Sew in the shortest order** groups threads exactly as the saved file does (it could add a color change).
+- **Projects**: damaged parts of a project are left out with a note instead of leaving the design blank; very large or hostile project files are refused (over 64 pictures, or 768 MB unpacked). Added designs and pictures whose originals are gone keep working after the engine restarts (it forgot its private copies).
+- **AI add-on**: LUDD never follows a redirect from an AI service, so your key can't be sent on to another address.
+- **Thread charts**: importing a chart never replaces one with a different name (every non-Latin name, and names like "Isacord 40" / "Isacord-40!", shared one file).
+- **Tracing**: a very small picture traces quickly (1 mm wide took 50 s); a picture under 0.5 mm, or a damaged placement, says so plainly; a 1-pixel picture finds nothing instead of failing. Settings → AI tracing now really checks that the AI can run on this computer.
+- **Stitch settings**: odd satin and line settings (empty or text values) and bad points in holes give plain messages (a hole with a bad point was silently sewn over). With Split long stitches on and Longest over 7 mm, the warning says to set Longest to 7 or less (it said to tick the box already ticked). No stitch output changed.
+- **Docs**: the knowledge base lists the 40 formats LUDD opens (it said 47); stale section links, US spelling, Help's "Color sets" place, Browse designs' Refresh.
+- **Behind the scenes**: the engine smoke test checks that ONNX Runtime loads; tests check that every version number agrees, guides and color sets survive saving, and the whole-picture flow. Dependencies updated on Nov 15: the Tauri updater (2.14), shell (2.6), dialog and process plugins, `@tauri-apps/api` 2.12, PixiJS 8.23, React 19.3, Zustand 5.1; TypeScript 7, vitest 5, jsdom 31 for tests; CI fixes for macOS and the engine smoke test. To check in the installed app before release: installing an update, and Show in folder.
+- Decisions left to the owner (stitch output and process changes) are listed in docs/QA-REPORT-2.md.
+
 ### QA decisions (2026-11-14)
 - **Pinned shapes** also ignore the arrow keys, R and Alt+H/V (a note says it's pinned); pinned pictures ignore the arrows with the same note.
 - **Browse designs** has a **Refresh** button.
@@ -9,7 +24,7 @@
 - **The AI tracing model download** is pinned to one upstream revision and each file is checked against its SHA-256; an older download that doesn't match is fetched again.
 - **Spelling**: the app and its docs use US spelling (Center in the hoop, Millimeters, Licenses, color).
 - **Repository**: GitHub Actions are pinned by commit SHA, and Dependabot proposes monthly updates.
-- **Tests**: panels can now be tested in a browser-like page (jsdom); name the file `*.dom.test.tsx`.
+- **Tests**: panels can now be tested in a browser-like page (jsdom): name the file `*.dom.test.tsx` and start it with `// @vitest-environment jsdom`.
 - **Docs**: AGENTS.md matches the app (networkx, onnxruntime, schemas, light fabric). Decisions on the 20 open QA items are in docs/QA-RESPONSE.md.
 
 ### Self-audit fixes (2026-10-13)
@@ -28,7 +43,7 @@ A review of the whole app after the changes above; fixed:
 - **Knife and Cut out** pieces get their own start, end and direction (each used to copy the whole shape's); Cut out pieces keep the colour change, pin and group.
 - **Stitch Advisor** looks at shapes where they are now (moved, turned, resized), not where they were drawn.
 - **Auto-trace**: a drawn shape inside another's hole is no longer ignored when fitting guesses around your shapes.
-- Picture right-click menu: "See-through stitches (all)" and "Show pictures (all)" say they're for every picture, plus **Hide this picture**. The panel's ⋯ menu has Change thread, Centre in the hoop, Sew first / last, and for lettering Change the words and Break into shapes.
+- Picture right-click menu: "See-through stitches (all)" and "Show pictures (all)" say they're for every picture, plus **Hide this picture**. The panel's ⋯ menu has Change thread, Center in the hoop, Sew first / last, and for lettering Change the words and Break into shapes.
 - Docs: PES re-save note in the manual, guide and Help; missing shortcuts added; leftover "Threads" wording.
 
 ### Knowledge base for a help agent
@@ -181,7 +196,7 @@ The Medium and Low findings, area by area (details in `docs/qa-phase4/`).
 - **Option-key shortcuts** (Alt+A, Alt+H, Alt+V, Alt+D, Alt+[ ]) work on a Mac. F5, Ctrl+R and the browser's right-click menu no longer reload the window.
 - **Zooming** a big design is smoother and keeps a dragged shape under the pointer; points snap to guides with snap to grid on.
 - **Design browser**: typing a name searches the whole folder; folder shortcuts no longer loop.
-- **Settings → About → Licences…** lists the licences of the software and fonts LUDD includes. In-app Help matches the manual again.
+- **Settings → About → Licenses…** lists the licenses of the software and fonts LUDD includes. In-app Help matches the manual again.
 
 **Installer & updates**
 - **On a Mac**, double-clicking a .ludd opens it, Cmd+Q asks about unsaved changes, and LUDD needs macOS 14 or newer (it says so at install).

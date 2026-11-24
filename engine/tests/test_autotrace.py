@@ -679,3 +679,47 @@ def test_guesses_fit_around_shapes_already_drawn(tmp_path, monkeypatch):
     # Clicking on the drawn shape itself: nothing is fitted.
     again = autotrace.region(str(path), PLACE, mm(400, 300), taken=[drawn])["candidates"]
     assert not any(c.get("fitted") for c in again)
+
+
+def test_qa2_t3_runtime_means_onnx_runtime_really_loads(monkeypatch):
+    """QA2 T3: runtime() only looked for the package, so a build whose native library is missing
+    still said "AI tracing can run here". It now imports it (and remembers the answer)."""
+    from threadline_engine.ai import segment
+
+    def broken():
+        raise segment.SegmentError("no")
+
+    segment.runtime.cache_clear()
+    monkeypatch.setattr(segment, "_runtime", broken)
+    try:
+        assert segment.runtime() is False
+        assert segment.status()["runtime"] is False
+    finally:
+        segment.runtime.cache_clear()
+
+
+def test_qa2_t4_tiny_placements_stay_fast_and_bad_ones_say_so(cartoon, tmp_path):
+    """QA2 T4: the solid-dark dilate grew with pixels per mm: 14 s at 2 mm wide, 50 s at 1 mm.
+    Zero, negative or NaN sizes and a 1x1 picture leaked raw Python/OpenCV errors."""
+    for w in (2.0, 1.0):
+        t = time.perf_counter()
+        autotrace.digitize_all(cartoon, {**PLACE, "width_mm": w, "height_mm": w})
+        assert time.perf_counter() - t < 5
+    # A big black disc placed small (many px per mm) still comes out as one solid fill.
+    img = Image.new("RGB", (SIZE, SIZE), "white")
+    ImageDraw.Draw(img).ellipse((100, 100, 700, 700), fill="black")
+    disc = tmp_path / "disc.png"
+    img.save(disc)
+    t = time.perf_counter()
+    shapes = autotrace.digitize_all(str(disc), {**PLACE, "width_mm": 15, "height_mm": 15})["shapes"]
+    assert time.perf_counter() - t < 5
+    assert [s["kind"] for s in shapes] == ["fill"]
+    for bad in (0, -5, float("nan"), 1e-6):
+        with pytest.raises(TraceError):
+            autotrace.digitize_all(cartoon, {**PLACE, "width_mm": bad})
+        with pytest.raises(TraceError):
+            autotrace.region(cartoon, {**PLACE, "width_mm": bad}, [0, 0])
+    one = tmp_path / "one.png"
+    Image.new("RGB", (1, 1), "black").save(one)
+    assert autotrace.digitize_all(str(one), PLACE)["shapes"] == []
+    assert autotrace.region(str(one), PLACE, [0, 0])["candidates"] == []

@@ -12,9 +12,31 @@ import os
 import time
 from pathlib import Path
 
-from .storage import data_dir
+from .storage import data_dir, read_json, write_json
 
+# Which original each private copy came from. Also kept in project-files/index.json, so a new
+# engine (after a crash or the Restart engine button) still finds the copy of a file that's gone
+# (QA2 P2: only this dict held it, and a restart forgot every copy).
 _copies: dict[str, str] = {}
+_loaded = False
+INDEX = "index.json"
+MAX_INDEX = 2000  # most recent files remembered
+
+
+def _load() -> None:
+    global _loaded
+    if _loaded:
+        return
+    _loaded = True
+    try:
+        saved = read_json(data_dir() / "project-files" / INDEX)
+    except (OSError, ValueError):
+        return
+    if isinstance(saved, dict):
+        for k, v in saved.items():
+            # Only names of copies in this folder: the index can't point anywhere else.
+            if isinstance(k, str) and isinstance(v, str) and Path(v).name == v and k not in _copies:
+                _copies[k] = v
 
 
 def _dir() -> Path:
@@ -42,7 +64,15 @@ def keep(path: str, data: bytes) -> None:
             os.replace(tmp, target)
     except OSError:
         return
-    _copies[str(path)] = str(target)
+    _load()
+    _copies.pop(str(path), None)
+    _copies[str(path)] = target.name  # newest last
+    while len(_copies) > MAX_INDEX:
+        _copies.pop(next(iter(_copies)))
+    try:
+        write_json(_dir() / INDEX, _copies)
+    except OSError:
+        pass  # best effort, like the copy itself
 
 
 def prune(days: float = KEEP_DAYS) -> int:
@@ -70,8 +100,12 @@ def readable(path: str, as_added: bool = False) -> str:
     With `as_added` (pictures), the private copy comes first: it holds the bytes the canvas shows,
     so a picture edited elsewhere after it was added doesn't get traced or saved instead of what's
     on screen. Adding the picture again (project.load_image) reads the original afresh."""
-    copy = _copies.get(str(path))
-    if as_added and copy and Path(copy).is_file():
+    _load()
+    name = _copies.get(str(path))
+    copy = str(data_dir() / "project-files" / name) if name else None
+    if copy and not Path(copy).is_file():
+        copy = None  # tidied away
+    if as_added and copy:
         return copy
     if Path(path).is_file():
         return path

@@ -18,6 +18,13 @@ Parked ideas, tech debt and nice-to-haves. Do not build these without the owner 
 - [ ] Multi-select Zoom to Selection (`apps/desktop/src/actions.ts`): update `zoomSelected()` (`S`) to use `selectionGeometry(selectionIds()).box` when multiple items are selected
 - [ ] Dev Vite engine bridge (`apps/desktop/vite-engine-bridge.ts`): ignore/clean up JSON-RPC notifications (no `id`) instead of leaking `pending` entries and cap request body size
 
+## From QA pass 2 (docs/QA-REPORT-2.md, 2026-11-24)
+- [x] Owner decisions 1-10 in docs/QA-REPORT-2.md: decided 2026-11-24 (all as recommended, 9 = a); being implemented (PLAN.md Phase 2)
+- [ ] Stipple at small loop sizes on hoop-sized shapes is slow (6.5 s); wave's stitch-count estimate is low (S8)
+- [ ] test_helpdocs: check each documented key against the command it describes, bare keys too (D9)
+- [ ] knowledgeBase.test.ts: compare the whole command table, so removed or renamed commands fail (D10)
+- [ ] Guide snapping as a pure function with tests (D12)
+
 ## Nice-to-haves from the QA decision list
 - [ ] Progress bar and Cancel for whole-picture auto-digitize (item 3)
 - [x] Pin AI tracing model download to a fixed version with checksums (item 2) (done: revision + SHA-256)

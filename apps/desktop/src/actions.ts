@@ -420,13 +420,13 @@ export function applyProjectMachine(machine?: string | null, hoop?: string | nul
 }
 
 async function openProject(path: string) {
-  const p = await engine().call<{ layout: Layout; images: RefImage[]; machine?: string; hoop?: string; path: string }>(
-    "project.open",
-    { path },
-    OPEN_TIMEOUT,
-  );
+  const p = await engine().call<{
+    layout: Layout; images: RefImage[]; machine?: string; hoop?: string; path: string; notes?: string[];
+  }>("project.open", { path }, OPEN_TIMEOUT);
   applyProjectMachine(p.machine, p.hoop);
   await replaceDoc({ layout: { ...p.layout, title: stem(path) }, images: p.images ?? [] }, p.path);
+  // Parts of a damaged project the engine left out (QA2 P4) are said, not silently gone.
+  if (p.notes?.length) info(p.notes.join(" "));
 }
 
 /** Save the project. Asks for a name the first time, or always with `as`. */
@@ -795,9 +795,21 @@ export function removeSelected() {
     s.select(null);
     return;
   }
-  let l = doc.layout;
-  for (const id of selectionIds()) l = removeItem(l, id);
-  void commit(l);
+  removeItems(selectionIds());
+}
+
+/** Remove these items (one undo step). Nothing stays selected, so the next Delete can't act on
+ *  them again; if the edit fails (the error says why), the selection comes back to try again. */
+function removeItems(ids: string[]) {
+  const s = useStore.getState();
+  let l = currentLayout();
+  if (!l) return;
+  for (const id of ids) l = removeItem(l, id);
+  const { selectedId, extraIds } = s;
+  void commit(l).then((ok) => {
+    const now = useStore.getState();
+    if (!ok && !now.selectedId && selectedId) now.setSelection(selectedId, extraIds);
+  });
   s.select(null);
 }
 
@@ -1752,6 +1764,7 @@ function startAngle() {
   const s = useStore.getState();
   const o = currentLayout()?.items.find((it) => it.id === s.selectedId);
   if (!o || o.kind !== "fill") return info("Select a fill first, then press I and draw a line the stitches should follow.");
+  feat.endOtherModes("angle");
   s.setAngleFor({ id: o.id, points: [] });
 }
 
@@ -1766,6 +1779,7 @@ export function finishAngle(id: string, a: [number, number], b: [number, number]
 function toggleRuler() {
   const s = useStore.getState();
   if (s.ruler) return s.setRuler(null);
+  feat.endOtherModes("ruler");
   if (s.tool !== "select") void tool("select")();
   s.setRuler([]);
 }
@@ -1797,7 +1811,8 @@ function copySelected(cut: boolean) {
   const items = l?.items.filter((x) => ids.includes(x.id)) ?? [];
   if (!items.length) return;
   clipboard = items.map((it) => structuredClone(it));
-  if (cut) removeSelected();
+  // What was copied is what goes (with nothing selected, that's the design's only item).
+  if (cut) removeItems(items.map((it) => it.id));
   else info("Copied. Ctrl+V pastes it.");
 }
 

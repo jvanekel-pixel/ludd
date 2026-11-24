@@ -10,7 +10,7 @@ change, in the same commit as docs/CHANGELOG.md. Never edited by the help agent.
 | --- | --- |
 | Product | **LUDD** (formerly *Threadline*), free embroidery digitizing software |
 | Version described | **1.0.1** (in development; installers built from the working copy) |
-| Last updated | **2026-11-14** |
+| Last updated | **2026-11-24** |
 | Owner | One hobbyist user (the person asking questions), with a **Brother PE550D** (4" × 4" hoop) |
 | Source of truth, in order | 1. this file · 2. `docs/USER-MANUAL.md` · 3. `docs/CHANGELOG.md` · 4. the app's own Help (F1) |
 | Developer | Claude Code, in the LUDD repository chat. The help agent never changes code or files. |
@@ -25,11 +25,11 @@ change, in the same commit as docs/CHANGELOG.md. Never edited by the help agent.
   - **YES**: LUDD does this today. Say how (where it is, the keys, the steps).
   - **PARTIAL**: it does some of it. Say what it does, what it doesn't, and the workaround.
   - **NO**: it doesn't. Say so plainly, give any workaround, and offer to write a change request
-    (section 9).
+    (section 24).
   - **FIXED**: was a bug, fixed in the version noted. If the person still sees it, they may be on an
     older installer, or have an old file (see the entry).
 - Keyboard keys are written for **Windows**: `Ctrl` (⌘ on a Mac), `Alt` (⌥ Option on a Mac).
-  In the command registry (section 8) `Mod` means Ctrl / ⌘.
+  In the command registry (section 25) `Mod` means Ctrl / ⌘.
 - UI paths are written `Place → Place → Thing`. "The panel" is the right-hand panel; "the rail"
   is the tool rail on the left; "⋯" is the toolbar's More menu (top right) unless it says "the
   panel's ⋯" (the menu at the top of the panel, for what's selected).
@@ -50,7 +50,7 @@ change, in the same commit as docs/CHANGELOG.md. Never edited by the help agent.
 | Brand | Name LUDD; colors ink #121114, bone #EEE9DF, techno yellow #C8FF2E. Light and dark mode. |
 | Units | Inches or millimeters (U, or Settings). Inside, LUDD works in millimeters. |
 | Machines built in | **Brother PE550D** (hoop 4" × 4", 10 × 10 cm; saves PES; cuts the thread only at color changes). **Janome (generic)** (hoops SQ14 14 × 14 cm, A 12.6 × 11 cm, RE20b 14 × 20 cm, SQ20b 20 × 20 cm; saves JEF). More machines can be added as JSON profiles in the data folder's `machines` folder (advanced). |
-| Opens (47 formats) | 100, 10o, bro, col, csv, dat, dsb, **dst**, dsz, edr, emd, **exp**, exy, fxy, gcode, gt, hus, inb, inf, **jef**, jpx, json, ksm, max, mit, new, pcd, pcm, pcq, pcs, **pec**, **pes**, phb, phc, pmv, sew, shv, spx, stc, stx, tap, tbf, u01, **vp3**, **xxx**, zhs, zxy, plus LUDD projects (`.ludd`, and old `.thl`). |
+| Opens (40 formats) | 100, 10o, bro, dat, dsb, **dst**, dsz, emd, **exp**, exy, fxy, gt, hus, inb, **jef**, jpx, ksm, max, mit, new, pcd, pcm, pcq, pcs, **pec**, **pes**, phb, phc, sew, shv, spx, stc, stx, tap, tbf, u01, **vp3**, **xxx**, zhs, zxy, plus LUDD projects (`.ludd`, and old `.thl`). |
 | Saves for machines (9 formats) | **PES** (Brother, primary), **JEF** (Janome), DST, EXP, PEC, TBF, U01, VP3, XXX. |
 | Can't open | Embrilliance working files (`.be`, `.bt`): they're a closed format. Open the PES/JEF Embrilliance saved, or recreate. See L-012. |
 | Project file | `.ludd`: everything embedded (shapes, lettering, placed designs, traced pictures, the lettering's fonts). Old `.thl` projects and `.tlfont` stitch fonts still open. |
@@ -108,7 +108,7 @@ One line per common question. Status, then where to read more.
 | edit individual stitches of a bought design? | YES | F-1901 |
 | change a bought design's stitch types (e.g. fill to satin)? | NO | L-007 |
 | resize a bought design? | PARTIAL (±20% advised) | F-1104 |
-| recolour threads, match to real thread brands? | YES | F-1601, F-1603 |
+| recolor threads, match to real thread brands? | YES | F-1601, F-1603 |
 | search threads by color code (#hex)? | YES | F-1602 |
 | keep my own spools (My threads)? | YES | F-1604 |
 | change many items' color at once? | YES (select them, change one) | F-1105, F-1601 |
@@ -172,7 +172,7 @@ One line per common question. Status, then where to read more.
 
 ### F-103 Undo, redo, Esc — YES
 - Undo `Ctrl+Z`, redo `Ctrl+Y` or `Ctrl+Shift+Z`. Most actions are one undo step (a whole drag,
-  a whole "Add all", a batch recolour).
+  a whole "Add all", a batch recolor).
 - **Esc lets go of one thing per press, newest first**: a drag (it goes back), an open menu or list,
   a value being typed (old value back), a half-drawn shape (even one point), measuring, the drawing
   tool (back to Select), a selected point, the selection, playback.
@@ -216,7 +216,7 @@ drawing the hole too). With a shape selected, arrow keys nudge it even while a d
 ## 4. Files and projects (section 2 of the manual)
 
 ### F-201 Open designs — YES
-`Ctrl+O`, or drag a file onto the window. 47 formats (section 1) and `.ludd` projects. A stitch
+`Ctrl+O`, or drag a file onto the window. 40 formats (section 1) and `.ludd` projects. A stitch
 file opens **centered in the hoop** (many PES files start at a corner).
 
 ### F-202 Add another design — YES
@@ -231,6 +231,10 @@ design, to combine designs.
 - Autosave: a recovery copy a few seconds after each change. After a crash LUDD offers **Recover**
   or **Discard**. The window title shows • for unsaved changes; closing asks first.
 - If antivirus/OneDrive holds the file, Save waits and retries.
+- A damaged project opens without its damaged parts and says how many were left out (2026-11-24;
+  T-016). Very large or hostile projects (over 64 pictures, over 768 MB unpacked) are refused.
+- Added designs and pictures keep working after the engine restarts, even if the original is gone
+  (fixed 2026-11-24).
 
 ### F-204 Samples — YES
 `Ctrl+Shift+E` (⋯ → Open a sample design): five sample designs (three also as PES and JEF). They
@@ -269,7 +273,7 @@ Save for machine → **Have the machine cut jump threads** (recommended for the 
 cuts at color changes). Long jumps marked for trimming become stops in the same color: the machine
 ties off and cuts; press Start at each stop, no thread change. More options: minimum jump length to
 cut, lock stitches, **Also cut jumps the design doesn't mark for trimming**. Not yet confirmed on
-the real machine for every case (stitch-out tests are queued; see section 10).
+the real machine for every case (stitch-out tests are queued; see L-016).
 
 ### F-303 Too big for the hoop — YES
 - Up to ~5% too big: **Make it N% smaller** fits it in one hooping.
@@ -303,7 +307,8 @@ when nothing is selected, slider (marks = color changes), speed 2–5,000 stitch
 `[`/`]`; `Shift+,` machine speed ≈12/s). The step being sewn is marked in Order & colors.
 
 ### F-405 Measure — YES
-`M`: click two points; shows distance and across/down. `M` or Esc puts it away.
+`M`: click two points; shows distance and across/down. `M` or Esc puts it away. Starting it ends
+the knife, stitch editing and the angle line (only one of these is on at a time, 2026-11-24).
 
 ---
 
@@ -347,7 +352,8 @@ when the shape is big enough on screen); round handle turns (Shift = 15° steps)
 shows the pull direction at every handle.
 
 ### F-603 Draw the angle — YES
-`I` (or Fill section → Draw the angle): draw a line across a fill to set its row direction.
+`I` (or Fill section → Draw the angle): draw a line across a fill to set its row direction. It
+ends if the fill is deleted or undone.
 
 ### F-701 Start and stop points (green and red dots) — YES (reworked 1.0.1, 2026-10-13)
 Select a shape: a **green dot** marks where it starts sewing, a **red dot** where it stops. **Drag
@@ -423,7 +429,8 @@ keeps going to a corner, 1/2 pick a branch, `[`/`]` step length.
 `Alt+A` (⋯, or Whole picture… in Auto-trace's bar): every color area → fill; solid dark areas →
 fills (one per letter for bold lettering); dark lines → satin ribbons (thin ones running stitch);
 near-equal colors merged; background left out (optional); big areas first, outlines last. Preview
-first (seconds to a minute); **Add all** (Enter, one undo) or Dismiss (Esc).
+first (seconds to a minute); **Add all** (Enter, one undo) or Dismiss (Esc). A picture placed
+under 0.5 mm wide can't be traced ("too small to trace").
 
 ---
 
@@ -448,9 +455,9 @@ Stitch files (bought designs) resize, but beyond about ±20% they sew too dense 
 aren't added or removed; LUDD warns). Drawn shapes and lettering re-stitch at any size.
 
 ### F-1105 Several selected — YES
-They move, turn, resize, mirror, copy, cut, delete **and recolour** together; all are highlighted
+They move, turn, resize, mirror, copy, cut, delete **and recolor** together; all are highlighted
 in Order & colors; changing the thread of one (its ✎ / color square, the 🧵 button, right-click →
-Change thread…, `Alt+T`) changes all (a multicolour stitch file keeps its colors, with a message).
+Change thread…, `Alt+T`) changes all (a multicolor stitch file keeps its colors, with a message).
 
 ### F-1106 Pin — YES
 `Ctrl+L` or 📌 in lists: can't be dragged by accident; a pinned picture lets clicks through. A pinned
@@ -461,7 +468,7 @@ unpin it first). A pinned picture ignores the arrow keys too.
 Double-click a name (list or panel top), `F2`, or ⋯ → Rename. Saved in the project.
 
 ### F-1108 Copy, paste, duplicate, repeat — YES
-`Ctrl+C/X/V` (pasted down-right), `Ctrl+D`; **Repeat…** `Ctrl+Shift+D`: row/grid, circle
+`Ctrl+C/X/V` (pasted down-right; with nothing selected they act on the only shape), `Ctrl+D`; **Repeat…** `Ctrl+Shift+D`: row/grid, circle
 (carousel), mirrored ×4.
 
 ---
@@ -478,7 +485,9 @@ stays (Delete it if only for cutting).
 
 ### F-1204 Knife and merge — YES
 Knife `Shift+K`: cut a fill, line or satin ribbon along a line (two clicks) into pieces with the
-same settings. Merge `Ctrl+M`: two or more touching/overlapping fills → one.
+same settings. Merge `Ctrl+M`: two or more touching/overlapping fills → one. If you change or undo
+the shapes while knife, merge, outline or Optimize jumps is working, LUDD drops its answer and says
+"The design changed while …: try again" (2026-11-24).
 
 ### F-1205 Outline / offset — YES
 `Ctrl+Shift+K`: a ring a set distance from the selection's stitches, sewn as satin border, line or
@@ -631,6 +640,8 @@ your spools first; untick any to keep.
 ### F-1604 My threads & charts — YES
 `Ctrl+T`: **My threads** (add from a brand chart, or "Add a spool by color" for unbranded Amazon
 kits); **Brand charts** (Brother, Janome built in; import CSV with code + hex or R,G,B columns).
+Importing under a name already used replaces that chart; a different name never replaces another
+chart (fixed 2026-11-24: non-Latin names and names like "Isacord 40"/"Isacord-40!" did).
 
 ### F-1605 Color sets — YES
 Order & colors → Color sets: save the current colors under a name, switch with **Use** (one undo).
@@ -708,11 +719,13 @@ Settings → AI add-on: **Off** (nothing sent) · **On this computer** (Ollama; 
 qwen2.5vl:7b`; the owner has this set up) · **Cloud** (Anthropic or OpenAI-compatible, own key,
 https only; key stored encrypted on Windows). Before anything is sent, LUDD shows what, where and the
 maximum cost: the text, any pictures, and (under its own heading) LUDD's fixed instructions to the AI.
+If the service tries to redirect LUDD to another address, LUDD refuses (your key stays with the
+address in Settings) and says to check the address (2026-11-24).
 
 ### F-2002 Stitch Advisor — YES
 `Ctrl+Shift+I` (✨ in Advanced stitch settings, ⋯, right-click): suggests stitch type, angle,
 density, underlay and sewing order with reasons; Accept / Dismiss each or Accept all (one undo). It
-sees each shape over the picture plus its neighbours in their thread colors. A suggestion to turn a
+sees each shape over the picture plus its neighbors in their thread colors. A suggestion to turn a
 fill into a satin can't be accepted (use Stitch as → Satin yourself).
 
 ### F-2003 Help with AI — YES
@@ -791,6 +804,9 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | T-013 | Can't grab a satin's purple tip | It sits just past the end of the satin, outside the shape | Zoom in; grab the purple dot outside the tip (green/red dots win where they overlap). |
 | T-014 | Too dense / puckers | Overlaps, density, fabric | Density map (`Alt+D`), Checks → Show me, lighter density, choose the fabric, cut holes under top shapes. |
 | T-015 | Thread colors on the machine screen differ | Machine palette maps to its nearest colors | Match to Brother chart (Order & colors → Match…) before saving. |
+| T-016 | "N parts of this project were damaged and left out" when opening | The project file was damaged, or made by a newer LUDD | The rest opened. Save under a new name to keep the original; send the original to the developer. |
+| T-017 | "The AI service tried to send LUDD on to …" | The address in Settings → AI add-on redirects (old address, wrong port, http vs https) | Put in the final address the service uses. |
+| T-018 | "This picture is too small to trace" | The picture was shrunk under 0.5 mm | Make the picture bigger, trace, then resize the shapes. |
 
 ---
 
@@ -829,6 +845,7 @@ Use this to answer "did that change?" or "why is it different?". Full detail: `d
 
 | Date | Change |
 | --- | --- |
+| 2026-11-24 | **QA pass 2** (docs/QA-REPORT-2.md): the knife, stitch editing, the ruler and the angle line no longer stay on together; picking a tool ends stitch editing; knife, merge, outline and Optimize jumps drop an answer if the design changed meanwhile; Auto-trace keeps the next guess while the last one is added; Ctrl+X cuts the only shape; a failed delete keeps the selection; damaged parts of a project are left out with a note; private copies are found again after an engine restart; AI services can't redirect your key elsewhere; thread charts with similar or non-Latin names no longer replace each other; tiny pictures trace fast or say they're too small; plain messages for odd satin and line settings and bad hole points; Settings knows if AI tracing really runs. |
 | 2026-11-14 | **QA decisions**: pinned shapes ignore arrows, R and Alt+H/V; Browse designs has **Refresh**; the AI send preview shows LUDD's fixed instructions; the AI tracing model download is pinned and checked; US spelling in the app (Center, Millimeters, Licenses); GitHub Actions pinned by commit and Dependabot added. |
 | 2026-10-13 | **Self-audit fixes**: satin start lands on the satin; multi-piece fills end on the right piece; Optimize jumps improves hand-set lines/satins; lettering hand-overs only for filled letters, new Reset (`Ctrl+Alt+R`); pinned shapes' points locked; dots don't snap back or appear on the wrong shape; late engine answers dropped if the shape changed; arrows nudge with a drawing tool chosen; commands only where they work; Back to … for changed colors; picker resets; context-menu scrolling; knife/cut-out pieces get fresh dots; Advisor sees moved shapes. |
 | 2026-10-13 | Satins start/stop anywhere along them (were stuck at their ends); wide satins end on the chosen side. Lettering: per-letter start/end dots, letters hand over (fewer trims), panel explains satin look vs fill, **Break into shapes** (`Ctrl+Alt+X`). |
@@ -836,9 +853,10 @@ Use this to answer "did that change?" or "why is it different?". Full detail: `d
 | 2026-10-13 | Start/stop dots follow the edge like a magnet and stay exactly where dropped; fills end exactly at the red dot; **purple direction dots** for fills and satin columns/fills; dots move with the shape. |
 | 2026-10-13 | **Order & colors** replaces Threads + Sewing order (per-item colors, Palette); multi-select highlighted in the list and recolored together (🧵, `Alt+T`); groups drag from anywhere inside their frame. |
 | 2026-10-13 | **PES placement fixed** for the PE550D (designs were shifted off the hoop). |
-| 2026-10-12 | Right-click menus everywhere; new commands Sew first/earlier/later/last, Center in the hoop, Change thread (`Alt+T`), Change the words. Tools stay chosen. Thread search by color code; mix your own color. Auto-trace fits around existing shapes; Stitch Advisor sees neighbours. Dialogs scroll in small windows. |
+| 2026-10-12 | Right-click menus everywhere; new commands Sew first/earlier/later/last, Center in the hoop, Change thread (`Alt+T`), Change the words. Tools stay chosen. Thread search by color code; mix your own color. Auto-trace fits around existing shapes; Stitch Advisor sees neighbors. Dialogs scroll in small windows. |
 | 2026-10-12 | Draggable start/end dots (first version), satin fill, holes and cut out, Shapes menu, density slider with numbers, Optimize jumps, side stretch handles, custom pointers, realistic thread redone, drag-and-drop sewing order, see-through stitches, satin edge fit. |
-| 2026-10-11 | 1.0.0 release; renamed LUDD (from Threadline); GPL-3.0-or-later; QA review fixes (phases 1–4). |
+| 2026-10-12 to 2026-11-14 | 1.0.1: QA review fixes (phases 1–4: docs/QA-RESPONSE.md). Not in 1.0.0 installers. |
+| 2026-10-11 | 1.0.0 release; renamed LUDD (from Threadline); GPL-3.0-or-later. |
 
 ---
 

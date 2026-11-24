@@ -35,9 +35,9 @@
   },
   "phase": 2,
   "status": "active",
-  "nextAction": "Check the model download checksums once (Settings > AI tracing > Download); triage the 4 Dependabot PRs; then the second QA pass (docs/QA-PROMPT.md)",
+  "nextAction": "Implement the 10 QA pass 2 decisions (docs/QA-REPORT-2.md; all as recommended, 9 = a) with tests, docs and stitch-out rows; then tag v1.0.1 when the owner asks",
   "blockedOnHuman": null,
-  "lastSessionAt": "2026-11-15T18:02:01.451Z",
+  "lastSessionAt": "2026-11-24T14:00:00Z",
   "health": {
     "tests": "passing",
     "build": "passing",

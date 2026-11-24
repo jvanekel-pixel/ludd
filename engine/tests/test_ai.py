@@ -360,3 +360,47 @@ def test_advisor_crops_show_the_shapes_around_each_one():
 
     green = lambda im: int(np.all(np.asarray(im.convert("RGB")) == (0, 255, 0), axis=-1).sum())  # noqa: E731
     assert green(alone) == 0 and green(together) > 50
+
+
+def test_qa2_t1_a_redirect_is_refused_so_the_key_stays_put():
+    """QA2 T1: urllib follows redirects and re-sends the key to the new address (another host,
+    even plain http). LUDD must refuse and say so."""
+    got = {}
+
+    class Elsewhere(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):  # noqa: N802
+            got["headers"] = dict(self.headers)
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b'{"choices": [{"message": {"content": "hi"}}]}')
+
+        do_POST = do_GET
+
+    other = HTTPServer(("127.0.0.1", 0), Elsewhere)
+
+    class Bounce(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_POST(self):  # noqa: N802
+            # Read the request first: closing with it unread resets the connection on Windows.
+            self.rfile.read(int(self.headers.get("content-length") or 0))
+            self.send_response(302)
+            self.send_header("Location", f"http://127.0.0.1:{other.server_port}/elsewhere")
+            self.end_headers()
+
+    first = HTTPServer(("127.0.0.1", 0), Bounce)
+    for s in (first, other):
+        threading.Thread(target=s.serve_forever, daemon=True).start()
+    try:
+        for p in (providers.OpenAICompatible("sk-SECRET", "m", f"http://127.0.0.1:{first.server_port}/v1"),
+                  providers.Anthropic("sk-ant-SECRET", "m", f"http://127.0.0.1:{first.server_port}/v1/messages")):
+            with pytest.raises(AIError, match="doesn't follow"):
+                p.ask(Request(system="s", text="t"))
+        assert got == {}
+    finally:
+        first.shutdown()
+        other.shutdown()

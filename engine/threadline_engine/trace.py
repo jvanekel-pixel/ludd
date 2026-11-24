@@ -33,6 +33,9 @@ MIN_CONFIDENCE = 0.28
 CORNER_DEG = 50  # a turn sharper than this makes the accepted point a corner
 
 
+MIN_PLACED_MM = 0.5  # a picture placed smaller than this can't be traced (and would be very slow)
+
+
 class TraceError(Exception):
     rpc_code = -32000  # rpc.APP_ERROR
 
@@ -173,7 +176,15 @@ class Placement:
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "Placement":
-        return cls(float(d["x"]), float(d["y"]), float(d["width_mm"]), float(d["height_mm"]), float(d.get("rotate", 0)))
+        try:
+            p = cls(float(d["x"]), float(d["y"]), float(d["width_mm"]), float(d["height_mm"]), float(d.get("rotate", 0) or 0))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise TraceError("The picture's place on the design is damaged; move or resize the picture and try again") from exc
+        if not all(math.isfinite(v) for v in (p.x, p.y, p.width_mm, p.height_mm, p.rotate)):
+            raise TraceError("The picture's place on the design is damaged; move or resize the picture and try again")
+        if min(p.width_mm, p.height_mm) < MIN_PLACED_MM:
+            raise TraceError(f"This picture is too small to trace (under {MIN_PLACED_MM} mm); make it bigger first")
+        return p
 
     def to_px(self, m: Maps, pts: np.ndarray) -> np.ndarray:
         a = math.radians(-self.rotate)

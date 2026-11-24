@@ -148,3 +148,18 @@ def test_qa4_travel_is_hidden_only_under_close_rows():
 
     assert commands(L.render(lay(0.4)), {pe.TRIM}) == 0
     assert commands(L.render(lay(1.4)), {pe.TRIM}) >= 1
+
+
+def test_qa2_p5_shortest_order_groups_threads_as_the_file_does():
+    """QA2 P5: the optimizer ignored thread names, so two same-hex threads with different names
+    (no catalog number) were one run to it but two colors in the file: it interleaved them."""
+    red = {"color": "#cc2222", "name": "Red", "catalog": "", "brand": ""}
+    cherry = {"color": "#cc2222", "name": "Cherry", "catalog": "", "brand": ""}
+    items = [square("a", 0, 0, 5, red), square("b", 60, 0, 5, red), square("c", 20, 0, 5, cherry), square("d", 40, 0, 5, cherry)]
+
+    def changes(its):
+        return sum(1 for *_, c in L.render({"items": its}).pattern.stitches if c & L.M == pe.COLOR_CHANGE)
+
+    order = L.optimize_order({"items": items})["order"]
+    by = {it["id"]: it for it in items}
+    assert changes([by[i] for i in order]) <= changes(items)

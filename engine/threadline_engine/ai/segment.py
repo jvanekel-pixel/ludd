@@ -12,6 +12,8 @@ the model's own confidence.
 
 from __future__ import annotations
 
+import functools
+
 import hashlib
 import http.client
 import os
@@ -58,16 +60,21 @@ def model_dir() -> Path:
 def _runtime():
     try:
         import onnxruntime as ort  # noqa: PLC0415 - only needed when the model is used
-    except ImportError as exc:  # pragma: no cover - not available on Intel Macs
+    except (ImportError, OSError) as exc:  # pragma: no cover - not available on Intel Macs
         raise SegmentError("AI tracing isn't available on this computer (ONNX Runtime isn't included).") from exc
     return ort
 
 
+@functools.cache
 def runtime() -> bool:
-    """ONNX Runtime is part of this build (it has no version for Intel Macs, so it's left out there)."""
-    import importlib.util  # noqa: PLC0415
-
-    return importlib.util.find_spec("onnxruntime") is not None
+    """ONNX Runtime is part of this build and really loads (it has no version for Intel Macs, so
+    it's left out there). Importing it, not just finding the package, catches a build whose native
+    library is missing or can't load: Settings then says so before a 45 MB download."""
+    try:
+        ort = _runtime()
+    except SegmentError:
+        return False
+    return hasattr(ort, "InferenceSession")
 
 
 def installed() -> bool:
