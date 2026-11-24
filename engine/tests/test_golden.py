@@ -115,3 +115,25 @@ def test_pes_files_start_at_the_top_left_corner_like_embrilliance(tmp_path):
     design.write(p, out)
     back = pe.read(str(out))
     assert back.extents() == (0, 0, 600, 450)
+
+
+SAMPLE_PROJECTS = sorted(SAMPLES.glob("*.ludd"))
+
+
+@pytest.mark.parametrize("ludd", SAMPLE_PROJECTS, ids=lambda p: p.stem)
+def test_qa2_p6_sample_projects_sew_like_their_shipped_files(ludd, tmp_path):
+    """Decision 6: each sample project (saved by LUDD 1.0.0) rendered and exported to PES must
+    match the PES shipped beside it, so a change to how old projects sew is made on purpose
+    (regenerate with scripts/make_samples.py and add a stitch-out row)."""
+    from threadline_engine import layout, project
+
+    proj = project.open_project(str(ludd))
+    shipped = ludd.with_suffix(".pes")
+    if not shipped.exists():  # applique and the split banner ship as projects only
+        assert layout.render_summary(proj["layout"])["info"]["stitches"] > 0
+        return
+    out = tmp_path / "now.pes"
+    layout.export(proj["layout"], str(out))
+    now, want = design.open_design(str(out)), design.open_design(str(shipped))
+    assert now["records"] == want["records"]
+    assert [t["color"] for t in now["threads"]] == [t["color"] for t in want["threads"]]
