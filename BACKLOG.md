@@ -15,6 +15,13 @@ Parked ideas, tech debt and nice-to-haves. Do not build these without the owner 
 - [ ] Clean the root of brand source PDFs/PNGs, research notes and the CSV (all git-ignored) into one folder
 - [ ] Working tree shows LF to CRLF warnings; decide on `.gitattributes` line-ending policy
 
+## From QA pass 2 (docs/QA-REPORT-2.md, 2026-11-24)
+- [ ] Owner decisions 1-10 in docs/QA-REPORT-2.md (thin necks, zigzag underlay, applique trims, sharp corners, edited stitch files changed on disk, samples, Dependabot/Tauri pairs, Mac Rust in CI, Ctrl+Z while drawing, old changelog spelling)
+- [ ] Stipple at small loop sizes on hoop-sized shapes is slow (6.5 s); wave's stitch-count estimate is low (S8)
+- [ ] test_helpdocs: check each documented key against the command it describes, bare keys too (D9)
+- [ ] knowledgeBase.test.ts: compare the whole command table, so removed or renamed commands fail (D10)
+- [ ] Guide snapping as a pure function with tests (D12)
+
 ## Nice-to-haves from the QA decision list
 - [ ] Progress bar and Cancel for whole-picture auto-digitize (item 3)
 - [x] Pin AI tracing model download to a fixed version with checksums (item 2) (done: revision + SHA-256)

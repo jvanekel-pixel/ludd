@@ -106,5 +106,5 @@ were placed off-center. Save the design for the machine again with the current L
 
 ## Uninstall
 
-Windows: Settings → Apps → LUDD → Uninstall. Mac: drag LUDD from Applications to the Bin. Your
+Windows: Settings → Apps → LUDD → Uninstall. Mac: drag LUDD from Applications to the Trash. Your
 projects stay wherever you saved them.

@@ -116,7 +116,9 @@ checks), so you rarely need to open one just to look.
 - **⋯ → Save project as** (Ctrl+Shift+S) makes a copy under a new name.
 - **Opening a project** uses the machine and hoop it was made for, for that project only: your
   usual machine stays your default. A project from a newer LUDD asks you to update instead of
-  opening wrongly; a missing, damaged or in-use file says so in plain words.
+  opening wrongly; a missing, damaged or in-use file says so in plain words. If only some parts
+  of a project are damaged, the rest opens and a note says how many parts were left out (save
+  under a new name to keep the original as it was).
 - **Autosave and recovery**: a few seconds after each change LUDD keeps a recovery copy. If it
   closes unexpectedly, next time it offers **Recover** or **Discard**. The copy is only removed
   once the work is really back (or you choose Discard); one that can't be read is kept aside.
@@ -124,7 +126,8 @@ checks), so you rarely need to open one just to look.
 - **Where LUDD keeps things** (Windows: `%APPDATA%\Ludd`): your threads, settings, stitch fonts
   (`fonts`), the recovery copy (`recovery`; `unrecovered-….ludd` files there are crash copies that
   couldn't be opened) and private copies of the pictures and designs you add (`project-files`;
-  copies unused for 90 days are deleted).
+  copies unused for 90 days are deleted). These copies keep your design working even if LUDD's
+  engine restarts after the original was moved or its USB stick unplugged.
 
 ### Saving for your machine
 **Save for machine** (Ctrl+E, the yellow button) writes the file your machine reads.
@@ -166,8 +169,8 @@ with its size, stitch count and colors. **Choose folder…** once; LUDD remember
 changed or removed designs. It shows
 the newest 600; type part of a name to find one (in a bigger folder this searches the whole
 folder). Click a design to open it, or **+ Add** to place it in the design you have open. The
-pictures are kept while LUDD is open, so going back to the folder is quick; choose the folder
-again to see designs added since.
+pictures are kept while LUDD is open, so going back to the folder is quick; press **Refresh**
+to see designs added since.
 
 ### Batch convert
 **⋯ → Batch convert folder** (Ctrl+B): converts every design in a folder to another format,
@@ -216,7 +219,9 @@ in its direction and the grid applies in the other). Guides are saved in the pro
 ### Measuring
 **M** (or ⋯ → Measure) turns on the measuring tool: click two points and the bar above the
 canvas shows the distance, and how far across and down; click again to measure something else.
-**M** or **Esc** puts it away.
+**M** or **Esc** puts it away. Only one of the measuring tool, the knife, stitch editing and the
+angle line (I) is on at a time: starting one ends the others, and picking a drawing tool ends
+stitch editing.
 
 ### Watching it stitch
 The bar at the bottom plays the design as the machine would sew it.
@@ -226,7 +231,7 @@ The bar at the bottom plays the design as the machine would sew it.
 - **← →** step one stitch (Shift: 100), when nothing is selected.
 - Drag the long slider to any point; the marks on it are color changes.
 - **Speed** (🐢 slider 🐇): from 2 stitches a second up to 5,000. **Machine speed** is how fast a
-  home machine really sews (about 12 a second). **Comma** (or **[**) slows down, **full stop**
+  home machine really sews (about 12 a second). **Comma** (or **[**) slows down, **period**
   (or **]**) speeds up, **Shift+comma** sets machine speed. LUDD remembers your speed. (While
   Auto-trace or Trace Assist is in use, [ and ] change their points instead.)
 
@@ -406,7 +411,8 @@ background is the color all round the picture's edge, light or dark; it's left o
 shows, also inside letters and rings, while shapes that touch the edge are kept. The bar has its
 own **Points every** and **Spread** (with Auto-trace as the tool, also [ ] and Alt+[ ]); the preview is read again when you
 change them or move the picture. **Add all** (Enter) adds every shape in one go (one Ctrl+Z takes
-them all out); **Dismiss** (Esc) adds nothing. Then fix what needs fixing: drag points, merge
+them all out); **Dismiss** (Esc) adds nothing. A picture made smaller than 0.5 mm can't be traced: make it
+bigger first. Then fix what needs fixing: drag points, merge
 pieces, delete specks, and use **Order & colors → Match…** to pick real threads for the colors.
 
 The older **Trace Assist** (a ghost "next point" while you draw, Tab to take it) is still there
@@ -466,6 +472,8 @@ to 0).
 - **Merge** (Ctrl+M): select two or more fills that touch or overlap (Shift+click) and they become
   one shape, with the settings, thread and sewing place of the one you selected first. Fills that
   don't touch, or only meet at a corner, can't be merged.
+- If you change or undo the shapes while the knife, merge, an outline or Optimize jumps is still
+  working, LUDD leaves the design as you made it and says "The design changed while …: try again".
 
 ### Copying and repeating
 - **Ctrl+C / Ctrl+X / Ctrl+V** copy, cut and paste (pasted a little down and right).
@@ -736,7 +744,9 @@ the whole garment.
 **⋯ → My threads & charts** (Ctrl+T):
 - **My threads**: the spools you own. Add them from a brand chart, or with **Add a spool by
   color…** for unbranded Amazon assortments. Matching uses these first.
-- **Brand charts**: Brother and Janome built in; import any brand from a CSV file.
+- **Brand charts**: Brother and Janome built in; import any brand from a CSV file. Importing
+  under a name you've used before replaces that chart (to update it); any other name is kept
+  as a chart of its own.
 
 ---
 
@@ -825,7 +835,8 @@ and never sends your pictures anywhere. See [Auto-trace](#auto-trace-shifta).
   account; on a Mac or Linux, in a file only your user account can read. **Before anything is
   sent**, LUDD shows what will go (your question or the shapes' details, and any pictures; LUDD's
   own fixed instructions to the AI go too), where it goes, and, if you enter the service's prices,
-  the most it can cost.
+  the most it can cost. If the service tries to send LUDD on to another address, LUDD stops
+  there, so your key only goes to the address in Settings, and asks you to check that address.
 
 **Stitch Advisor** (✨ in a shape's Advanced stitch settings, ⋯, or Ctrl+Shift+I): suggests stitch type, fill
 angle, density, underlay and sewing order, each with a reason. **Accept** or **Dismiss** each, or
@@ -1005,7 +1016,7 @@ Shortcuts are also shown in every menu and on every button's tooltip.
 | Back / forward 100 stitches | Shift+← / Shift+→ |
 | Previous / next color | Page Up / Page Down |
 | Start / whole design | Home / End |
-| Slower / faster | comma / full stop (or [ / ]) |
+| Slower / faster | comma / period (or [ / ]) |
 | Machine speed | Shift+comma |
 
 ### Machine stitches and colors
