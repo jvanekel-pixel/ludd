@@ -35,9 +35,9 @@
   },
   "phase": 2,
   "status": "active",
-  "nextAction": "Implement the 10 QA pass 2 decisions (docs/QA-REPORT-2.md; all as recommended, 9 = a) with tests, docs and stitch-out rows; then tag v1.0.1 when the owner asks",
+  "nextAction": "QA pass 2 and its 10 decisions are merged (PRs #20, #21). Owner checks the AI model download once (Settings > AI tracing); then tag v1.0.1 when the owner asks",
   "blockedOnHuman": null,
-  "lastSessionAt": "2026-11-24T14:00:00Z",
+  "lastSessionAt": "2026-11-24T18:00:00Z",
   "health": {
     "tests": "passing",
     "build": "passing",

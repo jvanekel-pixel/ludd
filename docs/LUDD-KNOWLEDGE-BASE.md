@@ -117,6 +117,8 @@ One line per common question. Status, then where to read more.
 | sort colors to fewest thread changes? | YES | F-1607 |
 | group things and move them together? | YES | F-1103 |
 | undo / redo? | YES | F-103 |
+| undo the last point while drawing (Ctrl+Z)? | YES (removes the last point, like Backspace) | F-103, F-502 |
+| keep my edits on a stitch file that I later change in another program? | YES (sews LUDD's copy; the change isn't picked up) | F-1901, L-025 |
 | autosave / crash recovery? | YES | F-203 |
 | split a design too big for the hoop? | YES | F-303 |
 | basting box / knockdown stitches? | YES | F-1801, F-1802 |
@@ -173,6 +175,9 @@ One line per common question. Status, then where to read more.
 ### F-103 Undo, redo, Esc — YES
 - Undo `Ctrl+Z`, redo `Ctrl+Y` or `Ctrl+Shift+Z`. Most actions are one undo step (a whole drag,
   a whole "Add all", a batch recolor).
+- **While drawing a shape**, `Ctrl+Z` removes the last point placed (like `Backspace`) and leaves the
+  earlier work alone; `Ctrl+Y` does nothing until the shape is finished or cancelled (changed
+  2026-11-24; before, Ctrl+Z threw the half-drawn shape away *and* undid the edit before it).
 - **Esc lets go of one thing per press, newest first**: a drag (it goes back), an open menu or list,
   a value being typed (old value back), a half-drawn shape (even one point), measuring, the drawing
   tool (back to Select), a selected point, the selection, playback.
@@ -238,7 +243,8 @@ design, to combine designs.
 
 ### F-204 Samples — YES
 `Ctrl+Shift+E` (⋯ → Open a sample design): five sample designs (three also as PES and JEF). They
-open as new designs (Save asks where).
+open as new designs (Save asks where). The PES/JEF files were made again on 2026-11-24, so they sew
+exactly like their projects do today (the 1.0.0 ones had drifted slightly).
 
 ### F-205 Print template & thread list — YES
 `Ctrl+P`: real-size template with center lines, plus a thread list (stitch counts, tick boxes,
@@ -332,7 +338,7 @@ shape, `W` the kind before that.
 ### F-502 Placing points — YES
 Click = curve point · `Ctrl`+click = straight point · `Shift`+click = sharp corner · hold `Alt` =
 15° steps · `Enter` / right-click / double-click = finish · `Ctrl`+right-click = finish and close
-(loop) · `Backspace` = remove last point · `C` while drawing = switch last point type · `Esc` =
+(loop) · `Backspace` or `Ctrl+Z` = remove last point · `C` while drawing = switch last point type · `Esc` =
 cancel · `Shift+G` = snap to grid. Points near other shapes' points snap to them. Curve = circle,
 straight = square, corner = diamond on screen.
 
@@ -542,7 +548,10 @@ Blanket stitch, with Repeat length and Width.
 ### F-1307 Satin ribbons — YES
 Draw like a line along the middle; width 1–12 mm (new ones start at the last width); Ctrl+right-click
 closes a loop. Warnings: wider than ~7 mm without Split, narrower than ~1 mm, folding on tight
-curves, crossing sides, too short.
+curves, crossing sides, too short. With **Split long stitches** on, no stitch is longer than the
+Longest setting, sharp corners included (an extra needle point goes on the outer edge there; since
+2026-11-24). The **zigzag underlay** sews out and back in an X (since 2026-11-24; on about half of
+wide satins it used to sew the same zigzag twice).
 
 ### F-1308 Satin fill (shape-shifting satin) — YES
 A closed shape set to Satin (or Auto-trace → Satin fill) becomes **one satin column** that turns and
@@ -608,7 +617,9 @@ Missing letters fall back to the other case or the unaccented letter.
 
 ### F-1501 Applique — YES
 Stitch as → Applique on a closed shape: placement line → stop → tack-down (zigzag or straight) →
-stop → satin border (width/density adjustable; split if wider than 7 mm). Holes get all three too.
+stop → satin border (width/density adjustable; split if wider than 7 mm, sharp corners included).
+Holes get all three too. A move of more than 3 mm from one edge to the next (holes, separate pieces)
+is marked for trimming, as in fills (since 2026-11-24; with cut-stops on, that can add stops).
 **Save cut file (SVG)** `Ctrl+Shift+U` for Cricut / ScanNCut / Silhouette. "Sew a placement line
 first" can be unticked.
 
@@ -709,6 +720,11 @@ it's dropped (with a note) once the shape changes.
 Select a placed stitch file → Edit stitches (`Ctrl+Alt+E`): click / Shift+click / box-select needle
 points, drag to move, Delete removes, Esc or Done finishes. Edits are kept in the project (the
 original file isn't changed) and turn/resize with the design.
+- **A placed file with edits sews from LUDD's own copy**, taken when it was added (since
+  2026-11-24). Edits (colors changed, colors or stitches deleted, stops or trims added, stitches
+  moved) name stitches by number, so if the original is saved again in another program, LUDD keeps
+  using its copy and the edits stay on the right stitches. To use the new version, add the file
+  again and redo the edits. A placed file *without* edits follows the file on disk.
 
 ---
 
@@ -782,6 +798,7 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | L-022 | **End point on Contour / Stipple / Cross-stitch fills** | NO | Their pattern decides where they end (the red dot shows it). | Possibly. |
 | L-023 | **Stitch Advisor changing a closed line to satin** | PARTIAL | It makes a satin border along the line; Stitch as → Satin makes a satin fill instead. | Yes. |
 | L-024 | **Memory guard for damaged or crafted .vp3 / .hus files** | NO | Only open stitch files you trust (LUDD is offline, so this only matters for files from strangers). A damaged one can make LUDD use a lot of memory and slow down; close LUDD from the task manager if so. | Yes, by reading files in a separate memory-limited process. |
+| L-025 | **A placed stitch file with edits doesn't pick up changes made to the original later** | By design (2026-11-24) | Add the changed file again and redo the edits (recolor, delete, stops). Without edits, a placed file follows the original. | Possibly (a "reload and keep what still fits" option). |
 
 ---
 
@@ -807,6 +824,8 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | T-016 | "N parts of this project were damaged and left out" when opening | The project file was damaged, or made by a newer LUDD | The rest opened. Save under a new name to keep the original; send the original to the developer. |
 | T-017 | "The AI service tried to send LUDD on to …" | The address in Settings → AI add-on redirects (old address, wrong port, http vs https) | Put in the final address the service uses. |
 | T-018 | "This picture is too small to trace" | The picture was shrunk under 0.5 mm | Make the picture bigger, trace, then resize the shapes. |
+| T-019 | I changed a stitch file in another program, but LUDD still sews the old one | The placed copy has edits, so LUDD keeps its own copy (L-025) | Add the file again (Ctrl+Shift+O) and redo the edits; delete the old copy. |
+| T-020 | An applique now has more machine stops than before (cut-stops on) | Since 2026-11-24 moves over 3 mm between applique edges are trimmed, and cut-stops turn trims into stops | Expected: each stop cuts a thread that used to lie over the fabric. Untick "Have the machine cut jump threads" to sew without them. |
 
 ---
 
@@ -845,6 +864,7 @@ Use this to answer "did that change?" or "why is it different?". Full detail: `d
 
 | Date | Change |
 | --- | --- |
+| 2026-11-24 | **QA pass 2 decisions** (changes stitches): fills with a thin neck travel along their edges and never end on a jump; zigzag underlay crosses back in an X; long moves between applique edges are trimmed; Split long stitches holds at sharp corners of ribbons and applique borders; a placed stitch file with edits sews from LUDD's copy taken when it was added; sample PES/JEF made again; Ctrl+Z while drawing removes the last point, Ctrl+Y waits; CI builds the Mac code. |
 | 2026-11-24 | **QA pass 2** (docs/QA-REPORT-2.md): the knife, stitch editing, the ruler and the angle line no longer stay on together; picking a tool ends stitch editing; knife, merge, outline and Optimize jumps drop an answer if the design changed meanwhile; Auto-trace keeps the next guess while the last one is added; Ctrl+X cuts the only shape; a failed delete keeps the selection; damaged parts of a project are left out with a note; private copies are found again after an engine restart; AI services can't redirect your key elsewhere; thread charts with similar or non-Latin names no longer replace each other; tiny pictures trace fast or say they're too small; plain messages for odd satin and line settings and bad hole points; Settings knows if AI tracing really runs. |
 | 2026-11-14 | **QA decisions**: pinned shapes ignore arrows, R and Alt+H/V; Browse designs has **Refresh**; the AI send preview shows LUDD's fixed instructions; the AI tracing model download is pinned and checked; US spelling in the app (Center, Millimeters, Licenses); GitHub Actions pinned by commit and Dependabot added. |
 | 2026-10-13 | **Self-audit fixes**: satin start lands on the satin; multi-piece fills end on the right piece; Optimize jumps improves hand-set lines/satins; lettering hand-overs only for filled letters, new Reset (`Ctrl+Alt+R`); pinned shapes' points locked; dots don't snap back or appear on the wrong shape; late engine answers dropped if the shape changed; arrows nudge with a drawing tool chosen; commands only where they work; Back to … for changed colors; picker resets; context-menu scrolling; knife/cut-out pieces get fresh dots; Advisor sees moved shapes. |

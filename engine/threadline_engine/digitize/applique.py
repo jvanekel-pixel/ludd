@@ -35,6 +35,7 @@ from .stitches import (
     stitch_run,
     tie_in,
     tie_off,
+    travel,
     valid_parts,
 )
 import pyembroidery as pe
@@ -176,8 +177,10 @@ def applique(outline: Sequence, params: AppliqueParams, holes: Sequence[Sequence
     def section(parts: list[list[Rec]], stop_after: bool) -> None:
         for recs in parts:
             recs = tie_off(tie_in(recs))
-            if out:  # move (not sew) to where this part starts
+            if out and out[-1][2] == STOP:  # move (not sew) to where this part starts
                 out.append((recs[0][0], recs[0][1], pe.JUMP))
+            elif out:  # a long move between edges is trimmed, as in fills (QA2 S3)
+                out.extend(travel(out[-1][:2], recs[0][:2]))
             out.extend(recs)
         if stop_after:
             last = out[-1]

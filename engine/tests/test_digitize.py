@@ -717,3 +717,94 @@ def test_qa2_s7_bad_hole_points_are_refused_not_sewn_over():
             fill(_sq(0, 0, 20, 20), [hole], FillParams())
         with pytest.raises(DigitizeError, match="hole"):
             applique(_sq(0, 0, 20, 20), AppliqueParams(), [hole])
+
+
+# ---------------------------------------------------------------- QA pass 2 decisions 1-4
+
+
+def _neck_shape(neck=0.3):
+    from shapely.geometry import box
+    from shapely.ops import unary_union
+
+    C = box(0, 0, 30, 30).difference(box(8, 8, 30, 22))
+    g = unary_union([C, box(30, 23, 40, 23 + neck), box(40, 18, 55, 30)])
+    return [[x, y, "c"] for x, y in list(g.exterior.coords)[:-1]]
+
+
+def _longest(recs):
+    return max((math.dist(a[:2], b[:2]) for a, b in zip(recs, recs[1:]) if a[2] == b[2] == STITCH), default=0)
+
+
+def test_qa2_s1_a_thin_neck_elsewhere_does_not_turn_travel_into_jumps():
+    """Decision 1: a neck under ~0.6 mm made the shrunk zone split, and every edge route gave up."""
+    recs, _ = generate({"kind": "fill", "geometry": {"outline": _neck_shape()},
+                        "params": {"underlay": [], "pull_comp_mm": 0, "angle_deg": 0}})
+    assert not [r for r in recs if r[2] in (JUMP, TRIM)]
+
+
+def test_qa2_s1_default_underlay_with_a_neck_needs_no_trims():
+    recs, _ = generate({"kind": "fill", "geometry": {"outline": _neck_shape(0.5)}, "params": {}})
+    assert not [r for r in recs if r[2] == TRIM]
+
+
+@pytest.mark.parametrize("end", [(20, 15), (5, 25), (50, 20), (45, 29), (1, 1), (35, 23)])
+def test_qa2_s1_a_fill_never_ends_on_a_jump_or_a_long_lock_stitch(end):
+    recs, _ = generate({"kind": "fill", "geometry": {"outline": _neck_shape()},
+                        "params": {"underlay": [], "pull_comp_mm": 0, "end_mm": list(end)}})
+    assert recs[-1][2] == STITCH
+    assert _longest(recs) < 7
+
+
+def test_qa2_s1_lock_stitches_go_before_a_trailing_jump():
+    from threadline_engine.digitize.stitches import tie_in, tie_off
+
+    recs = [(0, 0, STITCH), (2, 0, STITCH), (4, 0, STITCH), (4, 0, TRIM), (20, 0, JUMP)]
+    out = tie_off(recs)
+    assert out[-2:] == recs[-2:] and len(out) == len(recs) + 2
+    assert _longest(out) <= 2
+    lead = [(0, 0, JUMP), (1, 0, STITCH), (3, 0, STITCH)]
+    out = tie_in(lead)
+    assert out[0] == lead[0] and _longest(out) <= 2
+
+
+@pytest.mark.parametrize("rungs", [50, 55, 56])
+def test_qa2_s2_zigzag_underlay_crosses_back_instead_of_retracing(rungs):
+    """Decision 2: with an even zigzag count the way back sewed the same legs again."""
+    from threadline_engine.digitize.stitches import satin_from_pairs
+
+    pairs = [((i * 0.4, 0.0), (i * 0.4, 4.0)) for i in range(rungs)]
+    recs, _ = satin_from_pairs(pairs, SatinParams(underlay=("zigzag",), spacing_mm=0.4))
+    legs = [tuple(sorted([(round(a[0], 2), round(a[1], 2)), (round(b[0], 2), round(b[1], 2))]))
+            for a, b in zip(recs, recs[1:]) if a[2] == b[2] == STITCH]
+    under = legs[: len(legs) - (rungs - 1)]
+    assert len(set(under)) == len(under)
+
+
+def test_qa2_s3_applique_moves_between_edges_are_trimmed():
+    """Decision 3: moves over 3 mm between applique edges were bare jumps, never cut."""
+    from threadline_engine.digitize.applique import STOP, AppliqueParams, applique
+
+    holes = [_sq(10, 5, 20, 15), _sq(40, 5, 50, 15)]
+    recs, _ = applique(_sq(0, 0, 60, 20), AppliqueParams(), holes)
+    for prev, r in zip(recs, recs[1:]):
+        if r[2] == JUMP and prev[2] not in (STOP, TRIM):
+            assert math.dist(prev[:2], r[:2]) <= 3, (prev, r)
+    assert [r for r in recs if r[2] == TRIM]
+
+
+def test_qa2_s4_split_long_stitches_holds_at_sharp_corners():
+    """Decision 4: wide ribbons and applique borders made 8-8.6 mm stitches at sharp corners."""
+    from threadline_engine.digitize.applique import AppliqueParams, applique
+
+    for turn in (30, 45):
+        a = math.radians(turn)
+        nodes = [c(0, 0), c(20, 0), c(20 - 20 * math.cos(a), 20 * math.sin(a))]
+        recs, _ = generate({"kind": "satin", "geometry": {"nodes": nodes, "width_mm": 8},
+                            "params": {"split_mm": 7}})
+        assert _longest(recs) <= 7 + 1e-6, turn
+    star = []
+    for k in range(10):
+        r = 25 if k % 2 == 0 else 7.5
+        star.append(c(r * math.cos(math.pi * k / 5 + math.pi / 2), r * math.sin(math.pi * k / 5 + math.pi / 2)))
+    recs, _ = applique(star, AppliqueParams(cover_width_mm=8))
+    assert _longest(recs) <= 7 + 1e-6

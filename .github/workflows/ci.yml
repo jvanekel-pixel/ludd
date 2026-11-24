@@ -38,6 +38,36 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
 
+  # The Mac-only Rust code (Finder open, Cmd+Q) is otherwise compiled for the first time on
+  # release day (QA2 T7). No engine is frozen here: tauri-build only needs the sidecar and the
+  # notices file to exist, so empty placeholders stand in for them.
+  rust-macos:
+    name: Rust (macOS)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - name: Placeholder sidecar and notices
+        working-directory: apps/desktop/src-tauri
+        run: |
+          mkdir -p binaries
+          triple="$(rustc -vV | sed -n 's/^host: //p')"
+          printf '#!/bin/sh\nexit 1\n' > "binaries/threadline-engine-$triple"
+          chmod +x "binaries/threadline-engine-$triple"
+          echo "placeholder" > binaries/THIRD-PARTY-NOTICES.txt
+        shell: bash
+      - name: Rust lockfile is up to date
+        run: cargo metadata --locked --format-version 1 --manifest-path apps/desktop/src-tauri/Cargo.toml > /dev/null
+      - name: Rust build and tests
+        run: cargo test --locked --lib --manifest-path apps/desktop/src-tauri/Cargo.toml
+
   windows-installer:
     name: Windows installer
     needs: test

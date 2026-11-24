@@ -221,10 +221,12 @@ def _pack(project: dict[str, Any], autosave: bool = False) -> tuple[dict[str, An
     out["format"], out["version"] = FORMAT, 2 if feats else 1
     out["features"] = sorted(feats)
     out["saved_at"] = time.time()
+    pinned = kept.pinned(layout.get("items") or [])
     for it in layout.get("items") or []:
         if it.get("path"):
             try:
-                data = _read(it["path"], "design")
+                # With edits, the bytes they were made on (QA2 P3), not a newer file on disk.
+                data = _read(it["path"], "design", as_added=it["path"] in pinned)
             except ProjectError:
                 if autosave:
                     continue  # linked: restore() trusts its own recovery file
