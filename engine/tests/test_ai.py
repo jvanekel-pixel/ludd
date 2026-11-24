@@ -386,6 +386,8 @@ def test_qa2_t1_a_redirect_is_refused_so_the_key_stays_put():
             pass
 
         def do_POST(self):  # noqa: N802
+            # Read the request first: closing with it unread resets the connection on Windows.
+            self.rfile.read(int(self.headers.get("content-length") or 0))
             self.send_response(302)
             self.send_header("Location", f"http://127.0.0.1:{other.server_port}/elsewhere")
             self.end_headers()
