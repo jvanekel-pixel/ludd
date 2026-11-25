@@ -45,7 +45,7 @@ Parked ideas, tech debt and nice-to-haves. Do not build these without the owner 
 
 ## From Phase 3 (2026-11-24)
 - [x] Spiral showed lines across hearts, ovals and ring shapes: its pieces are now joined along the edge that cut them apart (done 2026-11-24, owner approved)
-- [ ] **Spiral piles its joining thread along the edge** (L-026): joined in spiral order, up to 27 threads share one spot on the ready-made Heart (16 to 19 on the Rectangle, Triangle and Star, which already did this before the joining changed). In a trial, sewing each time the unsewn piece nearest along the same edge, from either end, left at most 4 on every ready-made shape and two ring shapes, kept 0 mm across the rings, and used 24 to 56% fewer stitches than now. It changes the spec's "in order along the spiral" (step 4), so it needs the owner's or the planner's decision
+- [x] Spiral piled its joining thread along the edge (up to 27 threads in one spot on the ready-made Heart): it now sews each time the piece nearest along the same edge, so at most 4 or 5 share a spot, with 10 to 51% fewer stitches on the ready-made shapes but the Circle (done 2026-11-24, owner approved; L-026)
 - [ ] The green start dot can be dragged on Stipple, Cross-stitch and Spiral fills but changes nothing (only Contour uses it): honor it, or don't offer the drag
 - [ ] Cross-stitch fills show the purple direction dots although the angle doesn't change them (as before Phase 3)
 - [ ] The side panel's "Check before stitching" title runs into its "Density map" box (seen at 1280 × 800; older than Phase 3)

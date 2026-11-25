@@ -6,8 +6,9 @@ import statistics
 
 import pytest
 import shapely
-from shapely.geometry import LineString, Point, Polygon, box
+from shapely.geometry import LineString, MultiLineString, Point, Polygon, box
 from shapely.ops import unary_union
+from shapely.strtree import STRtree
 
 import invariants
 from snapshot_util import check, digest_recs
@@ -37,6 +38,8 @@ READY_ROUNDED_RECTANGLE = [list(n) for n in [
     (30, 12, "l"), (29.31, 15.44, "s"), (27.36, 18.36, "s"), (24.44, 20.31, "s"), (21, 21, "c"),
     (-21, 21, "l"), (-24.44, 20.31, "s"), (-27.36, 18.36, "s"), (-29.31, 15.44, "s"), (-30, 12, "c"),
     (-30, -12, "l"), (-29.31, -15.44, "s"), (-27.36, -18.36, "s"), (-24.44, -20.31, "s"), (-21, -21, "c")]]
+READY_RECTANGLE = [[-30, -21, "c"], [30, -21, "c"], [30, 21, "c"], [-30, 21, "c"]]
+READY_TRIANGLE = [[0, -25.98, "c"], [30, 25.98, "c"], [-30, 25.98, "c"]]
 
 
 def _round(r, n=96, middle=MIDDLE):
@@ -159,17 +162,111 @@ def _across_the_rings(recs, shape, spacing=1.5):
     return total
 
 
-@pytest.mark.parametrize("outline,holes", [
-    (READY_HEART, []), (READY_OVAL, []), (READY_ROUNDED_RECTANGLE, []),
-    (_round(20), [_round(10)]),  # a ring: the way round must keep to one edge, not cut across the band
-    (SQUARE, [HOLE]),
-], ids=["heart", "oval", "rounded_rectangle", "ring", "donut"])
+# Shapes that cut the spiral into many pieces: (outline, holes).
+CUT_UP = {
+    "heart": (READY_HEART, []),
+    "oval": (READY_OVAL, []),
+    "rounded_rectangle": (READY_ROUNDED_RECTANGLE, []),
+    "rectangle": (READY_RECTANGLE, []),
+    "triangle": (READY_TRIANGLE, []),
+    "star": (STAR, []),
+    "ring": (_round(20), [_round(10)]),  # the way round must keep to one edge, not cut across the band
+    "donut": (SQUARE, [HOLE]),
+    "three_holes": (_round(20), [_round(4, middle=(12, 14)), _round(3, middle=(27, 15)), _round(5, middle=(20, 29))]),
+    # a hole 0.8 mm from the outline on one side: stretches too short to count join the two edges there
+    "pinch": (_round(20), [_round(10, middle=(29.2, 20))]),
+}
+
+
+@pytest.mark.parametrize("outline,holes", CUT_UP.values(), ids=CUT_UP.keys())
 def test_no_thread_crosses_the_rings(outline, holes):
     obj = _spiral(outline, holes, underlay="auto")
     recs = generate(obj)[0]
     invariants.assert_sane(recs, inside=_area(obj), tolerance_mm=0.3, max_stitch_mm=STITCH_MM + 0.05,
                            max_jumps=0, max_trims=0)
     assert _across_the_rings(recs, _area(obj)) < 0.5
+
+
+def _most_threads_along_an_edge(recs, shape):
+    """The most threads lying side by side along the shape's outline or a hole's rim, looked at
+    every 0.5 mm: within 0.4 mm of that spot, and running the same way as the edge there."""
+    threads = [LineString(t) for t in _threads(recs) if t[0] != t[1]]
+    tree = STRtree(threads)
+    most = 0
+    for ring in [shape.exterior, *shape.interiors]:
+        edge = LineString(ring.coords)
+        for k in range(int(edge.length / 0.5)):
+            s = 0.25 + 0.5 * k
+            spot, back, ahead = (edge.interpolate(s + d) for d in (0, -0.2, 0.2))
+            along = 0
+            for i in tree.query(spot.buffer(0.4)):
+                (ax, ay), (bx, by) = threads[i].coords
+                sizes = math.hypot(bx - ax, by - ay) * math.hypot(ahead.x - back.x, ahead.y - back.y)
+                same_way = abs((bx - ax) * (ahead.x - back.x) + (by - ay) * (ahead.y - back.y)) > 0.85 * sizes
+                along += same_way and threads[i].distance(spot) <= 0.4
+            most = max(most, along)
+    return most
+
+
+@pytest.mark.parametrize("outline,holes", CUT_UP.values(), ids=CUT_UP.keys())
+def test_joining_thread_does_not_pile_up_along_the_edges(outline, holes):
+    obj = _spiral(outline, holes, underlay="auto", tie_in=False, tie_off=False)
+    assert _most_threads_along_an_edge(generate(obj)[0], _area(obj)) <= 6
+
+
+def _farthest_unsewn(recs, shape, spacing=1.5):
+    """How far from the thread the spiral gets anywhere 1 mm or more inside the shape (mm): large if
+    any stretch of it was left out."""
+    mx, my = recs[0][0] + spacing / 2, recs[0][1]
+    reach = max(math.dist((mx, my), p) for p in shape.exterior.coords)
+    spots = []
+    for degrees in range(360):
+        turn = math.radians(degrees)
+        radii = (spacing * (degrees / 360 + k) for k in range(int(reach / spacing) + 2))
+        spots += [Point(mx + r * math.cos(turn), my + r * math.sin(turn)) for r in radii if r >= spacing / 2]
+    inside = shape.buffer(-1.0)
+    shapely.prepare(inside)
+    spots = [p for p in spots if inside.contains(p)]
+    assert len(spots) > 100
+    return max(shapely.distance(MultiLineString(_threads(recs)), spots))
+
+
+@pytest.mark.parametrize("outline,holes", CUT_UP.values(), ids=CUT_UP.keys())
+def test_every_part_of_every_ring_is_sewn(outline, holes):
+    obj = _spiral(outline, holes, underlay="auto")
+    assert _farthest_unsewn(generate(obj)[0], _area(obj)) <= 0.3
+
+
+def _stretch(start, end):
+    """A stretch's two ends for _sewing_order, each (edge, how far round it, where it is)."""
+    return (start, end)
+
+
+FIRST = (None, 0.0, (0.0, 0.0))  # the first stretch starts in the middle, on no edge
+
+
+def test_the_nearest_end_along_the_edge_is_next_from_either_end():
+    ends = [_stretch(FIRST, (0, 19.0, (19, 0))),  # the needle is 19 mm round a 20 mm edge
+            _stretch((0, 9.0, (9, 0)), (0, 12.0, (12, 0))),
+            _stretch((0, 4.0, (4, 0)), (0, 1.0, (1, 0)))]  # its far end is 2 mm on, past where the edge starts
+    assert spiral._sewing_order(ends, [20.0]) == [(0, False), (2, True), (1, False)]
+
+
+def test_a_stretch_waits_if_sewing_it_now_would_strand_another():
+    """Edge 0 is the outline, edge 1 a hole. The nearest end on the outline starts a stretch to the
+    hole. One that begins and ends on the outline couldn't be reached from there, so it goes first."""
+    ends = [_stretch(FIRST, (0, 0.0, (0, 0))),
+            _stretch((0, 1.0, (1, 0)), (1, 0.0, (1, 5))),
+            _stretch((0, 5.0, (5, 0)), (0, 8.0, (8, 0)))]
+    assert spiral._sewing_order(ends, [20.0, 10.0]) == [(0, False), (2, False), (1, False)]
+
+
+def test_with_nothing_left_on_this_edge_the_stretch_nearest_in_a_straight_line_is_next():
+    """Only if the edges don't connect up (they always do in a spiral cut by a shape)."""
+    ends = [_stretch(FIRST, (0, 0.0, (0, 0))),
+            _stretch((1, 2.0, (8, 0)), (1, 3.0, (9, 0))),
+            _stretch((2, 2.0, (3, 0)), (2, 3.0, (30, 0)))]
+    assert spiral._sewing_order(ends, [20.0, 20.0, 40.0]) == [(0, False), (2, False), (1, True)]
 
 
 def test_stretches_no_edge_can_join_are_still_sewn(monkeypatch):

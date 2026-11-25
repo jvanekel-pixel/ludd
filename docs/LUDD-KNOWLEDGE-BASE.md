@@ -567,9 +567,11 @@ cross-hatch underlay; Gradient keeps only its edge run.
 Edge pad. With Underlay on Auto it has no underlay; you can still choose Edge, and the thread then
 runs from the edge back to the middle before the spiral. Rings closer than 0.6 mm get a warning
 that they can pucker. It starts in the middle of the widest part of the shape (a rectangle's
-center). Where the shape cuts the spiral into pieces, the thread joining them follows the edge (the
-outline or a hole's rim), so nothing runs across the rings; on most shapes it builds up along the
-edge (L-026). A project with a Spiral fill needs this version of LUDD or newer to open.
+center). Where the shape cuts the spiral into pieces, LUDD sews the nearest piece next, from
+whichever end is closer, and joins them along the edge (the outline or a hole's rim), so nothing
+runs across the rings and only a light outline shows on most shapes (L-026). The sew simulator
+shows the outer pieces being sewn area by area, not strictly from the middle out. A project with a
+Spiral fill needs this version of LUDD or newer to open.
 
 ### F-1306 Line styles and motifs — YES
 Single, Triple (three passes), Bean (each stitch three times), **Motif**: Wave, Zigzag, Scallop,
@@ -830,7 +832,7 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | L-023 | **Stitch Advisor changing a closed line to satin** | PARTIAL | It makes a satin border along the line; Stitch as → Satin makes a satin fill instead. | Yes. |
 | L-024 | **Memory guard for damaged or crafted .vp3 / .hus files** | NO | Only open stitch files you trust (LUDD is offline, so this only matters for files from strangers). A damaged one can make LUDD use a lot of memory and slow down; close LUDD from the task manager if so. | Yes, by reading files in a separate memory-limited process. |
 | L-025 | **A placed stitch file with edits doesn't pick up changes made to the original later** | By design (2026-11-24) | Add the changed file again and redo the edits (recolor, delete, stops). Without edits, a placed file follows the original. | Possibly (a "reload and keep what still fits" option). |
-| L-026 | **Spiral's joining thread builds up along the edge**: where the shape cuts the spiral into pieces, LUDD joins them along the edge (outline or hole rim), so nothing crosses the rings. That puts many threads on the same stretch of edge: up to 27 in one spot on the ready-made Heart, 16 to 19 on the Rectangle, Triangle and Star, 6 to 14 on the Hexagon, Oval and Rounded rectangle (60 mm shapes, default settings). The ready-made Circle has almost none. It can look like a thick, uneven outline, and may sew stiff | Known weakness (measured in the app's stitches; not yet checked on fabric) | Use Spiral on circles. Where the edge must look clean on other shapes, use Contour. | Possibly (sew each time the nearest piece next). |
+| L-026 | **Spiral leaves a light outline on most shapes**: where the shape cuts the rings, the thread joining the pieces runs along the edge (outline or hole rim), never across the rings. At most a few threads share any one spot (4 on most ready-made shapes at 60 mm, 5 on the Hexagon); the ready-made Circle has almost none | By design (not yet checked on fabric) | A satin border covers it round the outside, not round holes (**Add a satin border**, `Shift+B`). | No. |
 
 ---
 
