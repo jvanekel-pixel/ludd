@@ -65,3 +65,11 @@ Planned on 2026-11-24: every item in this section, and the nice-to-haves above t
 - [ ] Multi-color blending, embossing/carving, 3D foam, patch edge (v2)
 - [ ] Python plugin/scripting API; translations (v2)
 - [ ] Browser/PWA build via Pyodide (Later)
+
+## From Phase 4 (2026-11-25)
+- [ ] The browser preview's engine uses your real LUDD data folder (`vite-engine-bridge.ts` starts it without `THREADLINE_DATA_DIR`): a preview can autosave over the recovery copy and add private copies. Give the dev bridge its own data folder unless asked otherwise
+- [ ] "Don't sew what's hidden": the kept margin is still over the density limit; leaving the lower fill's edge run out round a cut would help (needs the fill generator to know which holes are cuts; PHASE-04 Build notes)
+- [ ] L-002 with "Don't sew what's hidden" on: the fill router prefers a straight move across sewn rows to a covered way round
+- [ ] Rebuild adds jumps and a few very short stitches in shapes with holes or notches (Wreath at 150%: 35 jumps instead of 15)
+- [ ] The Repair window and the panel's Repair list preview once per repair on every design change (about 1 s each at 50,000 stitches)
+- [ ] If P4-A1 is built, give `remove_hidden` its own project feature flag
