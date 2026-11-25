@@ -1,5 +1,7 @@
 # Changelog
 
+## Next (unreleased)
+
 ## 1.0.1 (Oct 11, 2026)
 
 ### Sewing time and thread estimate (2026-11-24)
