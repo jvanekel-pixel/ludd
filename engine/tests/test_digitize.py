@@ -7,12 +7,11 @@ can be reviewed; re-record with UPDATE_SNAPSHOTS=1 after checking the new output
 import hashlib
 import json
 import math
-import os
-from pathlib import Path
 
 import pytest
 from shapely.geometry import Point as SPoint, Polygon
 
+from snapshot_util import check
 from threadline_engine.digitize.paths import flatten, length, resample
 from threadline_engine.digitize.stitches import (
     JUMP,
@@ -30,8 +29,6 @@ from threadline_engine.digitize.stitches import (
     satin,
     satin_pairs,
 )
-
-SNAPSHOTS = Path(__file__).parent / "snapshots" / "digitize.json"
 
 
 def c(x, y):
@@ -349,17 +346,7 @@ def _digest(recs):
 
 @pytest.mark.parametrize("name", sorted(SNAPSHOT_CASES))
 def test_snapshot(name):
-    got = _digest(generate(SNAPSHOT_CASES[name])[0])
-    stored = json.loads(SNAPSHOTS.read_text()) if SNAPSHOTS.exists() else {}
-    if name not in stored and os.environ.get("CI") and not os.environ.get("UPDATE_SNAPSHOTS"):
-        # CI checks what's committed: a case without its recorded entry protects nothing (QA).
-        pytest.fail(f"no snapshot recorded for {name}: run the tests locally, review and commit snapshots/digitize.json")
-    if os.environ.get("UPDATE_SNAPSHOTS") or name not in stored:
-        stored[name] = got
-        SNAPSHOTS.parent.mkdir(exist_ok=True)
-        SNAPSHOTS.write_text(json.dumps(stored, indent=1, sort_keys=True) + "\n")
-        return
-    assert got == stored[name], f"{name} stitches changed; review, then re-record with UPDATE_SNAPSHOTS=1"
+    check("digitize", name, _digest(generate(SNAPSHOT_CASES[name])[0]))
 
 
 @pytest.mark.parametrize("angle", [0, 30, 45, -45, 90, 135])

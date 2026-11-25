@@ -7,17 +7,15 @@ reviewed; re-record with UPDATE_SNAPSHOTS=1 after checking the new output is rig
 
 import hashlib
 import json
-import os
-from pathlib import Path
 
 import pyembroidery as pe
 import pytest
 
+from snapshot_util import check
 from threadline_engine import layout
 
 from test_lettering import font_path  # noqa: F401  (a tiny font built in the test)
 
-SNAPSHOTS = Path(__file__).parent / "snapshots" / "layout.json"
 M = pe.COMMAND_MASK
 RED = {"color": "#cc2222", "name": "Red", "catalog": "", "brand": ""}
 
@@ -65,15 +63,7 @@ def _digest(r):
 
 @pytest.mark.parametrize("name", sorted(CASES))
 def test_layout_snapshot(name, font_path):  # noqa: F811
-    got = _digest(layout.render(CASES[name](font_path)))
-    stored = json.loads(SNAPSHOTS.read_text()) if SNAPSHOTS.exists() else {}
-    if name not in stored and os.environ.get("CI") and not os.environ.get("UPDATE_SNAPSHOTS"):
-        pytest.fail(f"no snapshot recorded for {name}: run the tests locally, review and commit snapshots/layout.json")
-    if os.environ.get("UPDATE_SNAPSHOTS") or name not in stored:
-        stored[name] = got
-        SNAPSHOTS.parent.mkdir(exist_ok=True)
-        SNAPSHOTS.write_text(json.dumps(stored, indent=1, sort_keys=True) + "\n")
-    assert got == stored[name], f"{name} stitches changed; review, then re-record with UPDATE_SNAPSHOTS=1"
+    check("layout", name, _digest(layout.render(CASES[name](font_path))))
 
 
 def test_layout_snapshot_cases_show_what_they_name(font_path):  # noqa: F811
