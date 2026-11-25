@@ -528,7 +528,7 @@ def test_qa2_p2_private_copies_are_found_again_after_the_engine_restarts(tmp_pat
     # A new engine: nothing in memory.
     monkeypatch.setattr(kept, "_copies", {})
     monkeypatch.setattr(kept, "_loaded", False)
-    monkeypatch.setattr(layout, "_cache", {})
+    monkeypatch.setattr(layout.files, "_cache", {})
     assert layout.render(proj["layout"]).blocks
     out = project.save(str(tmp_path / "after-restart"), proj)
     assert out["designs"] == 1 and out["images"] == 1

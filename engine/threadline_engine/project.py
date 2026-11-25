@@ -27,7 +27,7 @@ import time
 import zipfile
 import zlib
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from . import kept
 from .storage import data_dir
@@ -41,7 +41,7 @@ OLD_EXTS = {".thl"}
 VERSION = 2
 # Things a project can need that LUDD 1.0.0 (which reads version 1) would silently sew wrong.
 # A project lists the ones it uses; a newer LUDD's additions are refused with "update to open it".
-KNOWN_FEATURES = {"fill_patterns", "motif_lines", "satin_ribbons", "stitch_edits", "text_on_path", "travel_under", "trim_jumps_all"}
+# KNOWN_FEATURES is made from the two tables in "what a project needs" below.
 IMAGE_TYPES = {
     "png": "image/png",
     "jpg": "image/jpeg",
@@ -181,29 +181,35 @@ def _data_url_bytes(url: Any) -> bytes | None:
 # ---------------------------------------------------------------- what a project needs
 
 
+# Things a layout can use that LUDD 1.0.0 didn't know (it would open the project and sew it wrong).
+# Add a row with every change to what a project can hold; KNOWN_FEATURES follows. A pattern or
+# style added after 1.0.1 gets its own flag (fill_spiral, line_backstitch): 1.0.1 knows
+# fill_patterns and would try to sew a pattern it has never heard of.
+LAYOUT_FEATURES: dict[str, Callable[[dict], bool]] = {
+    "travel_under": lambda layout: bool(layout.get("travel_under")),
+    "trim_jumps_all": lambda layout: layout.get("jumps_to_trims") is not None,  # "Trim jumps longer than…" for the whole layout
+}
+ITEM_FEATURES: dict[str, Callable[[dict, dict, dict], bool]] = {  # (item, params, geometry)
+    "fill_patterns": lambda it, p, g: it.get("kind") in ("fill", "applique") and p.get("pattern") not in (None, "", "tatami"),
+    "motif_lines": lambda it, p, g: it.get("kind") == "run" and p.get("style") == "motif",
+    "satin_ribbons": lambda it, p, g: it.get("kind") == "satin" and g.get("nodes") is not None,
+    "text_on_path": lambda it, p, g: (it.get("kind") == "text" and isinstance(it.get("shape"), dict)
+                                      and it["shape"].get("type") == "path"),
+    "stitch_edits": lambda it, p, g: any(isinstance(o, dict) and o.get("op") in ("delete_stitches", "move_stitch", "move_stitches")
+                                         for o in it.get("ops") or []),
+}
+KNOWN_FEATURES = set(LAYOUT_FEATURES) | set(ITEM_FEATURES)
+
+
 def _features(layout: dict[str, Any]) -> set[str]:
-    """Things this layout uses that LUDD 1.0.0 didn't know (it would open the project and sew it
-    wrong). Add to this, and to KNOWN_FEATURES, with every change to what a project can hold."""
-    used: set[str] = set()
-    if layout.get("travel_under"):
-        used.add("travel_under")
-    if layout.get("jumps_to_trims") is not None:  # "Trim jumps longer than…" for the whole layout
-        used.add("trim_jumps_all")
+    """Things this layout uses that LUDD 1.0.0 didn't know (LAYOUT_FEATURES and ITEM_FEATURES)."""
+    used: set[str] = {name for name, uses in LAYOUT_FEATURES.items() if uses(layout)}
     for it in layout.get("items") or []:
         if not isinstance(it, dict):
             continue
         p = it.get("params") if isinstance(it.get("params"), dict) else {}
         g = it.get("geometry") if isinstance(it.get("geometry"), dict) else {}
-        if it.get("kind") in ("fill", "applique") and p.get("pattern") not in (None, "", "tatami"):
-            used.add("fill_patterns")
-        if it.get("kind") == "run" and p.get("style") == "motif":
-            used.add("motif_lines")
-        if it.get("kind") == "satin" and g.get("nodes") is not None:
-            used.add("satin_ribbons")
-        if it.get("kind") == "text" and isinstance(it.get("shape"), dict) and it["shape"].get("type") == "path":
-            used.add("text_on_path")
-        if any(isinstance(o, dict) and o.get("op") in ("delete_stitches", "move_stitch", "move_stitches") for o in it.get("ops") or []):
-            used.add("stitch_edits")
+        used |= {name for name, uses in ITEM_FEATURES.items() if uses(it, p, g)}
     return used
 
 

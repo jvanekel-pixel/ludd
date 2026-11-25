@@ -633,7 +633,7 @@ def test_qa4_source_cache_notices_a_changed_file_and_stays_small(tmp_path, monke
     _row_file(tmp_path, n=8)  # rewritten with the same time stamp: the size gives it away
     os.utime(f, ns=(st.st_atime_ns, st.st_mtime_ns))
     assert layout.render_summary(lay({"path": f}))["info"]["stitches"] == 8
-    monkeypatch.setattr(layout, "_CACHE_MAX", 3)
+    monkeypatch.setattr(layout.files, "_CACHE_MAX", 3)
     for i in range(6):
         layout.render(lay({"path": _row_file(tmp_path, name=f"r{i}.pes")}))
     assert len(layout._cache) <= 3

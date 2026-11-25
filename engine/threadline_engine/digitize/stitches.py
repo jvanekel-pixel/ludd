@@ -7,7 +7,7 @@ Coordinates are mm. Output is a list of (x, y, cmd) with cmd STITCH, JUMP or TRI
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Sequence
 
 import pyembroidery as pe
@@ -16,6 +16,7 @@ from shapely import affinity
 from shapely.geometry import LineString, Point as ShapelyPoint, Polygon
 from shapely.ops import substring
 
+from . import fills, lines
 from .paths import Point, corner_indices, cumulative, dist, flatten, point_at, resample, sharp_points
 from .patterns import (FILL_PATTERNS, MOTIFS, contour_paths, cross_paths, gradient_ys, motif_points, nearest_rotation,
                        polygons, stipple_paths, wave_offset)
@@ -237,6 +238,13 @@ class RunParams:
     motif: str = "wave"  # for style "motif": wave | zigzag | scallop | blanket
     motif_mm: float = 4.0  # length of one repeat
     motif_width_mm: float = 2.5
+    extra: dict[str, float] = field(default_factory=dict)  # a registered style's own settings (fills.Param)
+
+    def value(self, key: str) -> float:
+        """A setting by name: one of the fields above, else one of the style's own (`extra`)."""
+        if key in self.__dataclass_fields__:
+            return getattr(self, key)
+        return self.extra[key]
 
     @classmethod
     def from_dict(cls, d: dict[str, Any] | None) -> "RunParams":
@@ -244,15 +252,20 @@ class RunParams:
         p = cls(style=str(d.get("style", "single")), stitch_mm=_finite(d, "stitch_mm", 2.5),
                 motif=str(d.get("motif", "wave")), motif_mm=_finite(d, "motif_mm", 4.0),
                 motif_width_mm=_finite(d, "motif_width_mm", 2.5))
-        if p.style not in ("single", "triple", "bean", "motif"):
+        if p.style not in lines.REGISTRY:
             raise DigitizeError(f"Unknown running stitch style: {p.style}")
         if p.style == "motif":
-            if p.motif not in MOTIFS:
+            if p.motif not in lines.MOTIF_UNITS:
                 raise DigitizeError(f"Unknown motif: {p.motif}")
             if not 1.5 <= p.motif_mm <= 20 or not 0.5 <= p.motif_width_mm <= 10:
                 raise DigitizeError("A motif repeats every 1.5 to 20 mm and is 0.5 to 10 mm wide")
         if not 0.5 <= p.stitch_mm <= 12:
             raise DigitizeError("Stitch length must be between 0.5 and 12 mm")
+        for key, param in lines.REGISTRY[p.style].params.items():
+            v = _finite(d, key, param.default)
+            if not param.lo <= v <= param.hi:
+                raise DigitizeError(f"{param.label} must be between {param.lo:g} and {param.hi:g} mm")
+            p.extra[key] = v
         return p
 
 
@@ -265,23 +278,8 @@ def run_points(nodes: Sequence, stitch_mm: float, closed: bool = False) -> list[
 
 
 def running(nodes: Sequence, params: RunParams, closed: bool = False, start: Point | None = None) -> list[Rec]:
-    if params.style == "motif":
-        # The motif's corners are the needle points; long sides are split to the stitch length.
-        pts = motif_points(nodes, params.motif, params.motif_mm, params.motif_width_mm, closed)
-        return stitch_run(resample(pts, max(params.stitch_mm, 1.0), list(range(len(pts)))))
-    pts = run_points(nodes, params.stitch_mm, closed)
-    if len(pts) < 2:
-        return stitch_run(pts)
-    if closed and start is not None:
-        pts = _ring_from(pts, start)  # a border starts (and ends) exactly where chosen
-    if params.style == "triple":
-        pts = pts + pts[-2::-1] + pts[1:]
-    elif params.style == "bean":
-        out = [pts[0]]
-        for a, b in zip(pts, pts[1:]):
-            out += [b, a, b]
-        pts = out
-    return stitch_run(pts)
+    """A running-stitch line in its style (digitize/lines: single, triple, bean, motif, ...)."""
+    return stitch_run(lines.REGISTRY[params.style].points(nodes, params, closed, start))
 
 
 # ---------------------------------------------------------------- satin column
@@ -678,16 +676,28 @@ class FillParams:
     stipple_mm: float = 3.0  # stipple: how far apart the meandering line's turns are
     cross_mm: float = 2.5  # cross-stitch: size of one square
     underlay_spacing_mm: float = 2.0  # cross-hatch underlay rows (closer on stretchy and lofty fabrics)
+    extra: dict[str, float] = field(default_factory=dict)  # a registered pattern's own settings (fills.Param)
+
+    def value(self, key: str) -> float:
+        """A setting by name: one of the fields above, else one of the pattern's own (`extra`)."""
+        if key in self.__dataclass_fields__:
+            return getattr(self, key)
+        return self.extra[key]
 
     @classmethod
     def from_dict(cls, d: dict[str, Any] | None) -> "FillParams":
         d = d or {}
+        pattern = str(d.get("pattern", "tatami"))
+        known = fills.REGISTRY.get(pattern)  # unknown: refused below, where it always was
         u = d.get("underlay", ["edge", "tatami"])
         under_spacing = 2.0
         if u == "auto":
             # Automatic: light fabrics (denim, felt) need only an edge run; the rest a full base,
             # closer on stretchy and lofty fabrics (knit, fleece, towel), which need a firmer one.
-            u = ["edge"] if d.get("underlay_level") == "light" else ["edge", "tatami"]
+            if known is not None and known.auto_underlay is not None:
+                u = known.auto_underlay(d.get("underlay_level"))
+            else:
+                u = ["edge"] if d.get("underlay_level") == "light" else ["edge", "tatami"]
             if d.get("underlay_level") == "heavy":
                 under_spacing = 1.5
         if not isinstance(u, (list, tuple)):
@@ -702,7 +712,7 @@ class FillParams:
             reverse=bool(d.get("reverse", False)),
             start_mm=_start_point(d.get("start_mm")),
             end_mm=_start_point(d.get("end_mm")),
-            pattern=str(d.get("pattern", "tatami")),
+            pattern=pattern,
             gradient_to_mm=_finite(d, "gradient_to_mm", 1.6),
             wave_mm=_finite(d, "wave_mm", 1.5),
             wave_length_mm=_finite(d, "wave_length_mm", 8.0),
@@ -712,8 +722,7 @@ class FillParams:
         )
         if not 0 <= p.pull_comp_mm <= 2:
             raise DigitizeError("Pull compensation must be between 0 and 2 mm")
-        if p.pattern not in FILL_PATTERNS:
-            raise DigitizeError(f"Unknown fill pattern: {p.pattern}")
+        spec = fills.get(p.pattern)  # an unknown pattern: "Unknown fill pattern: <name>"
         if not 0.3 <= p.gradient_to_mm <= 5 or not 0.3 <= p.wave_mm <= 6 or not 2 <= p.wave_length_mm <= 40:
             raise DigitizeError("Gradient spacing 0.3-5 mm, wave height 0.3-6 mm and length 2-40 mm")
         if not 1 <= p.stipple_mm <= 10 or not 1 <= p.cross_mm <= 8:
@@ -727,6 +736,11 @@ class FillParams:
         bad = set(p.underlay) - {"edge", "tatami"}
         if bad:
             raise DigitizeError(f"Unknown fill underlay: {', '.join(sorted(bad))}")
+        for key, param in spec.params.items():
+            v = _finite(d, key, param.default)
+            if not param.lo <= v <= param.hi:
+                raise DigitizeError(f"{param.label} must be between {param.lo:g} and {param.hi:g} mm")
+            p.extra[key] = v
         return p
 
 
@@ -959,7 +973,7 @@ def _end_row(regions, rows, ys, miny: float, spacing: float, angle: float, end: 
     return k, j, (x * math.cos(b) - y * math.sin(b), x * math.sin(b) + y * math.cos(b))
 
 
-OPEN_PATTERNS = ("contour", "stipple", "cross")
+OPEN_PATTERNS = tuple(n for n, p in fills.REGISTRY.items() if p.kind == "open")
 
 
 def _stipple_seed(poly: Polygon) -> int:
@@ -967,27 +981,6 @@ def _stipple_seed(poly: Polygon) -> int:
     copying it) keeps the same stipple instead of shuffling it."""
     x0, y0, x1, y1 = poly.bounds
     return int(round(poly.area * 10) * 31 + round((x1 - x0) * 100) * 7 + round((y1 - y0) * 100)) % 100000
-
-
-def _open_paths(poly: Polygon, params: FillParams, pos: Point) -> tuple[list[list[Point]], list[str]]:
-    """The paths of a contour, stipple or cross-stitch fill (sewn in this order), with warnings."""
-    warnings: list[str] = []
-    if params.pattern == "contour":
-        paths = contour_paths(poly, params.spacing_mm, params.stitch_mm, pos)
-    elif params.pattern == "stipple":
-        paths = stipple_paths(poly, params.stipple_mm, min(params.stitch_mm, 2.5), _stipple_seed(poly), pos)
-        if paths:
-            reach = shapely.union_all([LineString(p) for p in paths if len(p) > 1]).buffer(params.stipple_mm)
-            bare = poly.difference(reach).area
-            if bare > 4 and bare > 0.1 * poly.area:
-                warnings.append(f"Parts of this shape are too narrow for {params.stipple_mm:g} mm stipple loops, so they "
-                                "are left empty. Make the loops smaller.")
-    else:
-        paths = cross_paths(poly, params.cross_mm)
-        if params.cross_mm * math.sqrt(2) > LONG_STITCH_MM:
-            # Diagonals of big squares would be loose stitches: give each a needle point midway.
-            paths = [_subdivide(p, LONG_STITCH_MM) for p in paths]
-    return paths, warnings
 
 
 def _sew_paths(paths: Sequence[Sequence[Point]], inside: "Polygon | Zone", pos: Point | None) -> list[Rec]:
@@ -1043,13 +1036,14 @@ def _fill_part(poly: Polygon, params: FillParams, end_here: bool = True) -> tupl
         # Begin at the edge nearest the chosen start (so the jump from the last piece is short).
         near = poly.exterior.interpolate(poly.exterior.project(ShapelyPoint(params.start_mm)))
         start = (near.x, near.y)
-    open_pattern = params.pattern in OPEN_PATTERNS
+    spec = fills.get(params.pattern)
+    open_pattern = spec.kind == "open"
     top: list[Rec] = []
     target = None
     if open_pattern:
         # Worked out first, so the edge run can end next to where the pattern starts: nothing
         # covers an open pattern, so a long move to its start would show on top.
-        paths, warnings = _open_paths(poly, params, start)
+        paths, warnings = spec.paths(poly, params, start)
         if not paths:
             raise DigitizeError(f"This shape is too small for a {params.pattern} fill; try a smaller size")
         top = _sew_paths(paths, poly.buffer(0.3), start)
@@ -1075,7 +1069,7 @@ def _fill_part(poly: Polygon, params: FillParams, end_here: bool = True) -> tupl
             _append(out, stitch_run(_ring_run(ring)))
     # Open patterns would show a cross-hatch underlay through them, and so would the sparse end of
     # a gradient (which should fade out to bare fabric).
-    if "tatami" in params.underlay and not open_pattern and params.pattern != "gradient":
+    if "tatami" in params.underlay and spec.kind == "rows" and spec.tatami_underlay:
         for under in polygons(poly.buffer(-0.6)):
             if under.area < MIN_PART_MM2:
                 continue
@@ -1088,10 +1082,7 @@ def _fill_part(poly: Polygon, params: FillParams, end_here: bool = True) -> tupl
     pos = (out[-1][0], out[-1][1]) if out else start
     if not open_pattern:
         top = tatami(poly, params.angle_deg, params.spacing_mm, params.stitch_mm, params.pull_comp_mm / 2, pos,
-                     random=params.random_pct / 100,
-                     sparse_to=params.gradient_to_mm if params.pattern == "gradient" else None,
-                     wave=(params.wave_mm, params.wave_length_mm) if params.pattern == "wave" else None,
-                     end_near=end_near)
+                     random=params.random_pct / 100, end_near=end_near, **spec.rows(params))
     if params.reverse and end_near is None and top and all(r[2] == STITCH for r in top):
         top = top[::-1]  # same stitches, sewn from the other end
     if out and top:
@@ -1123,7 +1114,7 @@ def fill(outline: Sequence, holes: Sequence[Sequence], params: FillParams) -> tu
     parts = fill_parts(outline, holes)
     warnings: list[str] = []
     area = sum(p.area for p in parts)
-    step = params.cross_mm ** 2 / 4 if params.pattern == "cross" else params.spacing_mm * min(params.stitch_mm, 2.5 if params.pattern == "stipple" else params.stitch_mm)
+    step = fills.get(params.pattern).step_mm2(params)
     if area / step > MAX_STITCHES:
         raise DigitizeError(f"This fill would need about {area / step:,.0f} stitches, far more than any design. "
                             "Make it smaller or less dense.")
