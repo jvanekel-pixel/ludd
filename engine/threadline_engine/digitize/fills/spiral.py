@@ -21,7 +21,7 @@ from collections import Counter, defaultdict
 import numpy as np
 import shapely
 from shapely.geometry import LineString, Point as ShapelyPoint
-from shapely.ops import substring
+from shapely.ops import nearest_points, substring
 
 from ..paths import Point, dist, resample, sharp_points
 from . import FillPattern, Param, register
@@ -30,6 +30,9 @@ SAMPLE_MM = 0.5  # how finely the spiral is drawn before it's cut to the shape
 CLIP_SAMPLES = 500  # samples cut at a time: ordering the cuts of a whole big spiral at once is slow
 SHORTEST_PIECE_MM = 1.0  # stretches inside the shape no longer than this are left out
 SAME_WIDTH_MM = 0.1  # a spot that near the biggest circle's radius from the outline is as wide
+# A point far off up and to the left of a shape (whose bounds start at 0, 0), on no line of symmetry
+# of the shapes people draw: of equally wide spots, the one nearest it is chosen.
+FAR = (-1000.0, -777.0)
 SHORTEST_STITCH_MM = 0.8  # the stitch length aimed for on the tightest turns
 SAG_MM = 0.15  # on a circle of radius r, a stitch 2 * sqrt(2 * SAG_MM * r) long cuts this far inside it
 TIGHT_MM = 0.6  # rings closer than this get a warning
@@ -37,16 +40,31 @@ TIGHT_WARNING = "Rings this close sew like a solid fill and can pucker in the mi
 
 
 def _middle(shape) -> Point:
-    """The middle of the shape's widest spot: the center of the biggest circle that fits inside. When
-    many spots are as wide (all along the middle of a rectangle), the search may pick one near an
-    end, so the shape's centroid is used if it is one of them."""
+    """The middle of the shape's widest spot. GEOS says how big the biggest circle that fits inside
+    is, but where it puts it can turn on the last digit, which processors round differently (an
+    Apple-chip Mac started a donut's spiral in another of its four equally wide corners). So the
+    spot is chosen here: the centroid if the shape is that wide there (as all along a rectangle,
+    where GEOS may pick a spot near one end); else the middle of the area that is nearly that wide
+    (within SAME_WIDTH_MM), the one nearest FAR if there are several. Where that area's middle lies
+    outside it (round a ring), its point nearest there."""
     if hasattr(shapely, "maximum_inscribed_circle"):  # shapely 2.1 and later
         circle = shapely.maximum_inscribed_circle(shape)  # a line from its center to the outline
+        radius = circle.length
         centroid = shape.centroid
-        if shape.contains(centroid) and shape.boundary.distance(centroid) >= circle.length - SAME_WIDTH_MM:
-            return centroid.x, centroid.y
-        x, y = circle.coords[0]
-        return x, y
+        if shape.contains(centroid) and shape.boundary.distance(centroid) >= radius - SAME_WIDTH_MM:
+            return round(centroid.x, 6), round(centroid.y, 6)
+        wide = shape.buffer(-max(radius - SAME_WIDTH_MM, radius / 2))
+        areas = [a for a in shapely.get_parts(wide) if not a.is_empty]
+        if not areas:  # lost in the buffer's rounded corners: GEOS's spot will do
+            return circle.coords[0]
+        area = min(areas, key=ShapelyPoint(FAR).distance)
+        spot = area.centroid
+        if not area.contains(spot):
+            # A hair toward FAR, so round a ring one side is nearest, not all of them alike.
+            toward = math.atan2(FAR[1] - spot.y, FAR[0] - spot.x)
+            target = ShapelyPoint(spot.x + 0.001 * math.cos(toward), spot.y + 0.001 * math.sin(toward))
+            spot = nearest_points(area, target)[0]
+        return round(spot.x, 6), round(spot.y, 6)
     p = shape.representative_point()
     return p.x, p.y
 

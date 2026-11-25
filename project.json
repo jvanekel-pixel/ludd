@@ -35,9 +35,9 @@
   },
   "phase": 3,
   "status": "active",
-  "nextAction": "Owner: say when to push and merge Phase 3; then the Phase 3 audit on the top model, before Phase 4",
-  "blockedOnHuman": "Phase 3: the go-ahead to push and merge",
-  "lastSessionAt": "2026-11-25T06:02:02Z",
+  "nextAction": "Phase 3 audit in a new session on the top model (phase-audit-gate), before Phase 4",
+  "blockedOnHuman": "Start the Phase 3 audit on the top model",
+  "lastSessionAt": "2026-11-25T06:17:18Z",
   "health": {
     "tests": "passing",
     "build": "passing",

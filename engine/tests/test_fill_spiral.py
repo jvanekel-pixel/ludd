@@ -4,6 +4,7 @@
 import math
 import statistics
 
+import numpy as np
 import pytest
 import shapely
 from shapely.geometry import LineString, MultiLineString, Point, Polygon, box
@@ -277,6 +278,41 @@ def test_stretches_no_edge_can_join_are_still_sewn(monkeypatch):
     shape = fill_polygon(*obj["geometry"].values())
     assert len(fills.get("spiral").paths(shape, FillParams.from_dict(obj["params"]), (0.0, 0.0))[0]) > 1
     invariants.assert_sane(generate(obj)[0], inside=_area(obj), tolerance_mm=0.3, max_stitch_mm=STITCH_MM + 0.05)
+
+
+def _sewn_with_rounding_noise(obj, monkeypatch, k):
+    """The records with every outline point moved by up to 1e-9 mm, as much as another processor's
+    rounding might (a different pattern for each `k`; a point and its copy move together)."""
+    real = shapely.transform
+
+    def noisy(geometry, move, *args, **kwargs):
+        def jittered(xy):
+            moved = move(xy)
+            return moved + 1e-9 * np.sin(moved @ np.array([[311.0 + 17 * k, 29.0], [23.0, 241.0 + 7 * k]]))
+
+        return real(geometry, jittered, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(shapely, "transform", noisy)
+        return generate(obj)[0]
+
+
+def _to_a_thousandth(recs):
+    return [(round(x, 3) + 0.0, round(y, 3) + 0.0, kind) for x, y, kind in recs]  # + 0.0: -0.0 is 0.0
+
+
+@pytest.mark.parametrize("name", ["square", "donut", "ring", "three_holes", "star", "heart"])
+def test_rounding_noise_does_not_change_the_stitches(name, monkeypatch):
+    """Processors round the last digit differently, and the same design must still sew the same: an
+    Apple-chip Mac started the donut's spiral in another of its four equally wide corners."""
+    obj = _spiral(*CUT_UP.get(name, (SQUARE, [])), underlay="auto")
+    expected = _to_a_thousandth(generate(obj)[0])
+    for k in range(8):
+        assert _to_a_thousandth(_sewn_with_rounding_noise(obj, monkeypatch, k)) == expected, k
+
+
+def test_of_equally_wide_spots_it_starts_at_the_top_left_one():
+    assert math.dist(_recs(holes=[HOLE])[0][:2], (8.2, 8.2)) <= 1.5
 
 
 def test_a_hole_stays_empty():

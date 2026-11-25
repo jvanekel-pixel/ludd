@@ -567,7 +567,7 @@ cross-hatch underlay; Gradient keeps only its edge run.
 Edge pad. With Underlay on Auto it has no underlay; you can still choose Edge, and the thread then
 runs from the edge back to the middle before the spiral. Rings closer than 0.6 mm get a warning
 that they can pucker. It starts in the middle of the widest part of the shape (a rectangle's
-center). Where the shape cuts the spiral into pieces, LUDD sews the nearest piece next, from
+center; of several equally wide parts, such as the corners round a square hole, the top-left one). Where the shape cuts the spiral into pieces, LUDD sews the nearest piece next, from
 whichever end is closer, and joins them along the edge (the outline or a hole's rim), so nothing
 runs across the rings and only a light outline shows on most shapes (L-026). The sew simulator
 shows the outer pieces being sewn area by area, not strictly from the middle out. A project with a
