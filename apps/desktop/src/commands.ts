@@ -12,6 +12,21 @@ export type Command = {
   enabled?: () => boolean;
 };
 
+/** Every command, in dispatch order. actions.ts registers the core list; cmd/*.ts add theirs. */
+export const COMMANDS: Command[] = [];
+
+/** Add commands after the ones already there, or ahead of them (`first`: for a mode that must
+ *  claim Enter, Tab or Delete before the core commands do). */
+export function registerCommands(list: Command[], opts: { first?: boolean } = {}): void {
+  const ids = new Set(COMMANDS.map((c) => c.id));
+  for (const c of list) {
+    if (ids.has(c.id)) throw new Error(`Command registered twice: ${c.id}`);
+    ids.add(c.id);
+  }
+  if (opts.first) COMMANDS.unshift(...list);
+  else COMMANDS.push(...list);
+}
+
 const isMac = () => typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
 
 type KeyLike = Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "shiftKey" | "altKey"> & { code?: string };

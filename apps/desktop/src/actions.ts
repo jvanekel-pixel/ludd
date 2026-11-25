@@ -1,5 +1,5 @@
 import { message, open, save } from "@tauri-apps/plugin-dialog";
-import type { Command } from "./commands";
+import { COMMANDS, registerCommands, type Command } from "./commands";
 import {
   ADD_OFFSET_MM,
   IDENTITY,
@@ -2120,7 +2120,7 @@ const hasJunction = () => (useStore.getState().ghost?.alternatives.length ?? 0) 
 
 // Order matters: the first enabled command for a key wins (drawing keys first, then a selection
 // is nudged by the arrows, otherwise they step the player).
-export const COMMANDS: Command[] = [
+export const CORE_COMMANDS: Command[] = [
   // While drawing, Tab always belongs to Trace Assist (never moves keyboard focus).
   // Stitch editing: Delete removes the selected stitches (before the other Delete commands).
   {
@@ -2482,6 +2482,8 @@ export const COMMANDS: Command[] = [
     },
   },
 ];
+registerCommands(CORE_COMMANDS);
+export { COMMANDS } from "./commands";
 
 export const command = (id: string) => COMMANDS.find((c) => c.id === id)!;
 
