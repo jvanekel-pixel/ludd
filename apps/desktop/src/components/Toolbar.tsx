@@ -74,6 +74,8 @@ export function Toolbar() {
   const basting = layout?.basting.enabled ?? false;
   const knockdown = layout?.knockdown?.enabled ?? false;
   const travelUnder = layout?.travel_under ?? false;
+  const removeOverlap = layout?.remove_overlap?.enabled ?? false;
+  const showWire = useStore((s) => s.showWire);
   const rulers = useStore((s) => s.showRulers);
   return (
     <header className="toolbar">
@@ -110,6 +112,7 @@ export function Toolbar() {
           { id: "stitch.basting", checked: basting },
           { id: "stitch.knockdown", checked: knockdown },
           { id: "layout.travelUnder", checked: travelUnder },
+          { id: "object.removeOverlap", label: "Don't sew what's hidden under shapes on top", checked: removeOverlap },
           { id: "layout.optimizeJumps" },
           { id: "layout.shortestOrder" },
           { id: "arrange.repeat" },
@@ -127,6 +130,7 @@ export function Toolbar() {
           { id: "view.seeThrough", checked: seeThrough },
           { id: "view.jumps", checked: showJumps },
           { id: "view.density", checked: showDensity },
+          { id: "view.wireframe", checked: showWire },
           { id: "view.fit" },
           "separator",
           { id: "app.help" },

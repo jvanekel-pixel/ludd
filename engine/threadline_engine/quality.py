@@ -206,7 +206,8 @@ def check(pattern: pe.EmbPattern, item_of: list[int] | None = None, names: dict[
             checks.append(_check(
                 "dense", "info", f"Thick spots in a placed stitch file (about {area} mm²)",
                 "Bought designs often have places with several layers; they usually sew fine.",
-                "If the stitch-out puckers, use a firmer stabilizer.",
+                "Limit density for this fabric thins fills and satins that are denser than your fabric takes. "
+                "If the stitch-out still puckers, use a firmer stabilizer.",
                 _worst_spot(dense, cover, x0, y0)))
     pile = hits > HITS_PER_MM2
     if pile.any():
@@ -214,13 +215,15 @@ def check(pattern: pe.EmbPattern, item_of: list[int] | None = None, names: dict[
             checks.append(_check(
                 "needle_hits", "warning", "The needle hits one spot over and over",
                 "Many stitches ending in the same tiny area cut the fabric like perforations and can break the thread.",
-                "Look for very narrow satins, tiny letters or points where many shapes start and end.",
+                "In a stitch file, Thin out dense spots takes out some of those hits. In shapes you drew, "
+                "look for very narrow satins, tiny letters or points where many shapes start and end.",
                 _worst_spot(pile if mine is None else pile & mine, hits, x0, y0)))
         else:
             checks.append(_check(
                 "needle_hits", "info", "A placed stitch file has spots where the needle hits often",
                 "Common in bought designs (small details, lettering); usually fine.",
-                "Use a sharp needle; if it cuts the fabric, use a firmer stabilizer.",
+                "Thin out dense spots takes out some of those hits. Use a sharp needle; if it still cuts "
+                "the fabric, use a firmer stabilizer.",
                 _worst_spot(pile, hits, x0, y0)))
     if len(segs):
         lengths = np.hypot(segs[:, 2] - segs[:, 0], segs[:, 3] - segs[:, 1])
@@ -230,7 +233,8 @@ def check(pattern: pe.EmbPattern, item_of: list[int] | None = None, names: dict[
             checks.append(_check(
                 "short", "info", f"{int(short.sum())} very short stitches (under {SHORT_MM} mm)",
                 "Very short stitches can make the machine nest thread or skip; a few at corners and ties are normal.",
-                "Use a longer stitch length, or check tiny details you could leave out.",
+                "In a stitch file, Remove tiny stitches takes them out. In shapes you drew, use a longer "
+                "stitch length or leave out tiny details.",
                 [round(float(segs[k, 2]), 2), round(float(segs[k, 3]), 2)]))
         long_ = lengths > LONG_MM + LONG_TOLERANCE_MM
         if long_.any():

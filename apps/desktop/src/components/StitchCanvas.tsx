@@ -44,6 +44,8 @@ import { cursorCss, type CursorName } from "../cursors";
 import { OPPOSITE, resizeCursorFor, sideAxis, sideMids, stretchFactor } from "../design/handles";
 import { columnRing, columnTips, fillDirection, fillRing, nearestOnLine, nearestOnRings } from "../design/direction";
 import { drawOverlays, runCanvasTool, snapToSources, type CanvasCtx } from "../canvas/hooks";
+import { useRepairHighlight } from "./RepairDialog";
+import { nearestStitch, pickable, stitchesInBox } from "../design/stitchPick";
 import { fixedFillEnd } from "../design/fillPatterns";
 import { selectCanvasDark, selectHoop, useStore, type Ghost, type Pen } from "../store";
 
@@ -183,12 +185,23 @@ function textureFor(img: RefImage, onReady: () => void): Texture | null {
 
 // ---------------------------------------------------------------- drawing helpers
 
+/** The needle path view's hairline: the thread's color, or grey for one too faint to see as a
+ *  hairline on this fabric (nearly white, or nearly black on dark fabric). */
+function wireColor(color: string): string {
+  const n = parseInt(color.slice(1), 16);
+  const light = (0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
+  return light > 0.8 || (C === PALETTES.dark && light < 0.2) ? "#8e877d" : color;
+}
+
 /** Draw records [start, end) as thread; jumps and trims lift the needle. `only` limits to one item. */
 function drawStitches(g: Graphics, d: Design, start: number, end: number, color: string, only?: number) {
   const { x, y, kind, item } = d.records;
   const keep = (i: number) => only === undefined || item?.[i] === only;
+  const { realistic, showWire } = useStore.getState();
+  // Needle path view: one hairline, a screen pixel wide at any zoom (drawPoints adds its dots).
+  const layers = showWire ? [{ width: 1, color: wireColor(color), alpha: 1 }] : threadLayers(color, realistic);
   // Each layer (edge, body, sheen) needs the path again: a stroke consumes it.
-  for (const layer of threadLayers(color, useStore.getState().realistic)) {
+  for (const layer of layers) {
     g.beginPath();
     let penDown = false;
     if (start > 0 && kind[start - 1] === Kind.Stitch && kind[start] === Kind.Stitch && keep(start - 1)) {
@@ -210,7 +223,7 @@ function drawStitches(g: Graphics, d: Design, start: number, end: number, color:
       }
     }
     if (!segments) return;
-    g.stroke({ width: layer.width, color: layer.color, alpha: layer.alpha, cap: "round", join: "round" });
+    g.stroke({ width: layer.width, color: layer.color, alpha: layer.alpha, cap: "round", join: "round", pixelLine: showWire });
   }
 }
 
@@ -923,7 +936,7 @@ function drawStitchEdit(scene: Scene, g: Graphics, px: number) {
   const idx = st.history.present?.layout.items.findIndex((it) => it.id === e.id) ?? -1;
   if (!d?.records.item || !d.records.src || idx < 0) return;
   const sel = new Set(e.selected);
-  const { x, y, kind, item, src } = d.records;
+  const { x, y, kind, src } = d.records;
   const off = liveStitches?.mode === "move" ? [liveStitches.to[0] - liveStitches.from[0], liveStitches.to[1] - liveStitches.from[1]] : [0, 0];
   const r = 2.2 * px;
   // Only the points on screen, and one per few pixels: a 30,000-stitch file stays smooth to drag.
@@ -941,12 +954,12 @@ function drawStitchEdit(scene: Scene, g: Graphics, px: number) {
     return true;
   };
   for (let i = 0; i < kind.length; i++) {
-    if (item[i] !== idx || kind[i] !== Kind.Stitch || sel.has(src[i]) || !shown(x[i], y[i], false)) continue;
+    if (!pickable(d.records, idx, i) || sel.has(src![i]) || !shown(x[i], y[i], false)) continue;
     g.rect(x[i] - r, y[i] - r, 2 * r, 2 * r);
   }
   g.fill({ color: 0xffffff, alpha: 0.9 }).stroke({ width: 0.8 * px, color: C.select, alpha: 0.7 });
   for (let i = 0; i < kind.length; i++) {
-    if (item[i] !== idx || kind[i] !== Kind.Stitch || !sel.has(src[i]) || !shown(x[i] + off[0], y[i] + off[1], true)) continue;
+    if (!pickable(d.records, idx, i) || !sel.has(src![i]) || !shown(x[i] + off[0], y[i] + off[1], true)) continue;
     g.circle(x[i] + off[0], y[i] + off[1], r * 1.4);
   }
   g.fill({ color: KNIFE_COLOR }).stroke({ width: 0.8 * px, color: 0xffffff });
@@ -1001,11 +1014,11 @@ function buildScene(app: Application, d: Design | null, prev: View | null): Scen
   const product = new Graphics();
   world.addChild(product, pictures, hoop, stitches);
   const chunks = d ? chunkBlocks(d) : [];
-  const realistic = useStore.getState().realistic;
+  const { realistic, showWire } = useStore.getState();
   const real: (ThreadChunk | null)[] = [];
   const full: Container[] = chunks.map((c) => {
     const color = d!.threads[c.thread]?.color ?? "#808080";
-    if (realistic) {
+    if (realistic && !showWire) {
       const tc = buildThreadChunk(d!, c.start, c.end, color);
       real.push(tc);
       stitches.addChild(tc.root);
@@ -1026,6 +1039,8 @@ function buildScene(app: Application, d: Design | null, prev: View | null): Scen
   const heat = new Container();
   const split = new Container();
   world.addChild(heat, jumps, needle, split, overlay);
+  // Needle path view: the density map goes under the hairlines, so a dense spot reads stitch by stitch.
+  if (showWire) world.addChildAt(heat, world.getChildIndex(stitches));
   const rulers = new Graphics();
   const rulerLabels = new Container();
   app.stage.addChild(rulers, rulerLabels);
@@ -1046,7 +1061,7 @@ function refresh(scene: Scene) {
   scene.stitches.visible = s.showStitches;
   scene.stitches.alpha = restingAlpha();
   scene.pictures.visible = s.showPictures;
-  drawPoints(scene, s.showPoints);
+  drawPoints(scene, s.showPoints || s.showWire);
   updatePlayhead(scene, s.stitchIdx, s.playhead, s.showJumps);
   drawHoop(scene, selectHoop(s), s.showHoop);
   drawOverlay(scene);
@@ -1093,11 +1108,12 @@ function updatePlayhead(scene: Scene, stitchIdx: Int32Array, playhead: number, s
  *  in the ones that have come into view. */
 function afterPan(scene: Scene) {
   const st = useStore.getState();
-  if (st.showPoints) drawPoints(scene, true);
+  if (st.showPoints || st.showWire) drawPoints(scene, true);
   if (st.stitchEdit) drawOverlay(scene);
 }
 
-/** Needle points (P): a dot where the needle goes down, in a colour that shows on any thread. */
+/** Needle points (P): a dot where the needle goes down, in a colour that shows on any thread.
+ *  The needle path view has them too: small ink dots, the same size at any zoom. */
 function drawPoints(scene: Scene, show: boolean) {
   const g = scene.points;
   g.clear();
@@ -1105,7 +1121,8 @@ function drawPoints(scene: Scene, show: boolean) {
   if (!show || !d) return;
   const { x, y, kind } = d.records;
   const s = scene.view.scale;
-  const r = Math.max(0.08, 1.6 / s);
+  const wire = !useStore.getState().showPoints; // only the needle path view asks for them
+  const r = wire ? 1.6 / s : Math.max(0.08, 1.6 / s);
   // A 40,000-stitch design: only points near the screen (one screen's width around it, so a pan
   // still shows them; redrawn when the pan ends), and one per couple of pixels.
   const [w, h] = [scene.app.screen.width / s, scene.app.screen.height / s];
@@ -1123,7 +1140,8 @@ function drawPoints(scene: Scene, show: boolean) {
     seen.add(key);
     g.circle(px, py, r);
   }
-  g.fill({ color: 0xffffff, alpha: 0.9 }).stroke({ width: 0.6 / s, color: 0x121114, alpha: 0.9 });
+  if (wire) g.fill({ color: C.select });
+  else g.fill({ color: 0xffffff, alpha: 0.9 }).stroke({ width: 0.6 / s, color: 0x121114, alpha: 0.9 });
 }
 
 /** A copy of one item's stitches that follows the pointer while dragging; everything else dims. */
@@ -1199,6 +1217,8 @@ export function StitchCanvas() {
   const guides = useStore((s) => s.history.present?.layout.guides);
   const preview = useStore((s) => s.preview);
   const showRulers = useStore((s) => s.showRulers);
+  const showWire = useStore((s) => s.showWire);
+  const repairMarks = useRepairHighlight((s) => s.shown); // "Show on the design" (an overlay)
 
   // Create the Pixi app once.
   useEffect(() => {
@@ -1272,7 +1292,7 @@ export function StitchCanvas() {
     sceneRef.current = buildScene(app, design, prev ? prev.view : null);
     if (prev) sceneRef.current.autoFit = prev.autoFit;
     refresh(sceneRef.current);
-  }, [design, hasDoc, realistic]);
+  }, [design, hasDoc, realistic, showWire, canvasDark]);
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -1293,7 +1313,7 @@ export function StitchCanvas() {
     const scene = sceneRef.current;
     if (scene) drawOverlay(scene);
     if (host.current) host.current.classList.toggle("drawing", tool !== "select" || measure !== null || !!useStore.getState().ruler || !!useStore.getState().angleFor);
-  }, [selectedId, extraIds, selectedNode, tool, pen, images, measure, ghost, autoTrace, autoAll, knife, stitchEdit, guides, edgeFit]);
+  }, [selectedId, extraIds, selectedNode, tool, pen, images, measure, ghost, autoTrace, autoAll, knife, stitchEdit, guides, edgeFit, repairMarks]);
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -1515,19 +1535,7 @@ export function StitchCanvas() {
       const idx = st.history.present?.layout.items.findIndex((it) => it.id === st.stitchEdit?.id) ?? -1;
       if (!d?.records.item || !d.records.src || idx < 0) return null;
       const p = toWorld(scene, sx, sy);
-      const reach = 6 / scene.view.scale;
-      let best: number | null = null;
-      let bestD = reach;
-      const { x, y, kind, item, src } = d.records;
-      for (let i = 0; i < kind.length; i++) {
-        if (item[i] !== idx || kind[i] !== Kind.Stitch) continue;
-        const dd = Math.hypot(x[i] - p[0], y[i] - p[1]);
-        if (dd < bestD) {
-          bestD = dd;
-          best = src[i];
-        }
-      }
-      return best;
+      return nearestStitch(d.records, idx, p[0], p[1], 6 / scene.view.scale);
     };
     /** The selected shape's start or end dot under the pointer (applique and lettering have none
      *  to move). The end dot wins where both sit together. */
@@ -2138,12 +2146,7 @@ export function StitchCanvas() {
             const idx = st.history.present?.layout.items.findIndex((it) => it.id === st.stitchEdit!.id) ?? -1;
             const [x0, x1] = [Math.min(ls.from[0], ls.to[0]), Math.max(ls.from[0], ls.to[0])];
             const [y0, y1] = [Math.min(ls.from[1], ls.to[1]), Math.max(ls.from[1], ls.to[1])];
-            const inBox: number[] = [];
-            if (des?.records.item && des.records.src) {
-              const { x, y, kind, item, src } = des.records;
-              for (let i = 0; i < kind.length; i++)
-                if (item[i] === idx && kind[i] === Kind.Stitch && x[i] >= x0 && x[i] <= x1 && y[i] >= y0 && y[i] <= y1) inBox.push(src[i]);
-            }
+            const inBox = des ? stitchesInBox(des.records, idx, x0, y0, x1, y1) : [];
             const keep = d.shift && (useStore.getState().stitchEdit?.selected ?? []).length > 0 && liveShift;
             const selected = keep ? [...new Set([...st.stitchEdit.selected, ...inBox])] : inBox;
             st.setStitchEdit({ ...st.stitchEdit, selected });
@@ -2270,7 +2273,11 @@ export function StitchCanvas() {
       if (st.tool !== "select" && st.tool !== "text") return;
       const [sx, sy] = local(e);
       if (st.stitchEdit) {
-        return openContextMenu(e, [{ id: "stitch.deleteSelected" }, "separator", { label: "Done editing stitches", run: endStitchEdit }], "Stitches");
+        // Right-clicking selects the stitch under the pointer first, as it does everywhere else.
+        const hit = stitchAt(scene, sx, sy);
+        if (hit !== null && !st.stitchEdit.selected.includes(hit)) st.setStitchEdit({ ...st.stitchEdit, selected: [hit] });
+        const edits = [{ id: "stitch.insert" }, { id: "stitch.insertJump" }, { id: "stitch.lockJump" }, "separator" as const, { id: "stitch.deleteSelected" }];
+        return openContextMenu(e, [...edits, "separator", { label: "Done editing stitches", run: endStitchEdit }], "Stitches");
       }
       if (nodeAt(scene, sx, sy)) return;
       const p = toWorld(scene, sx, sy);

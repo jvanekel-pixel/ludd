@@ -30,6 +30,7 @@ import { isObject, isText, type FileItem, type Layout, type LayoutItem, type Ref
 import { selectHoop, selectImages, selectLayout, selectMachine, useStore } from "../store";
 import { Section, Sub, Row, type SelKind } from "./Accordion";
 import { Menu } from "./Menu";
+import { OverlapOptions } from "./OverlapOptions";
 import { itemMenu, openContextMenu, pictureMenu } from "../contextMenu";
 import { AdvisorPanel } from "./AIPanels";
 import { Cmd, fmtLen, fromUnits, NumberField, toUnits } from "./controls";
@@ -603,6 +604,7 @@ function DesignSection({ sel }: { sel: SelKind }) {
       <label className="check" title="Moves between shapes in one thread run under stitching that's sewn later, where they can: fewer jumps and trims to snip">
         <input type="checkbox" checked={!!layout.travel_under} onChange={() => toggleTravelUnder()} /> Fewer jumps & trims (hide moves under later stitching)
       </label>
+      <OverlapOptions />
       <div className="btn-row">
         <Cmd id="layout.optimizeJumps" label="Optimize jumps" />
         <Cmd id="layout.shortestOrder" label="Sew in the shortest order" />

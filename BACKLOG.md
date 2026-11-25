@@ -13,6 +13,9 @@ Parked ideas, tech debt and nice-to-haves. Do not build these without the owner 
 - [ ] Vite build warns about chunks over 500 kB; consider code-splitting
 - [x] Delete the old git-ignored root `LUDD-User-Manual.pdf` (version 1.0); `docs/LUDD-User-Manual.pdf` is current (item 20) (done)
 - [ ] Clean the root of brand source PDFs/PNGs, research notes and the CSV (all git-ignored) into one folder
+- [ ] `check.py --all` prints RESULT: PASS when Rust is SKIP (no frozen engine): make a skip under `--all` say so in the RESULT line, or fail (Phase 3 audit, finding 1)
+- [ ] `check.py` doesn't say when `fixtures/` is missing (a worktree runs ~44 fewer engine tests and still passes): print it on the engine line (Phase 3 audit, finding 2)
+- [ ] `fills/spiral.py` `_middle`: the shapely < 2.1 fallback can't run (pyproject needs >= 2.2); drop it (Phase 3 audit, finding 4)
 - [ ] Working tree shows LF to CRLF warnings; decide on `.gitattributes` line-ending policy
 - [x] AI key storage: create `ai-key.bin` atomically with `0o600` (done 2026-11-24)
 - [ ] AI key storage: use the OS keychain on macOS/Linux instead of base64 (new dependency; owner decision)
@@ -62,3 +65,13 @@ Planned on 2026-11-24: every item in this section, and the nice-to-haves above t
 - [ ] Multi-color blending, embossing/carving, 3D foam, patch edge (v2)
 - [ ] Python plugin/scripting API; translations (v2)
 - [ ] Browser/PWA build via Pyodide (Later)
+
+## From Phase 4 (2026-11-25)
+- [ ] The browser preview's engine uses your real LUDD data folder (`vite-engine-bridge.ts` starts it without `THREADLINE_DATA_DIR`): a preview can autosave over the recovery copy and add private copies. Give the dev bridge its own data folder unless asked otherwise
+- [ ] "Don't sew what's hidden": the kept margin is still over the density limit; leaving the lower fill's edge run out round a cut would help (needs the fill generator to know which holes are cuts; PHASE-04 Build notes)
+- [ ] L-002 with "Don't sew what's hidden" on: the fill router prefers a straight move across sewn rows to a covered way round
+- [ ] Rebuild adds jumps and a few very short stitches in shapes with holes or notches (Wreath at 150%: 35 jumps instead of 15)
+- [ ] The Repair window and the panel's Repair list preview once per repair on every design change (about 1 s each at 50,000 stitches)
+- [ ] If P4-A1 is built, give `remove_hidden` its own project feature flag
+- [ ] Planner: reword Phase 4 done-when 2 to "no cell over the limit past the keep margin" (what is built and tested); add an L- entry for the margin band over the limit, which today is only in F-1207 (Phase 4 audit, finding 1)
+- [ ] `test_lower_fill_stops_under_the_cover` allows keep + 0.4 mm; the fill reaches keep + 0.16 to 0.20 mm: tighten to + 0.25 so a regression shows (Phase 4 audit, finding 3)

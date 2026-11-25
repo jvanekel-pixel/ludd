@@ -188,7 +188,16 @@ def _data_url_bytes(url: Any) -> bytes | None:
 LAYOUT_FEATURES: dict[str, Callable[[dict], bool]] = {
     "travel_under": lambda layout: bool(layout.get("travel_under")),
     "trim_jumps_all": lambda layout: layout.get("jumps_to_trims") is not None,  # "Trim jumps longer than…" for the whole layout
+    # "Don't sew what's hidden under shapes on top".
+    "remove_overlap": lambda layout: isinstance(layout.get("remove_overlap"), dict) and bool(layout["remove_overlap"].get("enabled")),
 }
+
+
+def _has_op(item: dict, names) -> bool:
+    ops = item.get("ops")
+    return isinstance(ops, list) and any(isinstance(o, dict) and isinstance(o.get("op"), str) and o["op"] in names for o in ops)
+
+
 ITEM_FEATURES: dict[str, Callable[[dict, dict, dict], bool]] = {  # (item, params, geometry)
     "fill_patterns": lambda it, p, g: it.get("kind") in ("fill", "applique") and p.get("pattern") not in (None, "", "tatami"),
     "motif_lines": lambda it, p, g: it.get("kind") == "run" and p.get("style") == "motif",
@@ -198,6 +207,9 @@ ITEM_FEATURES: dict[str, Callable[[dict, dict, dict], bool]] = {  # (item, param
     "stitch_edits": lambda it, p, g: any(isinstance(o, dict) and o.get("op") in ("delete_stitches", "move_stitch", "move_stitches")
                                          for o in it.get("ops") or []),
     "fill_spiral": lambda it, p, g: it.get("kind") in ("fill", "applique") and p.get("pattern") == "spiral",
+    # Repairs on a stitch file, and stitches or jumps added to one.
+    "stitch_repairs": lambda it, p, g: _has_op(it, kept.REPAIR_OPS),
+    "stitch_inserts": lambda it, p, g: _has_op(it, ("insert_stitch", "insert_jump", "lock_jump")),
 }
 KNOWN_FEATURES = set(LAYOUT_FEATURES) | set(ITEM_FEATURES)
 

@@ -58,3 +58,6 @@ from .extras import (BASTING_MIN_MM, BASTING_STITCH_MM, BASTING_THREAD, KNOCKDOW
 # `export` are the functions, as they always were.
 from .render import Rendered, _names, check, render, render_summary  # noqa: F401,E402
 from .export import export, export_split, preview_export, split_plan  # noqa: F401,E402
+# Last of all, because they use this package: the repairs, which register their render hooks
+# (threadline_engine/repair/__init__.py).
+from .. import repair  # noqa: F401,E402

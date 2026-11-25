@@ -240,6 +240,22 @@ def test_qa_projects_say_what_they_need_and_newer_ones_are_refused(tmp_path, fil
         project.open_project(_zip(tmp_path / "future.ludd", {**GOOD, "version": 2, "features": ["hologram_fill"]}))
 
 
+def test_phase4_projects_name_the_repairs_inserts_and_overlap_they_use():
+    """Each changes what is sewn, so an older LUDD must refuse the project instead of sewing it wrong."""
+    def one(ops):
+        return {"items": [{"id": "a", "path": "x.pes", "ops": ops}]}
+
+    for name in ("filter_small", "declump", "density_limit", "rebuild", "remove_hidden"):
+        assert project._features(one([{"op": name}])) == {"stitch_repairs"}, name
+    for name in ("insert_stitch", "insert_jump", "lock_jump"):
+        assert project._features(one([{"op": name}])) == {"stitch_inserts"}, name
+    assert project._features(one([{"op": "delete_block"}, "junk", {"op": ["rebuild"]}])) == set()
+    assert project._features({"remove_overlap": {"enabled": True, "keep_mm": 1}}) == {"remove_overlap"}
+    for off in ({"enabled": False, "keep_mm": 1}, "junk", None):
+        assert project._features({"remove_overlap": off}) == set(), off
+    assert {"stitch_repairs", "stitch_inserts", "remove_overlap"} <= project.KNOWN_FEATURES
+
+
 @pytest.mark.parametrize("manifest, message", [
     ("[]", "isn't a LUDD project"),
     (json.dumps({**GOOD, "version": "abc"}), "version"),

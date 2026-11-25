@@ -37,6 +37,8 @@ export type Prefs = {
   previewGarment?: "none" | "tshirt" | "tote" | "towel" | "bodysuit" | "cap";
   previewColor?: string;
   showRulers?: boolean;
+  /** Needle path view: thread as hairlines with a dot at every needle point. */
+  showWire?: boolean;
   /** The design browser's last folder. */
   browseFolder?: string;
   /** The fabric picked last; new designs start with it. */

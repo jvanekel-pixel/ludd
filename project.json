@@ -33,16 +33,16 @@
     "monthlyCapUsd": 0,
     "spentThisMonthUsd": 0
   },
-  "phase": 3,
+  "phase": 5,
   "status": "active",
-  "nextAction": "Phase 3 audit in a new session on the top model (phase-audit-gate), before Phase 4",
-  "blockedOnHuman": "Start the Phase 3 audit on the top model",
-  "lastSessionAt": "2026-11-25T06:17:18Z",
+  "nextAction": "Phase 5 (lettering) in a fresh session once Phase 4 is merged: answer its spec's Owner decisions first",
+  "blockedOnHuman": "Answer the Phase 5 spec's Owner decisions",
+  "lastSessionAt": "2026-11-25T19:50:00Z",
   "health": {
     "tests": "passing",
     "build": "passing",
-    "lastAuditedPhase": 1,
-    "lastAuditedAt": "2026-11-15T18:02:01.451Z"
+    "lastAuditedPhase": 4,
+    "lastAuditedAt": "2026-11-25T19:50:00Z"
   },
   "deploy": {
     "target": "local",

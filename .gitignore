@@ -43,4 +43,6 @@ build/
 *.db
 *.log
 _logs/*.log
+# Reports a test writes about the owner's own designs (fixtures/), which are never committed.
+_logs/*.txt
 !_logs/.gitkeep

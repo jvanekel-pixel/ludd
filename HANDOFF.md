@@ -1,24 +1,17 @@
 # Session Handoff (Overwrite Every Session — <=25 Lines)
 
-- **Updated:** 2026-11-24
-- **Current Phase:** Phase 3 ships to `main` as pull request 25 (branch `claude/goofy-goldwasser-7af929`, squash merge). `phase` stays 3 until the top-model audit passes.
-- **Active Routing:** balanced (top model plans and audits, Sonnet builds; BUILDPLAN.md section 3)
-- **What Changed:** engine and UI seams (`layout/`, `methods/`; fill, line, command, dialog and canvas-hook registries), `scripts/check.py`, Spiral fill, five new shapes, docs. Track branches `phase-03/track-a` to `-e` are kept.
-  - Then, owner approved twice: Spiral joins its pieces along the edge, sewing the nearest piece next, so nothing runs across the rings and little thread gathers on the edge (`fills/spiral.py` only; only Spiral snapshots re-recorded).
-- **Checks Run:** `check.py --all` PASS: engine 1065 passed, 1 skipped (before the phase: 657 + 1); UI 276 (before: 241); typecheck, command table, build, Rust (2). No test removed; `digitize.json` and `layout.json` unchanged. With the sample designs copied in: PASS too (engine 1109 passed, 1 skipped).
-  - CI's first run failed on the Apple-chip Mac only (donut spiral in another corner); the spot is now chosen in `fills/spiral.py`, proven against rounding-sized noise on 150 shape and spacing cases.
-  - `pnpm build:engine` run, smoke ok; the frozen engine renders like the source. Preview: shapes, Spiral (Heart: nothing across, light edge), polygon Enter/Esc ok. The canvas hooks have no real user yet.
-  - Spiral stress test (39 shapes, 36 settings each): nothing more than 0.3 mm outside, no stitch over its length, nothing across the rings; every stretch over 1 mm sewn.
-- **Spec deviations** (details: spec section 12, Build notes):
-  - The canvas dots read the pattern descriptors (new `directionDots`, only on cross-stitch).
-  - Wave 1 tests now let wave 2 add items (old ones still required, in order); the menu test imports `./cmd`.
-  - Spiral: where spots tie, the middle is the centroid; needle points at exact length; corner test measures to the thread.
-  - `layout.render`/`export` stay functions; `text.py` imports `objects.py`; a local item op's transform also sets `center_mm`.
-  - Overlays wrap `drawOverlay`; `CanvasTool.cursor` is not applied; `registerDialog` replaces a repeated id.
-  - Rounded rectangle has 20 points; the width test checks the star's tips; the polygon dialog handles Enter and Esc itself.
-  - `check.py -k` runs vitest through node, and an engine run matching no test counts as skipped.
-  - Spiral steps 4 and 6: nearest piece next, not spiral order, joined along the edge by Spiral itself (owner approved).
+- **Updated:** 2026-11-25
+- **Current Phase:** Phase 4 audit **PASSED** at `8f5d568` (branch `claude/phase-04-merge-safe-df7a99`, which also carries `fd7f43c`, the Phase 3 stamp); this stamp lands on `main` with the Phase 4 pull request. `phase` is now 5. P4-A1 stays held (patent check).
+- **Active Routing:** balanced (top model plans and audits, Sonnet builds)
+- **Checks Run (audit):** `check.py --all` PASS with a frozen engine: engine 1221 passed, 2 skipped; UI 337; build; Rust 2 passed. Engine with `fixtures/` copied in: 1266 passed, 1 skipped (copy removed). `digitize.json` and `layout.json` snapshots unchanged against `main`; no test deleted; the one rewritten test (hooks start empty) checks a fresh copy of `passes.py`, same strength.
+- **Audit verdicts on the planner's points:**
+  1. Done-when 2 is accepted as a known limit. The 76 over-limit cells (20 mm on 40 mm, keep 1 mm) are exactly the outer 1 mm ring; none lies deeper. The lower fill reaches 1.16 to 1.20 mm (keep + pull compensation). F-1207 and L-002 say so honestly.
+  2. Flower 150% Rebuild 8.84 is explained by the original: measured at the same footprint, the 100% file peaks at 10.9 with 37 cells over 7; the rebuild has 8. Thread 2.13x (2.25x is the most a full re-space can add). No doubling.
+  3. P4-A1: the step is hidden (`visible: () => false`), the command only says "Not built yet", the engine refuses the op, and L-030 says NO.
+  4. Nothing earlier weakened (see Checks).
+  5. Committed tests and scripts use a temporary data folder (autouse `conftest.py`); `.claude/launch.json` is unchanged in this phase. The dev bridge issue predates this phase and is already in BACKLOG.
+- **Findings (no blocker):** 1 done-when 2 wording vs the margin band (planner); 2 Rebuild adds jumps in shapes with holes (Wreath 35 vs 15; documented, backlog); 3 loose depth tolerance in a test; 4 L-002 travel line (documented, backlog).
 - **Blocked On Human:**
-  1. Start the Phase 3 audit in a new session on the top model.
-  2. Older: tag v1.0.1 on commit `281272e` (PR #23); AI tracing Download check; patent checks (P4-A1, P6-A1); photo stitch (Phase 9). Phase 2's audit is not stamped.
-- **Next Action:** the Phase 3 audit on the top model (`phase-audit-gate`), before Phase 4.
+  1. Answer the Phase 5 spec's Owner decisions.
+  2. Older: P4-A1 patent check; tag v1.0.1; AI tracing download check; P6-A1 patent; photo stitch (Phase 9).
+- **Next Action:** After the merge, Phase 5 (lettering) in a fresh session: answer its spec's Owner decisions first.

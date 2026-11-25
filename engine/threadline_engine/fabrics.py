@@ -58,6 +58,15 @@ FABRICS: list[dict[str, Any]] = [
 ]
 _BY_ID = {f["id"]: f for f in FABRICS}
 
+# Limit density for this fabric (repair/density.py): in a placed stitch file, fills and satins whose
+# spacing is under the first number (mm, on woven cotton) are remade at the second. Each fabric
+# divides both by its density factor, as it does every spacing. First guesses, to be tuned with the
+# stitch-outs (Phase 16). Satin spacing is between stitches on one side.
+DENSITY_LIMITS: dict[str, tuple[float, float]] = {
+    "fill": (0.33, 0.40),
+    "satin": (0.30, 0.36),
+}
+
 
 def get(fabric_id: str | None) -> dict[str, Any]:
     return _BY_ID.get(fabric_id or DEFAULT_FABRIC, _BY_ID[DEFAULT_FABRIC])

@@ -1,0 +1,35 @@
+{
+ "fill_under_applique": {
+  "jumps": 2,
+  "records": 2326,
+  "sha1": "1ced6f73dfb85a9b165599ab4e1f694bef0732f0",
+  "stitches": 2320,
+  "threads": [
+   "#cc2222",
+   "#2222cc"
+  ],
+  "trims": 0
+ },
+ "fill_under_text": {
+  "jumps": 2,
+  "records": 5502,
+  "sha1": "1b8628a8332014563a3c67fc01205d112ed8370a",
+  "stitches": 5496,
+  "threads": [
+   "#cc2222",
+   "#2222cc"
+  ],
+  "trims": 2
+ },
+ "square_under_square": {
+  "jumps": 0,
+  "records": 2295,
+  "sha1": "a4ea36f312c19acb5111411ec375114805a02aa1",
+  "stitches": 2293,
+  "threads": [
+   "#cc2222",
+   "#2222cc"
+  ],
+  "trims": 0
+ }
+}

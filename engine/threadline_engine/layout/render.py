@@ -29,12 +29,14 @@ class Rendered:
 
 
 def render(layout: dict[str, Any]) -> Rendered:
-    items = layout.get("items") or []
-    if not items:
+    whole = layout.get("items") or []
+    if not whole:
         raise LayoutError("Nothing to show: the layout has no designs")
+    # Render hooks (layout/passes.py): passes that change the layout before any item is made.
+    layout, warnings = passes.run_before_items(layout)
+    items = layout.get("items") or []
     all_blocks: list[Block] = []
     item_info: list[dict[str, Any]] = []
-    warnings: list[dict[str, str]] = []
 
     # "Trim jumps longer than …" for the whole design (older projects keep it as an op per item).
     jt_mm = _mm(layout.get("jumps_to_trims")) if layout.get("jumps_to_trims") is not None else None
@@ -63,7 +65,13 @@ def render(layout: dict[str, Any]) -> Rendered:
             blocks, geo, obj_warnings = _object_blocks(it, idx, layout.get("fabric"))
             obj_warnings = list(obj_warnings)
             blocks = _apply_ops(blocks, it.get("ops") or [], jt_mm, obj_warnings, generated=True)
-            b = _stitch_bounds([r for blk in blocks for r in blk.recs])
+            # A shape measures as itself, whatever a pass left out of it: the size boxes, the
+            # selection and alignment use these bounds, and a typed width resizes from them.
+            measured = blocks
+            if idx < len(whole) and whole[idx] is not it:
+                measured = _apply_ops(_object_blocks(whole[idx], idx, layout.get("fabric"))[0],
+                                      it.get("ops") or [], jt_mm, [], generated=True)
+            b = _stitch_bounds([r for blk in measured for r in blk.recs])
             name = it.get("name") or f"{OBJECT_LABEL[it['kind']]} {idx + 1}"
             item_info.append({
                 "id": it.get("id", str(idx)),
@@ -84,11 +92,12 @@ def render(layout: dict[str, Any]) -> Rendered:
         for b, t in enumerate(it.get("threads") or []):
             if t and b < len(blocks):
                 blocks[b].thread = {k: str(t.get(k, "")) for k in ("color", "name", "catalog", "brand")}
-        blocks = _apply_ops(blocks, it.get("ops") or [], jt_mm)
+        notes: list[str] = []  # plain-words notes about this item's edits and repairs
+        blocks = _apply_ops(blocks, it.get("ops") or [], jt_mm, notes)
         _move_stitches(blocks, it.get("ops") or [], local=True)
         t = Transform.from_dict(it.get("transform"))
         # Render hooks (layout/passes.py): registered item ops, in the file's own frame, then placed.
-        ctx = passes.OpContext(it, idx, t, center, layout.get("fabric"), [])
+        ctx = passes.OpContext(it, idx, t, center, layout.get("fabric"), notes)
         blocks = passes.run_item_ops(passes.ITEM_OPS_LOCAL, blocks, ctx)
         t = ctx.transform
         _transform(blocks, t, center)
@@ -110,7 +119,8 @@ def render(layout: dict[str, Any]) -> Rendered:
             if abs(s - 1) > SCALE_WARN + 1e-9:
                 warnings.append({"level": "warning", "code": f"scale_{idx}_{axis}", "message": (
                     f"{name} is resized to {s * 100:.0f}% {axis}. Beyond about ±20% stitches get too dense "
-                    "or too sparse, because resizing a stitch file doesn't add or remove stitches.")})
+                    "or too sparse, because resizing a stitch file doesn't add or remove stitches. "
+                    "Rebuild stitches at this size (Alt+Shift+R) fixes this.")})
                 break
         all_blocks.extend(blk for blk in blocks if blk.recs)
 
