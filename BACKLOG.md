@@ -73,3 +73,5 @@ Planned on 2026-11-24: every item in this section, and the nice-to-haves above t
 - [ ] Rebuild adds jumps and a few very short stitches in shapes with holes or notches (Wreath at 150%: 35 jumps instead of 15)
 - [ ] The Repair window and the panel's Repair list preview once per repair on every design change (about 1 s each at 50,000 stitches)
 - [ ] If P4-A1 is built, give `remove_hidden` its own project feature flag
+- [ ] Planner: reword Phase 4 done-when 2 to "no cell over the limit past the keep margin" (what is built and tested); add an L- entry for the margin band over the limit, which today is only in F-1207 (Phase 4 audit, finding 1)
+- [ ] `test_lower_fill_stops_under_the_cover` allows keep + 0.4 mm; the fill reaches keep + 0.16 to 0.20 mm: tighten to + 0.25 so a regression shows (Phase 4 audit, finding 3)
