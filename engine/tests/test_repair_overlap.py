@@ -550,3 +550,33 @@ def test_snapshot_stitches_do_not_turn_on_the_last_digit(name, font_path):  # no
             nudge = {"x": t.get("x", 0) + rng.uniform(-1e-9, 1e-9), "y": t.get("y", 0) + rng.uniform(-1e-9, 1e-9)}
             items.append({**it, "transform": {**t, **nudge}})
         assert digest_pattern(layout.render({**lay, "items": items}).pattern) == want
+
+
+@pytest.mark.parametrize("transform", [{}, {"rotate": 30, "scale_x": 1.2, "scale_y": 0.8, "flip_x": True, "x": 3}])
+def test_a_trimmed_fill_still_measures_as_the_whole_shape(transform):
+    """The size boxes, selection, zoom and alignment use an item's bounds: they must be the whole
+    shape's, or typing a width would resize it from what's left after trimming."""
+    lower = {**_square("a", 0, 0, 40), "transform": transform}
+    upper = _square("b", 20, -20, 80, BLUE)  # covers about half of the lower square
+    off, on = _pair(lower, upper)
+    assert len(_mm_recs(on, 0)) < len(_mm_recs(off, 0)) * 0.8  # (it really was trimmed)
+    for key in ("bounds_mm", "center_mm"):
+        assert on.items[0][key] == pytest.approx(off.items[0][key], abs=0.05), key
+        assert on.items[1][key] == off.items[1][key], key
+
+
+
+@pytest.mark.parametrize("keep", [0.5, 1.0, 3.0])
+@pytest.mark.parametrize("upper", ["square", "ribbon", "applique"])
+def test_reordering_keeps_the_layering_with_the_switch_on(keep, upper):
+    """"Sew in the shortest order" and "Sort colors" look at the trimmed stitches: the kept margin
+    must still count as overlapping, or the shape on top would change."""
+    top = {"square": _square("top", 24, 4, 20), "ribbon": _ribbon("top", [(24, 20), (60, 20)], 10, RED),
+           "applique": _shape("top", "applique", {"outline": _rect(24, 4, 44, 24)}, RED)}[upper]
+    lay = _layout(_square("low", 0, 0, 30), _square("far", 100, 0, 10), top, keep=keep)
+    order = layout.optimize_order(lay)["order"]
+    assert order.index("low") < order.index("top"), order
+    sorted_lay = _layout(_square("low", 0, 0, 30, RED), _square("mid", 10, 10, 6, GREEN),
+                         {**top, "thread": RED}, keep=keep, color_sort=True)
+    sewn = [it for blk in layout.render(sorted_lay).blocks for *_, it, _ in blk.recs if it >= 0]
+    assert sewn.index(0) < sewn.index(2) and max(i for i, it in enumerate(sewn) if it == 0) < sewn.index(2)

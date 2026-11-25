@@ -29,7 +29,8 @@ class Rendered:
 
 
 def render(layout: dict[str, Any]) -> Rendered:
-    if not (layout.get("items") or []):
+    whole = layout.get("items") or []
+    if not whole:
         raise LayoutError("Nothing to show: the layout has no designs")
     # Render hooks (layout/passes.py): passes that change the layout before any item is made.
     layout, warnings = passes.run_before_items(layout)
@@ -64,7 +65,13 @@ def render(layout: dict[str, Any]) -> Rendered:
             blocks, geo, obj_warnings = _object_blocks(it, idx, layout.get("fabric"))
             obj_warnings = list(obj_warnings)
             blocks = _apply_ops(blocks, it.get("ops") or [], jt_mm, obj_warnings, generated=True)
-            b = _stitch_bounds([r for blk in blocks for r in blk.recs])
+            # A shape measures as itself, whatever a pass left out of it: the size boxes, the
+            # selection and alignment use these bounds, and a typed width resizes from them.
+            measured = blocks
+            if idx < len(whole) and whole[idx] is not it:
+                measured = _apply_ops(_object_blocks(whole[idx], idx, layout.get("fabric"))[0],
+                                      it.get("ops") or [], jt_mm, [], generated=True)
+            b = _stitch_bounds([r for blk in measured for r in blk.recs])
             name = it.get("name") or f"{OBJECT_LABEL[it['kind']]} {idx + 1}"
             item_info.append({
                 "id": it.get("id", str(idx)),
