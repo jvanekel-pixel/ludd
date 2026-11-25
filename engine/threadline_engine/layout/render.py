@@ -111,7 +111,8 @@ def render(layout: dict[str, Any]) -> Rendered:
             if abs(s - 1) > SCALE_WARN + 1e-9:
                 warnings.append({"level": "warning", "code": f"scale_{idx}_{axis}", "message": (
                     f"{name} is resized to {s * 100:.0f}% {axis}. Beyond about ±20% stitches get too dense "
-                    "or too sparse, because resizing a stitch file doesn't add or remove stitches.")})
+                    "or too sparse, because resizing a stitch file doesn't add or remove stitches. "
+                    "Rebuild stitches at this size (Alt+Shift+R) fixes this.")})
                 break
         all_blocks.extend(blk for blk in blocks if blk.recs)
 

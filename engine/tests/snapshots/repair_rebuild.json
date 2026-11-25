@@ -1,0 +1,45 @@
+{
+ "flower_150": {
+  "jumps": 10,
+  "records": 4877,
+  "sha1": "9b5b061094863a348b0289c9d3518eff565eeb55",
+  "stitches": 4854,
+  "threads": [
+   "#1e4d2b",
+   "#3a7d44",
+   "#e86a92",
+   "#ffcd00"
+  ],
+  "trims": 9
+ },
+ "satin_150": {
+  "jumps": 0,
+  "records": 233,
+  "sha1": "3e4788c3e51880c55cfd85dd56fcfec19f592fd1",
+  "stitches": 232,
+  "threads": [
+   "#cc2222"
+  ],
+  "trims": 0
+ },
+ "square_150": {
+  "jumps": 1,
+  "records": 2985,
+  "sha1": "a14fa44014d987c28148612273a48f0b6d9c5626",
+  "stitches": 2983,
+  "threads": [
+   "#cc2222"
+  ],
+  "trims": 0
+ },
+ "square_60": {
+  "jumps": 1,
+  "records": 584,
+  "sha1": "0a1a9dded3fb8782af2ca28a70ea71774143769f",
+  "stitches": 582,
+  "threads": [
+   "#cc2222"
+  ],
+  "trims": 0
+ }
+}
