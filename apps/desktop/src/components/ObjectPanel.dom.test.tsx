@@ -104,6 +104,18 @@ describe("shape settings after the panel split", () => {
     expect(host!.querySelector(".density-slider")).not.toBeNull();
   });
 
+  it("Spiral shows Ring spacing and hides Density and Angle", () => {
+    const section = show(fill({ pattern: "spiral" }));
+    expect(rowLabels(section)).toEqual(["Stitch as", "Pattern", "Ring spacing", "", "Length"]);
+    expect(host!.querySelector(".density-slider")).toBeNull();
+    expect(texts(section, 'select[aria-label="Fill pattern"] option')).toContain("Spiral");
+    expect(texts(section, '[aria-label="Underlay"] button')).toEqual(["Auto", "Edge"]);
+    expect(objectSummary(fill({ pattern: "spiral" }))).toBe("Spiral");
+    // Length stops at 4 mm: longer stitches would cut across the turns.
+    const longer = show(fill({ pattern: "spiral", stitch_mm: 4 })).querySelector<HTMLButtonElement>('button[aria-label="More length"]')!;
+    expect(longer.disabled).toBe(true);
+  });
+
   it("objectSummary is unchanged", () => {
     expect(objectSummary(fill())).toBe("Normal · 45°");
     expect(objectSummary(fill({ pattern: "contour", spacing_mm: 0.5 }))).toBe("Contour · Light");

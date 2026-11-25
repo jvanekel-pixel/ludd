@@ -56,3 +56,4 @@ def get(name: str) -> FillPattern:
 
 
 from . import builtin  # noqa: E402,F401  (registers the six, in today's order)
+from . import spiral  # noqa: E402,F401

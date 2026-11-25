@@ -74,6 +74,16 @@ export const FILL_PATTERN_DEFS: FillPatternDef[] = [
     summary: "label",
     directionDots: true, // open, but it has always shown them
   },
+  {
+    id: "spiral",
+    label: "Spiral",
+    title: "One line that winds from the middle of the shape out to its edge",
+    open: true,
+    noSpacing: true,
+    maxStitch: 4,
+    fields: [{ key: "spiral_mm", label: "Ring spacing", def: 1.5, min: 0.4, max: 6, step: 0.1, digits: 1, suffix: "mm", title: "How far apart the spiral's turns are" }],
+    summary: "label",
+  },
 ];
 
 const TATAMI = FILL_PATTERN_DEFS.find((d) => d.id === "tatami")!;
