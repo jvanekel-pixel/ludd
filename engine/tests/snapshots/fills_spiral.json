@@ -1,0 +1,30 @@
+{
+ "donut": {
+  "jumps": 0,
+  "records": 721,
+  "sha1": "9aeab0405631565dc09f7678b2e4a8b3cd3d2aa5",
+  "stitches": 721,
+  "trims": 0
+ },
+ "square_40": {
+  "jumps": 0,
+  "records": 547,
+  "sha1": "ee15463437f5eb6cd4e863c93a6509c08afad54d",
+  "stitches": 547,
+  "trims": 0
+ },
+ "star": {
+  "jumps": 0,
+  "records": 335,
+  "sha1": "71ecd4edf2c0554452bbcbccc46ba809159a566e",
+  "stitches": 335,
+  "trims": 0
+ },
+ "tight_0_6": {
+  "jumps": 0,
+  "records": 1370,
+  "sha1": "3d73277679bc76fd3ad74e5b762f43ff2228a0af",
+  "stitches": 1370,
+  "trims": 0
+ }
+}

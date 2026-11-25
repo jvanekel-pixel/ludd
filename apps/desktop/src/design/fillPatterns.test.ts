@@ -21,4 +21,15 @@ describe("fill pattern descriptors", () => {
     expect(hasDirectionDots(undefined)).toBe(true);
     expect(hasDirectionDots("nope")).toBe(true);
   });
+
+  it("spiral has Ring spacing 1.5 (0.4 to 6)", () => {
+    const spiral = fillPatternDef("spiral");
+    expect(spiral).toMatchObject({ id: "spiral", label: "Spiral", open: true, noSpacing: true, maxStitch: 4, summary: "label" });
+    expect(spiral.noLength).toBeFalsy();
+    expect(spiral.fields).toHaveLength(1);
+    expect(spiral.fields[0]).toMatchObject({ key: "spiral_mm", label: "Ring spacing", def: 1.5, min: 0.4, max: 6, step: 0.1, digits: 1, suffix: "mm" });
+    // An open pattern: its end can't be moved, and it has no rows to point the direction dots along.
+    expect(fixedFillEnd("spiral")).toBe(true);
+    expect(hasDirectionDots("spiral")).toBe(false);
+  });
 });

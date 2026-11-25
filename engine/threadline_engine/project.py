@@ -197,6 +197,7 @@ ITEM_FEATURES: dict[str, Callable[[dict, dict, dict], bool]] = {  # (item, param
                                       and it["shape"].get("type") == "path"),
     "stitch_edits": lambda it, p, g: any(isinstance(o, dict) and o.get("op") in ("delete_stitches", "move_stitch", "move_stitches")
                                          for o in it.get("ops") or []),
+    "fill_spiral": lambda it, p, g: it.get("kind") in ("fill", "applique") and p.get("pattern") == "spiral",
 }
 KNOWN_FEATURES = set(LAYOUT_FEATURES) | set(ITEM_FEATURES)
 

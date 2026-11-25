@@ -135,7 +135,7 @@ export type SatinParams = {
   tie_in?: boolean;
   tie_off?: boolean;
 };
-export type FillPattern = "tatami" | "gradient" | "wave" | "contour" | "stipple" | "cross";
+export type FillPattern = "tatami" | "gradient" | "wave" | "contour" | "stipple" | "cross" | "spiral";
 export type FillParams = {
   pattern?: FillPattern;
   /** gradient: row spacing at the sparse end. */
@@ -144,6 +144,7 @@ export type FillParams = {
   wave_length_mm?: number;
   stipple_mm?: number;
   cross_mm?: number;
+  spiral_mm?: number;
   angle_deg?: number;
   /** Where its purple direction dots were left (they set angle_deg). */
   angle_line?: [[number, number], [number, number]];
