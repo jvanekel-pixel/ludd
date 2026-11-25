@@ -654,3 +654,7 @@ No new `L-` or `T-` entries are expected; the phase's blocks (L-026 to L-029, T-
 ## 11. Handoff
 
 Write in `HANDOFF.md`: the test counts before and after; whether `pnpm build:engine` was run; whether the canvas hooks have a real user yet (no); any spec deviation, one line each. Set `project.json` `phase` to 4 only after the owner has merged this phase and the top-model audit has passed.
+
+## 12. Build notes
+
+- Two UI spots outside Track B's files also listed the open patterns by name, so a new open pattern needed more than its registry lines: the fixed red end dot (`components/StitchCanvas.tsx`) and the purple direction dots (`design/direction.ts`). After wave 1 the lead made both read the descriptors (`fixedFillEnd`, `hasDirectionDots` in `design/fillPatterns.ts`). The descriptor gained `directionDots`, set only on cross-stitch so it keeps the dots it has always shown. The six old patterns behave as before.

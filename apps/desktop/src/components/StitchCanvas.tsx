@@ -44,6 +44,7 @@ import { cursorCss, type CursorName } from "../cursors";
 import { OPPOSITE, resizeCursorFor, sideAxis, sideMids, stretchFactor } from "../design/handles";
 import { columnRing, columnTips, fillDirection, fillRing, nearestOnLine, nearestOnRings } from "../design/direction";
 import { drawOverlays, runCanvasTool, snapToSources, type CanvasCtx } from "../canvas/hooks";
+import { fixedFillEnd } from "../design/fillPatterns";
 import { selectCanvasDark, selectHoop, useStore, type Ghost, type Pen } from "../store";
 
 const TRAVEL_COLOR = 0x8a8a8a; // trimmed travel: the thread is cut, nothing is left
@@ -1537,9 +1538,9 @@ export function StitchCanvas() {
       if (!o || o.locked || o.kind === "applique") return null;
       const ends = stitchEnds(scene, o);
       if (!ends) return null;
-      // Contour, stipple and cross-stitch fills end where their pattern does: their red dot shows it
-      // but can't be moved.
-      const fixedEnd = o.kind === "fill" && ["contour", "stipple", "cross"].includes(String((o.params as { pattern?: string }).pattern));
+      // Open fill patterns (contour, stipple, cross-stitch…) end where their pattern does: their red
+      // dot shows it but can't be moved.
+      const fixedEnd = o.kind === "fill" && fixedFillEnd((o.params as { pattern?: string }).pattern);
       for (const which of ["end", "start"] as const) {
         if (which === "end" && fixedEnd) continue;
         if (near(scene, ends[which], sx, sy, ENDS_PX + 3)) return { id: o.id, which, at: ends[which] };

@@ -23,6 +23,8 @@ export type FillPatternDef = {
   hint?: string;
   /** The folded heading of an open pattern. */
   summary?: "label" | "label+density";
+  /** The purple direction dots on the canvas. Left out: only patterns that aren't open show them. */
+  directionDots?: boolean;
 };
 
 export const FILL_PATTERN_DEFS: FillPatternDef[] = [
@@ -70,6 +72,7 @@ export const FILL_PATTERN_DEFS: FillPatternDef[] = [
     noLength: true,
     fields: [{ key: "cross_mm", label: "Square", def: 2.5, min: 1, max: 8, step: 0.5, digits: 1, suffix: "mm", title: "Size of one cross-stitch" }],
     summary: "label",
+    directionDots: true, // open, but it has always shown them
   },
 ];
 
@@ -77,3 +80,12 @@ const TATAMI = FILL_PATTERN_DEFS.find((d) => d.id === "tatami")!;
 
 /** A pattern's descriptor; an unknown or missing one is treated as tatami. */
 export const fillPatternDef = (id?: string): FillPatternDef => FILL_PATTERN_DEFS.find((d) => d.id === id) ?? TATAMI;
+
+/** An open pattern ends where its own lines end: the red dot shows it but can't be moved. */
+export const fixedFillEnd = (id?: string): boolean => !!fillPatternDef(id).open;
+
+/** Whether a fill with this pattern shows the two purple dots that set its rows' direction. */
+export const hasDirectionDots = (id?: string): boolean => {
+  const def = fillPatternDef(id);
+  return def.directionDots ?? !def.open;
+};

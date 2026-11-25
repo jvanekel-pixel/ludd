@@ -3,6 +3,7 @@
  * red) and the stitch-direction dots (purple). Each slides round the inside of the outline,
  * following the point of the edge nearest the mouse. Pure, for tests.
  */
+import { hasDirectionDots } from "./fillPatterns";
 import { flatten, type Pt } from "./paths";
 import type { ObjectItem, PathNode } from "./types";
 
@@ -99,14 +100,12 @@ export function fillRing(o: ObjectItem): Pt[] {
   return flatten((o.geometry as { outline: PathNode[] }).outline, true);
 }
 
-/** Patterns whose rows don't follow an angle (no direction dots for them). */
-const NO_ANGLE = ["contour", "stipple"];
-
-/** A fill's two purple direction dots: where you left them, or across its middle at its angle. */
+/** A fill's two purple direction dots: where you left them, or across its middle at its angle.
+ *  None for patterns whose rows don't follow an angle (design/fillPatterns.ts says which). */
 export function fillDirection(o: ObjectItem): [Pt, Pt] | null {
   if (o.kind !== "fill") return null;
   const p = o.params as { angle_deg?: number; angle_line?: [Pt, Pt]; pattern?: string };
-  if (p.pattern && NO_ANGLE.includes(p.pattern)) return null;
+  if (!hasDirectionDots(p.pattern)) return null;
   const angle = p.angle_deg ?? 45;
   const line = p.angle_line;
   // The dots you placed, as long as the angle is still theirs (typed in the panel, it's not).
