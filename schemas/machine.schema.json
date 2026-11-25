@@ -37,6 +37,7 @@
     "max_stitch_mm": { "type": ["number", "null"], "description": "Longer stitches are split on export." },
     "max_stitches": { "type": ["integer", "null"] },
     "max_colors": { "type": ["integer", "null"], "description": "Color changes plus stops the machine accepts." },
+    "speed_spm": { "type": ["number", "null"], "description": "Top sewing speed in stitches per minute, for the sewing time estimate. Null: LUDD assumes 600." },
     "notes": { "type": "string" }
   }
 }

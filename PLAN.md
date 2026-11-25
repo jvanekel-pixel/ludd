@@ -4,10 +4,9 @@ Phase tracker for Command Center. This file only tracks phases and checkboxes. E
 
 Order of work (decided 2026-11-24, D-019): build the features first, phases 3 to 14; sew the stitch-outs once, in Phase 15; fix and release in Phase 16. Phases 3 to 12 close the gaps found in the competitive review (`docs/COMPETITIVE-REVIEW.md`); 13 and 14 are extras the owner can pull in or leave.
 
-Built ahead of plan: sewing time and thread estimate (F-406), pull request #23.
+Built ahead of plan: sewing time and thread estimate (F-406), merged in pull request #23.
 
 Owner actions that belong to no phase:
-- Merge pull request #23 (CI green on 2026-11-24).
 - Tag v1.0.1 when ready, ideally before Phase 3 merges; check the draft release's `latest.json`; publish. Moved out of Phase 2 on 2026-11-24.
 - Check Settings > AI tracing > Download once.
 - Before each phase: answer the "Owner decisions" table in its spec.

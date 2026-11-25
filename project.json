@@ -35,9 +35,9 @@
   },
   "phase": 3,
   "status": "active",
-  "nextAction": "Owner: merge PR #23 (sewing time estimate) and PR #24 (the build plan); then start Phase 3 in a fresh session with the prompt in BUILDPLAN.md section 10",
-  "blockedOnHuman": "Merge PR #23 and PR #24; decide whether to tag v1.0.1 before Phase 3 merges",
-  "lastSessionAt": "2026-11-24T23:50:00Z",
+  "nextAction": "Start Phase 3 in a fresh session on Sonnet 5.5 with the 'Start a phase' prompt in BUILDPLAN.md section 10; then the phase audit on the top model",
+  "blockedOnHuman": null,
+  "lastSessionAt": "2026-11-25T01:04:16Z",
   "health": {
     "tests": "passing",
     "build": "passing",

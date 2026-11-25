@@ -71,3 +71,50 @@ describe("sewing-order row drag", () => {
     removed.mockRestore();
   });
 });
+
+describe("Design panel: sewing time and thread", () => {
+  it("shows about how long the design sews on this machine and how much thread it uses", () => {
+    const d = newDoc();
+    const doc: Doc = { layout: { ...d.layout, items: [fill("a")] }, images: [] };
+    // 1300 stitches, 1 mm apart, in two colors: 2 minutes at 650 a minute; one thread change.
+    const n = 1300;
+    const kind = [...Array(650).fill(0), 4, ...Array(650).fill(0), 5];
+    const x = kind.map((_, i) => i);
+    const y = kind.map(() => 0);
+    useStore.setState({
+      history: { past: [], present: doc, future: [] },
+      savedDoc: doc,
+      selectedId: null,
+      extraIds: [],
+      units: "mm",
+      machineId: "pe",
+      machines: [{ id: "pe", name: "PE", brand: "", formats: ["pes"], needles: 1, hoops: [{ id: "h", name: "h", width_mm: 100, height_mm: 100 }], cuts: "color_change", max_stitch_mm: null, max_stitches: null, max_colors: null, speed_spm: 650, notes: "", builtin: true }],
+      design: {
+        path: "",
+        name: "x",
+        format: "pes",
+        info: { stitches: n, jumps: 0, trims: 0, stops: 0, color_changes: 1, colors: 2, width_mm: 50, height_mm: 0, bounds_mm: [0, 0, 50, 0] },
+        threads: [
+          { color: "#ff0000", name: "Red", brand: "", catalog: "" },
+          { color: "#0000ff", name: "Blue", brand: "", catalog: "" },
+        ],
+        blocks: [
+          { thread: 0, start: 0, end: 650 },
+          { thread: 1, start: 651, end: 1301 },
+        ],
+        records: { x, y, kind: kind as never },
+      },
+    });
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    act(() => root!.render(<InfoPanel />));
+    const text = host.textContent ?? "";
+    expect(text).toContain("Sewing time");
+    expect(text).toContain("about 2 min");
+    expect(text).toContain("1 thread change");
+    expect(text).toContain("Thread used");
+    // Each color: 649 mm of stitching + 650 × 1 mm allowance ≈ 1.3 m; both ≈ 2.6 m.
+    expect(text).toContain("about 2.5 m");
+  });
+});

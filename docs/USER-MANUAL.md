@@ -84,8 +84,8 @@ checks), so you rarely need to open one just to look.
   **Applique**, **Lettering**, **Stitch file** or **Picture**. The everyday settings are in view;
   the rest sit in smaller folds inside it (**Underlay**, **Advanced stitch settings**, lettering
   **Shape** and **Advanced**, a stitch file's **Rotation and position**).
-- Then **Size and points** (for drawn shapes), **Design** (size, stitches, hoop fit, the fabric;
-  **File details** inside), **Order & colors**, **Check before stitching** and
+- Then **Size and points** (for drawn shapes), **Design** (size, stitches, sewing time, thread,
+  hoop fit, the fabric; **Thread used** and **File details** inside), **Order & colors**, **Check before stitching** and
   **Pictures**.
 - With **nothing selected**, Design and Order & colors open. Select something and its own section opens
   instead. LUDD remembers what you open or close for each kind of thing: close Underlay once and
@@ -765,6 +765,13 @@ fabric (also a density you set by hand: the panel shows your setting, the fabric
 and the pull compensation and underlay of drawn shapes (pull compensation or underlay you set by
 hand on a shape wins). It shows the **stabilizer** to use, plus a **topping** for towels and
 fleece, and suggests **knockdown stitches** there.
+
+### How long it sews, and how much thread
+The Design section shows **Sewing time**: about how long your machine takes at its top speed (650
+stitches a minute on the PE550D), plus how many times you'll change the thread. Long stitches slow
+the machine down, so allow a little more. **Thread** shows about how much top thread the design uses,
+and the bobbin (about a third of that). Open **Thread used** to see each color, so you can check
+there's enough on the spool before you start. These are estimates: fabric and tension change them.
 
 ### Check before stitching
 The **Check before stitching** list warns before you stitch: too much thread in one place, the
