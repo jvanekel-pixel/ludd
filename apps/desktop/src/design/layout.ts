@@ -73,28 +73,8 @@ export function renameItem(layout: Layout, id: string, name: string): Layout {
   });
 }
 
-/** Outline points for a ready-made shape centred on (cx, cy). */
-export function shapeNodes(shape: "rectangle" | "circle" | "star", cx: number, cy: number, size: number): PathNode[] {
-  const r = size / 2;
-  if (shape === "rectangle") {
-    const h = r * 0.7;
-    return [[cx - r, cy - h, "c"], [cx + r, cy - h, "c"], [cx + r, cy + h, "c"], [cx - r, cy + h, "c"]].map(
-      (n) => [round2(n[0] as number), round2(n[1] as number), n[2]] as PathNode,
-    );
-  }
-  if (shape === "circle") {
-    // Eight curve points make a smooth circle with the Catmull-Rom curve rule.
-    return Array.from({ length: 8 }, (_, i) => {
-      const a = (i / 8) * 2 * Math.PI;
-      return [round2(cx + r * Math.cos(a)), round2(cy + r * Math.sin(a)), "s"] as PathNode;
-    });
-  }
-  return Array.from({ length: 10 }, (_, i) => {
-    const a = -Math.PI / 2 + (i / 10) * 2 * Math.PI;
-    const rr = i % 2 === 0 ? r : r * 0.45;
-    return [round2(cx + rr * Math.cos(a)), round2(cy + rr * Math.sin(a)), "c"] as PathNode;
-  });
-}
+/** Outline points for a ready-made shape (see shapes.ts). */
+export { shapeNodes } from "./shapes";
 
 // ---------------------------------------------------------------- reference pictures
 

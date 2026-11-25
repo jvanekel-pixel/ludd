@@ -1123,6 +1123,11 @@ drawing a satin).
 | Show whole design | `End` | `player.end` |
 | Faster playback | `]` | `player.fasterAlt` |
 | Slower playback | `[` | `player.slowerAlt` |
+| Add a rounded rectangle | `Mod+Alt+4` | `shape.roundedRect` |
+| Add an oval | `Mod+Alt+5` | `shape.ellipse` |
+| Add a triangle | `Mod+Alt+6` | `shape.triangle` |
+| Add a polygon | `Mod+Alt+7` | `shape.polygon` |
+| Add a heart | `Mod+Alt+8` | `shape.heart` |
 <!-- COMMANDS:END -->
 
 ---
