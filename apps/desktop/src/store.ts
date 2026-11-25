@@ -126,8 +126,8 @@ type State = {
   /** Stitch editing of a placed stitch file: which item, and which of its stitches are selected (file indices). */
   stitchEdit: { id: string; selected: number[] } | null;
   setStitchEdit: (s: State["stitchEdit"]) => void;
-  /** A dialog open by name. */
-  dialog: "offset" | "browse" | "names" | null;
+  /** A dialog open by name: "offset", "browse", "names", or one registered in dialogs.tsx. */
+  dialog: string | null;
   setDialog: (d: State["dialog"]) => void;
   /** Preview the design on a garment, in a fabric color. */
   preview: { garment: Garment; color: string };

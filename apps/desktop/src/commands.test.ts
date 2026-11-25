@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
-import { dispatchKey, formatShortcut, matchesShortcut } from "./commands";
+import { CORE_COMMANDS, command } from "./actions";
+import "./cmd";
+import { COMMANDS, dispatchKey, formatShortcut, matchesShortcut, registerCommands, type Command } from "./commands";
 
 const key = (k: string, mods: Partial<Record<"ctrlKey" | "metaKey" | "shiftKey" | "altKey", boolean>> = {}) => ({
   key: k,
@@ -68,5 +70,41 @@ describe("shortcuts", () => {
     ];
     expect(dispatchKey(key("Escape"), cmds)).toBe(true);
     expect(run).toHaveBeenCalledOnce();
+  });
+});
+
+describe("the command registry", () => {
+  const extra = (id: string): Command => ({ id, title: "A test command", shortcut: "Mod+Alt+Shift+F9", run: () => {} });
+
+  it("registerCommands refuses a duplicate id", () => {
+    const before = [...COMMANDS];
+    expect(() => registerCommands([extra("stitch.deleteSelected")])).toThrow("Command registered twice: stitch.deleteSelected");
+    // Twice in one list counts too, and a refused list adds nothing.
+    expect(() => registerCommands([extra("test.twice"), extra("test.twice")])).toThrow("Command registered twice: test.twice");
+    expect(COMMANDS).toEqual(before);
+  });
+
+  it("every command has a title and a shortcut", () => {
+    expect(COMMANDS.filter((c) => !c.title.trim() || !c.shortcut.trim()).map((c) => c.id)).toEqual([]);
+  });
+
+  it("core commands keep their order", () => {
+    expect(COMMANDS[0].id).toBe("stitch.deleteSelected");
+    expect(COMMANDS.length).toBeGreaterThanOrEqual(167);
+    expect(COMMANDS.filter((c) => CORE_COMMANDS.includes(c))).toEqual(CORE_COMMANDS);
+  });
+
+  it("adds feature commands after the core list, or ahead of it with first", () => {
+    const after = extra("test.after");
+    const ahead = extra("test.ahead");
+    registerCommands([after]);
+    registerCommands([ahead], { first: true });
+    try {
+      expect(COMMANDS[0]).toBe(ahead);
+      expect(COMMANDS.at(-1)).toBe(after);
+      expect(command("test.after")).toBe(after);
+    } finally {
+      for (const c of [after, ahead]) COMMANDS.splice(COMMANDS.indexOf(c), 1);
+    }
   });
 });

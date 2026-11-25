@@ -29,6 +29,7 @@ import { Player } from "./components/Player";
 import { HelpDialog, SendPreview } from "./components/AIPanels";
 import { RepeatDialog } from "./components/RepeatDialog";
 import { BrowseDialog, NamesDialog, OffsetDialog } from "./components/FeatureDialogs";
+import { DialogHost } from "./dialogs";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { StatusBar } from "./components/StatusBar";
 import { StitchCanvas } from "./components/StitchCanvas";
@@ -369,6 +370,7 @@ export function App() {
       <OffsetDialog />
       <BrowseDialog />
       <NamesDialog />
+      <DialogHost />
       <HelpDialog />
       <SendPreview />
     </div>
