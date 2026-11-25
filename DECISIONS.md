@@ -100,3 +100,15 @@ Durable log so future sessions do not re-litigate these. Newest decisions go bel
 - Alternatives rejected: merging Dependabot PRs one at a time as they come.
 - Revisit if: the release workflow is moved to tauri-action 1.x (needs release.yml changes and a draft release check), or Vite is upgraded (then @vitejs/plugin-react 6, closed as #12, can follow).
 - Open when work resumes: the CI run on main after #17 and #18 (e415eb3) was not checked; run `pnpm install` locally before the next build; Pillow 13 (passed all tests earlier) can come back as its own PR.
+
+### D-019: Features first, stitch-outs once near the end (2026-11-24)
+- Decision: Phase 2 is closed. Phases 3 to 14 are build phases; machine testing happens once, in Phase 15; fixes, the public manual and the 2.0 release are Phase 16. Tagging v1.0.1 is an owner action outside the phases.
+- Why: the owner wants the gaps from the competitive review (docs/COMPETITIVE-REVIEW.md) closed while a larger plan is available, and D-012 already holds stitch-outs until the software is about 95% done.
+- Alternatives rejected: stitch-out verification as Phase 3, before any new feature.
+- Revisit if: a stitch-out shows a foundation problem (density, compensation). BUILDPLAN.md suggests an optional early look at six foundation rows after Phase 8.
+
+### D-020: Build protocol: one spec per phase, one phase per session, planner and worker split (2026-11-24)
+- Decision: each phase has one spec file in docs/phases/; BUILDPLAN.md says how a session runs. The top model plans and audits, Sonnet builds from the spec, tests and `scripts/check.py` do the reviewing, tracks inside a phase are built in parallel by workers in their own worktrees, and the heavy phases go first.
+- Why: the owner's five rules for keeping token use low and results right the first time.
+- Alternatives rejected: planning inside build sessions; one long session across phases; reviewing by re-reading code.
+- Revisit if: specs keep failing their preflight (they are going stale faster than they are built).

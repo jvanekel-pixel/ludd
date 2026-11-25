@@ -11,6 +11,11 @@ LUDD (formerly Threadline) is a free, open-source, offline desktop embroidery di
 - **Local Ollama**: read-only log checks, compression, and briefs. It never edits code.
 - **Command Center MCP** (`iammachine-command-center`): call `get_project_context` before starting and `log_session` when done.
 
+## Build Protocol
+- How a phase is built: `BUILDPLAN.md`. One spec per phase: `docs/phases/PHASE-NN-*.md` (index, ID blocks, reserved shortcuts and shared rules: `docs/phases/README.md`).
+- A build session reads `BUILDPLAN.md`, its phase's spec and `HANDOFF.md`, and nothing else unless the spec points at it. It does not re-plan: a wrong spec is fixed in a planning chat.
+- The top model plans and audits; Sonnet builds from the spec; tests and the check script do the reviewing.
+
 ## Token Policy & Guardrails
 - **Static prefix**: do not put dates, counts, or status in `AGENTS.md` / `CLAUDE.md`.
 - **Diff-only and quiet checks**: edit with diffs, run tests quietly, and summarize failures to <=30 lines.
