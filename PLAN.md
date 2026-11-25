@@ -58,15 +58,15 @@ Why it matters: merged and resized bought designs are the top cause of needle br
 Spec: docs/phases/PHASE-04-merge-safe-stitch-files.md
 > Verify: `python scripts/check.py --all` | Done when: a stitch file scaled to 150% or 60% and rebuilt keeps its row spacing within 10% of the original, two overlapping drawn fills sew nothing hidden and show no red on the density map, and Repair changes nothing until Accept
 - [ ] P4-A1 Remove stitches of a placed design hidden under what is sewn on top (held: owner decision 1 in the spec)
-- [ ] P4-A2 Don't sew what's hidden under shapes on top (drawn shapes)
-- [ ] P4-B1 Repair dialog with before and after numbers; Fix it on the checks
-- [ ] P4-B2 Remove tiny stitches (fixes, not only warns)
-- [ ] P4-B3 Thin out spots where the needle hits over and over
-- [ ] P4-B4 Edit stitches: insert a stitch, insert a jump, lock both sides of a jump
-- [ ] P4-B5 Needle path view
-- [ ] P4-C1 Recognize fills, satins and runs inside a stitch file
-- [ ] P4-C2 Rebuild stitches at a new size (narrows L-020)
-- [ ] P4-C3 Limit density for the fabric
+- [x] P4-A2 Don't sew what's hidden under shapes on top (drawn shapes)
+- [x] P4-B1 Repair dialog with before and after numbers; Fix it on the checks
+- [x] P4-B2 Remove tiny stitches (fixes, not only warns)
+- [x] P4-B3 Thin out spots where the needle hits over and over
+- [x] P4-B4 Edit stitches: insert a stitch, insert a jump, lock both sides of a jump
+- [x] P4-B5 Needle path view
+- [x] P4-C1 Recognize fills, satins and runs inside a stitch file
+- [x] P4-C2 Rebuild stitches at a new size (narrows L-020)
+- [x] P4-C3 Limit density for the fabric
 
 ## Phase 5: Lettering & Personalization
 Why it matters: lettering is LUDD's biggest gap (11 of 17 lettering features missing) and where hobbyists spend most time; AlphaTricks ($119) and BX fonts keep users tied to Embrilliance.

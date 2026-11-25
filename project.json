@@ -35,9 +35,9 @@
   },
   "phase": 4,
   "status": "active",
-  "nextAction": "Phase 4 (merge-safe stitch files) in a fresh session: answer its spec's Owner decisions first",
-  "blockedOnHuman": "Answer the Phase 4 spec's Owner decisions, then start Phase 4",
-  "lastSessionAt": "2026-11-25T12:00:00Z",
+  "nextAction": "Phase 4 audit on the top model (phase-audit-gate), then the owner's OK to push and merge",
+  "blockedOnHuman": "After the audit: OK to push and merge Phase 4; decide done-when 2 (kept margin) and the travel line",
+  "lastSessionAt": "2026-11-25T16:41:00Z",
   "health": {
     "tests": "passing",
     "build": "passing",
