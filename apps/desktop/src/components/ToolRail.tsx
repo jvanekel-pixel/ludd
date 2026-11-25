@@ -135,6 +135,7 @@ export function DrawHint() {
     return (
       <div className="draw-hint auto-trace" role="status">
         <b>Editing stitches</b> · click a stitch (<kbd>Shift</kbd>+click for more) or drag a box round some · drag them to move ·{" "}
+        <kbd>Insert</kbd> adds one after it ·{" "}
         <kbd>Delete</kbd> removes {stitchEdit.selected.length ? `the ${stitchEdit.selected.length} selected` : "selected ones"} · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undoes
         <button onClick={endStitchEdit}>
           Done <kbd>Esc</kbd>

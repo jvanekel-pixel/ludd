@@ -1,6 +1,7 @@
 import { setFabric, showCheck } from "../actions";
 import { DEFAULT_FABRIC } from "../design/layout";
 import type { Fabric, QualityCheck, Warning } from "../design/types";
+import { fixFor, openFix } from "../feat/repair/steps";
 import { selectLayout, useStore } from "../store";
 import { Section, type SelKind } from "./Accordion";
 
@@ -39,6 +40,7 @@ export function Checks({ sel }: { sel: SelKind }) {
   const checks = useStore((s) => s.checks);
   const showDensity = useStore((s) => s.showDensity);
   const toggleDensity = useStore((s) => s.toggleDensity);
+  const layout = useStore(selectLayout);
   if (!design) return null;
   const items: (Warning & Partial<QualityCheck>)[] = [
     ...(design.warnings ?? []).filter((w) => w.level !== "info"),
@@ -60,20 +62,30 @@ export function Checks({ sel }: { sel: SelKind }) {
     >
       {items.length === 0 && checks && <p className="hint ok">✓ Nothing to fix: no thick spots, gaps or loose stitches found.</p>}
       <ul className="checks">
-        {items.map((c) => (
-          <li key={c.code} className={`check-${c.level}`}>
-            <p className="what">
-              {c.level === "info" ? "ℹ️" : "⚠️"} {c.message}
-            </p>
-            {c.why && <p className="why">{c.why}</p>}
-            {c.fix && <p className="fix">{c.fix}</p>}
-            {(c.at || c.item_id) && (
-              <button className="link" onClick={() => showCheck(c)}>
-                Show me
-              </button>
-            )}
-          </li>
-        ))}
+        {items.map((c) => {
+          const repair = fixFor(c, layout, design);
+          return (
+            <li key={c.code} className={`check-${c.level}`}>
+              <p className="what">
+                {c.level === "info" ? "ℹ️" : "⚠️"} {c.message}
+              </p>
+              {c.why && <p className="why">{c.why}</p>}
+              {c.fix && <p className="fix">{c.fix}</p>}
+              <div className="check-actions">
+                {(c.at || c.item_id) && (
+                  <button className="link" onClick={() => showCheck(c)}>
+                    Show me
+                  </button>
+                )}
+                {repair && (
+                  <button className="link" onClick={() => openFix(repair)} title="Open Repair this design with the repair for this already ticked">
+                    Fix it
+                  </button>
+                )}
+              </div>
+            </li>
+          );
+        })}
       </ul>
     </Section>
   );
