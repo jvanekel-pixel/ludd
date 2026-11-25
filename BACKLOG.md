@@ -13,6 +13,9 @@ Parked ideas, tech debt and nice-to-haves. Do not build these without the owner 
 - [ ] Vite build warns about chunks over 500 kB; consider code-splitting
 - [x] Delete the old git-ignored root `LUDD-User-Manual.pdf` (version 1.0); `docs/LUDD-User-Manual.pdf` is current (item 20) (done)
 - [ ] Clean the root of brand source PDFs/PNGs, research notes and the CSV (all git-ignored) into one folder
+- [ ] `check.py --all` prints RESULT: PASS when Rust is SKIP (no frozen engine): make a skip under `--all` say so in the RESULT line, or fail (Phase 3 audit, finding 1)
+- [ ] `check.py` doesn't say when `fixtures/` is missing (a worktree runs ~44 fewer engine tests and still passes): print it on the engine line (Phase 3 audit, finding 2)
+- [ ] `fills/spiral.py` `_middle`: the shapely < 2.1 fallback can't run (pyproject needs >= 2.2); drop it (Phase 3 audit, finding 4)
 - [ ] Working tree shows LF to CRLF warnings; decide on `.gitattributes` line-ending policy
 - [x] AI key storage: create `ai-key.bin` atomically with `0o600` (done 2026-11-24)
 - [ ] AI key storage: use the OS keychain on macOS/Linux instead of base64 (new dependency; owner decision)
