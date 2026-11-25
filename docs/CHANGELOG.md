@@ -2,6 +2,17 @@
 
 ## Next (unreleased)
 
+### Phase 4: repair bought designs (2026-11-25)
+- **Repair this design** (Ctrl+Alt+D, a stitch file's Repair section, or **Fix it** on a check): tick the repairs, compare before and after numbers, **Show on the design** marks in red what would change, and nothing changes until **Accept**. Your stitch file is never changed, and each repair can be taken off again.
+- **Rebuild stitches at a new size** (Alt+Shift+R): a resized bought design's fills, satins and lines are sewn again with their original spacing, so it's neither too dense nor too sparse. The resize warning suggests it.
+- **Remove tiny stitches** (Alt+Shift+S) and **Thin out dense spots** (Alt+Shift+D), where the needle hits one spot over and over.
+- **Limit density for this fabric** (Alt+Shift+L): fills and satins denser than the "Stitching on" fabric takes are made again at its normal spacing.
+- **Fix it** buttons on the checks for very short stitches, needle clumps and thick spots in a stitch file.
+- **Edit stitches** can add a stitch (Insert), turn a move into a jump (Shift+Insert) and lock both sides of a jump (Alt+Shift+T). Right-click selects the stitch first; stitches a repair or a lock added can't be picked.
+- **Needle path view** (Shift+P): hairlines with a dot at every needle point, whatever the zoom.
+- Fixed: the note that an added stitch, jump or lock no longer fits now shows on the design.
+- Not built: removing the hidden stitches of one stitch file under another (waiting on a patent check).
+
 ### Phase 3: spiral fill, more shapes (2026-11-24)
 - **Spiral fill**: a new fill pattern that winds one line from the middle of the shape out to its edge. Set how far apart the rings are (Ring spacing).
 - **More shapes**: the Shapes menu adds a rounded rectangle, an oval, a triangle, a polygon (you choose 3 to 12 sides) and a heart (Ctrl+Alt+4 to 8).

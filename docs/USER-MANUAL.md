@@ -204,6 +204,7 @@ does. Existing files are never replaced.
 | **E** | Crosshairs | Lines across the whole design through the pointer, to line things up. |
 | **G** / **H** | Grid / hoop | The grid (inches or mm) and the hoop outline. |
 | **U** | Units | Inches or millimeters. |
+| **Shift+P** | Needle path view | Hairlines with a dot at every needle point, the same size at any zoom, to read a thick spot stitch by stitch. Works with the density map. |
 | **Alt+D** | Density map | Colors the design where thread piles up: yellow-green (two layers), orange (the limit), red (too much). Also a tick box beside Checks. |
 
 The design sits on **light fabric**, in dark mode too, so threads and shadows look as they'll sew; untick **Always show the design on light fabric** in Settings for a dark design area.
@@ -449,8 +450,9 @@ but off unless you turn it on (Ctrl+Shift+A or Settings).
 - **R / Shift+R** turn 90° right/left. **Alt+H** mirrors left-right, **Alt+V** top-bottom. A fill's
   stitch direction turns and mirrors with it.
 - Exact size: the **W** and **H** boxes (Size and points for drawn shapes); 🔒 keeps the proportions.
-  A stitch file resized more than about 20% may sew too dense or too sparse (LUDD warns you);
-  drawn shapes and lettering re-stitch at any size.
+  A stitch file resized more than about 20% may sew too dense or too sparse (LUDD warns you):
+  **Rebuild stitches at this size** (Alt+Shift+R) fixes that (see Repairing bought designs).
+  Drawn shapes and lettering re-stitch at any size.
 
 ### Pinning
 **📌 Pin** stops something being dragged by accident. Pin designs and shapes from the 📌 in the
@@ -502,6 +504,45 @@ The edits are kept with the design in the project; the original file isn't chang
 file has edits, LUDD sews it from its own copy, made when you added it: if the original is saved
 again in another program, your edits still land on the right stitches. To use the new version, add
 it again and redo the edits.
+
+With **one stitch selected** you can also add to the file (right-clicking a stitch selects it and
+offers these too; Mac keyboards have no Insert key, so use the right-click menu):
+- **Insert** adds a stitch halfway to the next one, selected, ready to drag.
+- **Shift+Insert** turns the move to the next stitch into a jump (no thread sewn across).
+- **Alt+Shift+T** locks both sides of the jump after the stitch (three short stitches on each
+  side), so you can cut the thread there without it unraveling.
+Stitches made by a repair or a lock aren't the file's own, so they can't be picked.
+
+### Repairing bought designs
+Merged and resized bought designs often end up too dense, too sparse or full of tiny stitches,
+which can break needles and nest thread. **Repairs** fix that without ever changing your stitch
+file: they're kept with your design and applied whenever it's drawn or saved for the machine.
+
+Select the design, open **Repair** in its panel section and press **Repair this design…**
+(Ctrl+Alt+D), or press **Fix it** on a check. Tick what you want:
+- **Rebuild stitches at this size** (shown when the design is resized by 10% or more, ticked past
+  20%): sews its fills, satins and lines again at the new size with their original spacing. Parts
+  it can't recognize (such as motif fills, cross-stitch or special fill patterns) are resized as
+  they are, and a note says how much was rebuilt. Complicated shapes can get a few extra jumps.
+- **Remove tiny stitches** (shorter than 0.4 mm; adjustable): they can make the machine nest
+  thread. The lock stitches at the start and end of each thread stay.
+- **Thin out dense spots**: where the needle goes into one spot more than 5 times (adjustable),
+  takes some of those stitches out without changing the shape.
+- **Limit density for this fabric**: fills and satins sewn closer than your fabric takes
+  (**Stitching on**) are sewn again at its normal spacing. Thick spots made by layers stay.
+
+The window shows **before and after** numbers, including the **densest spot** (red when it's too
+thick). **Show on the design** moves the window aside and marks in red the stitches that would
+change. Nothing changes until **Accept**; **Cancel** or Esc leaves the design as it was.
+
+The panel's **Repair** section lists what's on; **✕** takes a repair off. You can also turn one on
+or off directly: **Alt+Shift+R** rebuild, **Alt+Shift+S** tiny stitches, **Alt+Shift+D** dense
+spots, **Alt+Shift+L** density limit. Removing the stitches of one design that are hidden under
+another isn't built yet (Alt+Shift+H says so).
+
+While a repair that remakes stitches is on (Rebuild or the density limit), Edit stitches shows only
+the stitches the repair didn't remake. To edit the others, take the repair off, edit, and turn it
+on again.
 
 ### Order & colors
 One list in the panel for what sews when and in which thread (it used to be two sections,
@@ -785,8 +826,10 @@ there's enough on the spool before you start. These are estimates: fabric and te
 The **Check before stitching** list warns before you stitch: too much thread in one place, the
 needle hitting one spot over and over, many very short stitches, long loose stitches (over 7 mm),
 shapes that almost touch. Each says **why it matters** and **what to do**; **Show me** jumps to
-the spot. Thick spots inside a stitch file you placed (a bought design) are a note, not a warning,
-since you can't change its stitches. The same checks appear in Save for machine.
+the spot, and **Fix it** (on tiny stitches, needle clumps and thick spots in a stitch file) opens
+**Repair this design** with the right repair ticked. Thick spots inside a stitch file you placed (a
+bought design) are a note, not a warning: they often sew fine. The same checks appear in Save for
+machine.
 
 ### Machine extras (⋯ menu)
 - **Insert a stop / trim at the needle** (Ctrl+Shift+P / Ctrl+Shift+T): at the stitch-out bar's
@@ -926,6 +969,14 @@ Shortcuts are also shown in every menu and on every button's tooltip.
 | Knife: cut the selected shape | Shift+K |
 | Merge the selected fills | Ctrl+M |
 | Edit stitches of a stitch file | Ctrl+Alt+E |
+| While editing stitches: add a stitch / add a jump | Insert / Shift+Insert |
+| While editing stitches: lock both sides of a jump | Alt+Shift+T |
+| Repair this design… | Ctrl+Alt+D |
+| Rebuild stitches at this size (on/off) | Alt+Shift+R |
+| Remove tiny stitches (on/off) | Alt+Shift+S |
+| Thin out dense spots (on/off) | Alt+Shift+D |
+| Limit density for this fabric (on/off) | Alt+Shift+L |
+| Remove hidden stitches (not built yet) | Alt+Shift+H |
 | Put the text on the selected line | Ctrl+Alt+L |
 | Break lettering into shapes | Ctrl+Alt+X |
 | Reset the letters' starts and ends | Ctrl+Alt+R |
@@ -1027,6 +1078,7 @@ Shortcuts are also shown in every menu and on every button's tooltip.
 | Measure | M |
 | Inches or millimeters | U |
 | Density map | Alt+D |
+| Needle path view | Shift+P |
 
 ### Stitch-out
 
