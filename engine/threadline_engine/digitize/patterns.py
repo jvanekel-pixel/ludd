@@ -25,6 +25,8 @@ from shapely.ops import unary_union
 
 from .paths import Point, cumulative, dist, flatten, point_at, resample, sharp_points
 
+# Kept for importers. The lists LUDD checks against are the registries: digitize.fills.REGISTRY
+# (fill patterns) and digitize.lines.MOTIF_UNITS (motifs); a new one is registered there.
 FILL_PATTERNS = ("tatami", "gradient", "wave", "contour", "stipple", "cross")
 MOTIFS = ("wave", "zigzag", "scallop", "blanket")
 
@@ -265,16 +267,12 @@ def wave_offset(x: float, height: float, length: float) -> float:
 
 
 def _motif_unit(name: str) -> list[tuple[float, float]]:
-    """One repeat of a motif: (along 0..1, across -0.5..0.5)."""
-    if name == "zigzag":
-        return [(0.0, -0.5), (0.5, 0.5), (1.0, -0.5)]
-    if name == "wave":
-        return [(i / 8, 0.5 * math.sin(2 * math.pi * i / 8)) for i in range(9)]
-    if name == "scallop":
-        return [(i / 8, 0.5 * math.sin(math.pi * i / 8) - 0.25) for i in range(9)]
-    if name == "blanket":
-        return [(0.0, -0.5), (0.5, -0.5), (0.5, 0.5), (0.5, -0.5), (1.0, -0.5)]
-    raise ValueError(name)
+    """One repeat of a motif: (along 0..1, across -0.5..0.5), from the registry in digitize.lines."""
+    from .lines import MOTIF_UNITS  # here, not at the top: lines -> fills -> fills.builtin imports this module
+
+    if name not in MOTIF_UNITS:
+        raise ValueError(name)
+    return list(MOTIF_UNITS[name])
 
 
 def motif_points(nodes: Sequence, name: str, repeat_mm: float, width_mm: float, closed: bool = False) -> list[Point]:
