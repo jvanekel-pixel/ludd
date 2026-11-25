@@ -43,6 +43,14 @@ Parked ideas, tech debt and nice-to-haves. Do not build these without the owner 
 - [ ] Memory guard for crafted .vp3/.hus files: read files in a separate memory-limited process (item 8; documented as L-024)
 - JEF hoop and stop codes wait for a Janome stitch-out (item 9, queued in stitchout-log.md).
 
+## From Phase 3 (2026-11-24)
+- [x] Spiral showed lines across hearts, ovals and ring shapes: its pieces are now joined along the edge that cut them apart (done 2026-11-24, owner approved)
+- [x] Spiral piled its joining thread along the edge (up to 27 threads in one spot on the ready-made Heart): it now sews each time the piece nearest along the same edge, so at most 4 or 5 share a spot, with 10 to 51% fewer stitches on the ready-made shapes but the Circle (done 2026-11-24, owner approved; L-026)
+- [ ] The green start dot can be dragged on Stipple, Cross-stitch and Spiral fills but changes nothing (only Contour uses it): honor it, or don't offer the drag
+- [ ] Cross-stitch fills show the purple direction dots although the angle doesn't change them (as before Phase 3)
+- [ ] The side panel's "Check before stitching" title runs into its "Density map" box (seen at 1280 × 800; older than Phase 3)
+- [ ] Rare engine quirks found stress-testing Spiral (all older): a travel stitch can reach 2.75 mm and run 0.31 mm outside a shape; ties between the parts of a self-crossing outline can be under 0.3 mm; one too-tiny piece makes a whole open-pattern fill refuse; with an Edge underlay, moving a symmetric open-pattern fill can start its edge run on another side
+
 ## From docs/PLAN.md backlog (not yet started)
 Planned on 2026-11-24: every item in this section, and the nice-to-haves above that name a phase there, now sits in a phase (3 to 14) with a spec in `docs/phases/`. `docs/phases/README.md` has the index. The list stays for history; tick an item when its phase ships it.
 - [ ] Thread inventory and shopping list

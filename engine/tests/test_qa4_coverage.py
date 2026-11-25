@@ -161,7 +161,7 @@ def test_shortest_order_never_puts_an_overlapping_shape_ahead(monkeypatch):
     got = layout.optimize_order({"items": items})
     assert got["order"] == ["a", "c", "b", "d"] and got["saved_mm"] > 0
     # Without the guard the order is different: this test fails if the guard stops working.
-    monkeypatch.setattr(layout, "_blocks_overlap", lambda a, b: False)
+    monkeypatch.setattr(layout.joins, "_blocks_overlap", lambda a, b: False)
     unguarded = layout.optimize_order({"items": items})["order"]
     assert unguarded.index("d") < unguarded.index("b")
 

@@ -248,8 +248,12 @@ The bar at the bottom plays the design as the machine would sew it.
 | **Fill** | F | A filled area (tatami): click around its edge; it closes by itself. |
 | **Text** | Shift+T | Lettering: click where it goes, then type. |
 | **Auto-trace** | Shift+A | Click a shape (or a line) in a picture: LUDD finds its outline for you. |
-| **Shapes** | | Opens a menu beside the rail: rectangle (Ctrl+Alt+1), circle (Ctrl+Alt+2), star (Ctrl+Alt+3), monogram (Ctrl+Alt+M), and cutting holes (below). |
+| **Shapes** | | Opens a menu beside the rail: rectangle (Ctrl+Alt+1), circle (Ctrl+Alt+2), star (Ctrl+Alt+3), rounded rectangle (Ctrl+Alt+4), oval (Ctrl+Alt+5), triangle (Ctrl+Alt+6), polygon (Ctrl+Alt+7), heart (Ctrl+Alt+8), monogram (Ctrl+Alt+M), and cutting holes (below). |
 | **Picture** | Ctrl+I | A picture to trace over. |
+
+A ready-made shape is added as a fill in the middle of the hoop, selected, ready to move, resize or
+edit like any fill. **Polygon** asks how many sides (3 to 12): type a number, then press Enter, or
+Esc to cancel. It remembers the last number you used.
 
 Embrilliance's create keys work too: **D** switches between drawing and Select, **X** draws again
 with the last tool, **Q** draws the same kind of shape as the last one, **W** the kind before that.
@@ -318,8 +322,10 @@ Select the shape, then:
     dots on each piece.
   - A **pinned** shape shows its outline only: its points and dots can't be moved until you unpin
     it. With several things selected the dots aren't shown.
-  - **Contour, Stipple and Cross-stitch** fills end where their pattern does: the red dot shows
-    it but can't be moved. **Sew from the other end (reverse)** on a fill clears a chosen end.
+  - **Contour, Stipple, Cross-stitch and Spiral** fills end where their pattern does: the red dot
+    shows it but can't be moved. Stipple, Cross-stitch and Spiral also start where their pattern
+    does (a Spiral in the middle), wherever you drag the green dot. **Sew from the other end
+    (reverse)** on a fill clears a chosen end.
 
 ### Tracing a picture
 1. **Picture** (Ctrl+I) adds a picture (up to 40 MB and about 120 megapixels). Drag it into place
@@ -544,7 +550,8 @@ and **Draw the angle**, and an applique's border, tack-down and cut file.
 **Underlay** holds the underlay buttons. **Advanced stitch settings** holds the exact spacing,
 length, random, edge pad, reverse, split and lock stitches, and **✨ Ask the Stitch Advisor** if
 the AI add-on is on. Only the settings that do something for the shape are shown (an applique
-has no lock-stitch boxes; Contour, Stipple and Cross-stitch hide the row settings they don't use).
+has no lock-stitch boxes; Contour, Stipple, Cross-stitch and Spiral hide the row settings they
+don't use).
 
 **Your settings carry over.** Change a shape's density, length, underlay or any other stitch
 setting and the next shape of that kind starts with it: make a fill 0.6 mm and every new fill is
@@ -577,10 +584,11 @@ A fill's **Pattern** (in its section) changes how the area is stitched:
 | **Contour** | Rows that follow the outline inwards, ring by ring. | Row spacing is the density; Light gives an open, ringed look. |
 | **Stipple** | One meandering line over every part of the shape, never crossing itself: the quilting look, great for backgrounds and applique. It says if a part is too narrow for the loop size. | **Loop size**. |
 | **Cross-stitch** | Little Xs on a square grid. Squares over about 5 mm get a needle point in the middle of each diagonal. | **Square** size. |
+| **Spiral** | One line that starts in the middle of the shape and winds out to its edge in rings. Where the shape cuts the rings short, LUDD sews the nearest piece next and joins them along the edge, never across the rings, so most shapes get a light outline (a circle hardly any). A satin border covers it on the outside edge. With Underlay on **Auto** it has none. Rings closer than 0.6 mm can pucker, and LUDD says so. | **Ring spacing**: how far apart the turns are (0.4 to 6 mm, normally 1.5). Stitch Length goes up to 4 mm. |
 
-Contour, Stipple and Cross-stitch are open patterns: they skip the cross-hatch underlay (it would
-show through) and have no Angle, Random or Edge pad; Stipple and Cross-stitch have no Density
-either. A Gradient also skips the cross-hatch (keeping its edge run), so it really fades out.
+Contour, Stipple, Cross-stitch and Spiral are open patterns: they skip the cross-hatch underlay (it
+would show through) and have no Angle, Random or Edge pad; Stipple, Cross-stitch and Spiral have no
+Density either. A Gradient also skips the cross-hatch (keeping its edge run), so it really fades out.
 
 ### Motif lines
 A line's **Style → Motif** repeats a little pattern along it: **Wave**, **Zigzag**, **Scallop** or

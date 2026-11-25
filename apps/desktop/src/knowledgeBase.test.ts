@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { COMMANDS } from "./actions";
+import "./cmd";
 
 // The help agent answers from docs/LUDD-KNOWLEDGE-BASE.md: every command must be in its command
 // table, with the shortcut the app uses. Run `python scripts/kb_commands.py` after changing COMMANDS.

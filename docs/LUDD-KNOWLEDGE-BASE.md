@@ -81,10 +81,11 @@ One line per common question. Status, then where to read more.
 | set the stitch direction by dragging on the design? | YES (purple dots) for fills and satin columns/fills | F-702 |
 | set the stitch angle by typing / drawing a line? | YES | F-1302, F-603 |
 | draw running-stitch lines, satins, fills? | YES | F-501 |
+| add ready-made shapes (rectangle, rounded rectangle, circle, oval, triangle, polygon, star, heart)? | YES | F-501 |
 | triple / bean / motif lines (blanket stitch, scallop…)? | YES | F-1306 |
 | fill a shape with one shape-shifting satin (petals, leaves)? | YES (satin fill) | F-1308 |
 | satin columns that start/stop anywhere along them? | YES | F-701 |
-| fill patterns: gradient, wave, contour, stipple, cross-stitch? | YES | F-1305 |
+| fill patterns: gradient, wave, contour, stipple, cross-stitch, spiral? | YES | F-1305 |
 | a two-color gradient / color blend? | NO (one-color density gradient only) | L-001 |
 | cut holes in a fill, or cut shapes out of a fill? | YES | F-1202, F-1203 |
 | knife a shape in two / merge fills? | YES | F-1204 |
@@ -197,8 +198,8 @@ One line per common question. Status, then where to read more.
   stitches.
 - **Picture**: Auto-trace, Auto-digitize the whole picture, Pin/unpin (finds a pinned picture too),
   See-through stitches, Show pictures, Remove, Zoom.
-- **Empty canvas**: Paste, Select everything, the drawing tools, rectangle/circle/star, Add a
-  picture, zoom, view toggles (ticked when on), Measure.
+- **Empty canvas**: Paste, Select everything, the drawing tools, the ready-made shapes (F-501), Add
+  a picture, zoom, view toggles (ticked when on), Measure.
 - **Panel rows**: a step or one of its colors in Order & colors; a picture in Pictures.
 - While drawing, right-click still **finishes the shape**; in Auto-trace it **uses the guess**; on
   a shape's point it **switches the point type**. Arrow keys move in a menu, Enter picks, Esc closes.
@@ -341,8 +342,14 @@ so allow a little extra of both. Not shown for an empty design.
 | Fill | `F` | tatami fill: click around the edge; closes itself |
 | Text | `Shift+T` | lettering (click where it goes) |
 | Auto-trace | `Shift+A` | traces a picture (F-901) |
-| Shapes | menu | rectangle `Ctrl+Alt+1`, circle `Ctrl+Alt+2`, star `Ctrl+Alt+3`, monogram `Ctrl+Alt+M`, holes |
+| Shapes | menu | rectangle `Ctrl+Alt+1`, circle `Ctrl+Alt+2`, star `Ctrl+Alt+3`, rounded rectangle `Ctrl+Alt+4`, oval `Ctrl+Alt+5`, triangle `Ctrl+Alt+6`, polygon `Ctrl+Alt+7`, heart `Ctrl+Alt+8`, monogram `Ctrl+Alt+M`, holes |
 | Picture | `Ctrl+I` | a picture to trace over |
+
+**Ready-made shapes** (Shapes menu, the empty canvas's right-click menu, or the keys): each adds a
+fill in the middle of the hoop, selected, up to 60 mm wide (smaller on a small hoop), with your fill
+settings. **Polygon** asks how many sides (3 to 12; it starts at the number used last, 6 the first
+time): Enter adds it, Esc cancels. The rounded rectangle and the oval are 0.7 as tall as wide, the
+heart about 0.9; a triangle or polygon has a corner at the top. Then edit them like any fill (F-601).
 
 Embrilliance create keys: `D` toggle drawing/Select, `X` last tool again, `Q` same kind as the last
 shape, `W` the kind before that.
@@ -385,7 +392,8 @@ magnet), and stays exactly where you let go.
 | Open running line | At its ends only: dragging a dot moves that end point; dropping it on the other end sews the line the other way round (L-004). |
 | Lettering | Each letter has its own small dots (F-1405). |
 | Applique, stitch files | No dots to move. |
-| Contour / Stipple / Cross-stitch fills | Start movable; the red end dot shows but can't be moved (the pattern decides). |
+| Contour fills | Start movable; the red end dot shows but can't be moved (the pattern decides). |
+| Stipple / Cross-stitch / Spiral fills | The red end dot shows but can't be moved. The green dot can be dragged, but the pattern still starts at the same place (a Spiral always in the middle). |
 - **Pinned** shapes show only their outline: points and dots can't be moved. With several things
   selected the dots aren't shown. A satin's start always lands on the satin (its nearest stitch).
 - Knife / Cut out pieces get fresh dots each. Moving a satin's purple tips or Shift+W drops its old
@@ -398,7 +406,7 @@ magnet), and stays exactly where you let go.
 ### F-702 Stitch direction (purple dots) — YES (added 2026-10-13)
 - **Fill**: two purple dots on the outline with a purple line between them = the direction of the
   rows. Drag either dot round the outline; the Angle setting follows. Typing an angle puts the line
-  back across the middle. Not shown for Contour and Stipple patterns (they have no angle).
+  back across the middle. Not shown for Contour, Stipple and Spiral patterns (they have no angle).
 - **Satin column / satin fill**: the purple dots sit just past each end and are the satin's
   **tips**. Slide them round the outline; the satin is rebuilt to run from one to the other, with
   stitches straight across between them. Tips too close together → message, nothing changes.
@@ -550,8 +558,20 @@ settings for new fills" resets.
 ### F-1305 Fill patterns — YES
 Tatami (standard rows) · **Gradient** (dense → sparse; one color; "Sparse end" spacing; Angle sets
 the fade direction) · **Wave** (height, length) · **Contour** (rings inward) · **Stipple** (one
-meandering never-crossing line; loop size) · **Cross-stitch** (square size). Contour/Stipple/Cross
-skip the cross-hatch underlay; Gradient keeps only its edge run.
+meandering never-crossing line; loop size) · **Cross-stitch** (square size) · **Spiral** (one line
+winding from the middle of the shape out to its edge, F-701). Contour/Stipple/Cross/Spiral skip the
+cross-hatch underlay; Gradient keeps only its edge run.
+
+**Spiral** settings: **Ring spacing** (how far apart the turns are) 0.4–6 mm, default 1.5; stitch
+**Length** up to 4 mm (the turns near the middle get shorter stitches). No Angle, Density, Random or
+Edge pad. With Underlay on Auto it has no underlay; you can still choose Edge, and the thread then
+runs from the edge back to the middle before the spiral. Rings closer than 0.6 mm get a warning
+that they can pucker. It starts in the middle of the widest part of the shape (a rectangle's
+center; of several equally wide parts, such as the corners round a square hole, the top-left one). Where the shape cuts the spiral into pieces, LUDD sews the nearest piece next, from
+whichever end is closer, and joins them along the edge (the outline or a hole's rim), so nothing
+runs across the rings and only a light outline shows on most shapes (L-026). The sew simulator
+shows the outer pieces being sewn area by area, not strictly from the middle out. A project with a
+Spiral fill needs this version of LUDD or newer to open.
 
 ### F-1306 Line styles and motifs — YES
 Single, Triple (three passes), Bean (each stitch three times), **Motif**: Wave, Zigzag, Scallop,
@@ -808,10 +828,11 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | L-019 | **Stitch Advisor turning a fill into a satin** | NO | Stitch as → Satin yourself (makes a satin fill). | Yes. |
 | L-020 | **Resizing bought designs a lot** | PARTIAL (±20%) | Re-digitize for big changes. | Unlikely. |
 | L-021 | **Fill end mid-way along an edge that runs with the rows** | PARTIAL | The rows finish at a row end; a short run along the last row (on top of it) takes the needle to the exact point. Usually invisible; on light fabric it can thicken that row slightly. Put the end near a corner, or turn the angle. | Yes (split the last row). |
-| L-022 | **End point on Contour / Stipple / Cross-stitch fills** | NO | Their pattern decides where they end (the red dot shows it). | Possibly. |
+| L-022 | **End point on Contour / Stipple / Cross-stitch / Spiral fills** | NO | Their pattern decides where they end (the red dot shows it). | Possibly. |
 | L-023 | **Stitch Advisor changing a closed line to satin** | PARTIAL | It makes a satin border along the line; Stitch as → Satin makes a satin fill instead. | Yes. |
 | L-024 | **Memory guard for damaged or crafted .vp3 / .hus files** | NO | Only open stitch files you trust (LUDD is offline, so this only matters for files from strangers). A damaged one can make LUDD use a lot of memory and slow down; close LUDD from the task manager if so. | Yes, by reading files in a separate memory-limited process. |
 | L-025 | **A placed stitch file with edits doesn't pick up changes made to the original later** | By design (2026-11-24) | Add the changed file again and redo the edits (recolor, delete, stops). Without edits, a placed file follows the original. | Possibly (a "reload and keep what still fits" option). |
+| L-026 | **Spiral leaves a light outline on most shapes**: where the shape cuts the rings, the thread joining the pieces runs along the edge (outline or hole rim), never across the rings. At most a few threads share any one spot (4 on most ready-made shapes at 60 mm, 5 on the Hexagon); the ready-made Circle has almost none | By design (not yet checked on fabric) | A satin border covers it round the outside, not round holes (**Add a satin border**, `Shift+B`). | No. |
 
 ---
 
@@ -877,6 +898,7 @@ Use this to answer "did that change?" or "why is it different?". Full detail: `d
 
 | Date | Change |
 | --- | --- |
+| 2026-11-24 | **Spiral fill and more shapes** (nothing already sewn changes): a new **Spiral** fill pattern (F-1305; the thread joining its pieces follows the edge, L-026); the Shapes menu adds a rounded rectangle, oval, triangle, polygon and heart (`Ctrl+Alt+4`–`8`, F-501). Behind the scenes, the stitch engine and panel were split into smaller parts, and `python scripts/check.py` runs every check. Also corrected: Stipple and Cross-stitch don't move their start with the green dot (F-701). |
 | 2026-11-24 | **Sewing time and thread estimate** (F-406): the Design section shows about how long the design sews on your machine, how many thread changes, and about how much top and bobbin thread it uses, per color under **Thread used**. Machine profiles can set `speed_spm`. |
 | 2026-11-24 | **Phase 1 audit fixes**: `S` zooms to everything selected (was one item); the AI key file is written whole and private from the start on Mac/Linux. No stitch changes. |
 | 2026-11-24 | **QA pass 2 decisions** (changes stitches): fills with a thin neck travel along their edges and never end on a jump; zigzag underlay crosses back in an X; long moves between applique edges are trimmed; Split long stitches holds at sharp corners of ribbons and applique borders; a placed stitch file with edits sews from LUDD's copy taken when it was added; sample PES/JEF made again; Ctrl+Z while drawing removes the last point, Ctrl+Y waits; CI builds the Mac code. |
@@ -1123,6 +1145,11 @@ drawing a satin).
 | Show whole design | `End` | `player.end` |
 | Faster playback | `]` | `player.fasterAlt` |
 | Slower playback | `[` | `player.slowerAlt` |
+| Add a rounded rectangle | `Mod+Alt+4` | `shape.roundedRect` |
+| Add an oval | `Mod+Alt+5` | `shape.ellipse` |
+| Add a triangle | `Mod+Alt+6` | `shape.triangle` |
+| Add a polygon | `Mod+Alt+7` | `shape.polygon` |
+| Add a heart | `Mod+Alt+8` | `shape.heart` |
 <!-- COMMANDS:END -->
 
 ---

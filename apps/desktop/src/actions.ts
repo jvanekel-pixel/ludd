@@ -1,5 +1,5 @@
 import { message, open, save } from "@tauri-apps/plugin-dialog";
-import type { Command } from "./commands";
+import { COMMANDS, registerCommands, type Command } from "./commands";
 import {
   ADD_OFFSET_MM,
   IDENTITY,
@@ -41,6 +41,7 @@ import {
   updateObject,
   type History,
 } from "./design/layout";
+import type { ShapeId } from "./design/shapes";
 import { visibleRecords } from "./design/player";
 import type {
   Chart,
@@ -1126,15 +1127,16 @@ export function continueDrawing() {
   info("Keep clicking to add points to this shape; Enter when done.");
 }
 
-/** Add a ready-made shape (as a fill) in the middle of the hoop, selected, ready to reshape. */
-export async function addShape(shape: "rectangle" | "circle" | "star") {
+/** Add a ready-made shape (as a fill) in the middle of the hoop, selected, ready to reshape.
+ *  `opts.sides` is for the polygon. */
+export async function addShape(shape: ShapeId, opts?: { sides?: number }) {
   const s = useStore.getState();
   if (!s.history.present) await replaceDoc(freshDoc(), null);
   const hoop = selectHoop(useStore.getState());
   const size = Math.min(60, (hoop?.width_mm ?? 100) * 0.6);
   const { layout: next, id } = addObject(currentLayout()!, {
     kind: "fill",
-    geometry: { outline: shapeNodes(shape, 0, 0, size) },
+    geometry: { outline: shapeNodes(shape, 0, 0, size, opts) },
     params: defaultsFor("fill"), // your remembered fill settings, like a drawn fill
     thread: s.drawThread,
   } as Omit<ObjectItem, "id" | "transform" | "threads" | "ops">);
@@ -2120,7 +2122,7 @@ const hasJunction = () => (useStore.getState().ghost?.alternatives.length ?? 0) 
 
 // Order matters: the first enabled command for a key wins (drawing keys first, then a selection
 // is nudged by the arrows, otherwise they step the player).
-export const COMMANDS: Command[] = [
+export const CORE_COMMANDS: Command[] = [
   // While drawing, Tab always belongs to Trace Assist (never moves keyboard focus).
   // Stitch editing: Delete removes the selected stitches (before the other Delete commands).
   {
@@ -2482,6 +2484,8 @@ export const COMMANDS: Command[] = [
     },
   },
 ];
+registerCommands(CORE_COMMANDS);
+export { COMMANDS } from "./commands";
 
 export const command = (id: string) => COMMANDS.find((c) => c.id === id)!;
 

@@ -41,6 +41,8 @@ export type Prefs = {
   browseFolder?: string;
   /** The fabric picked last; new designs start with it. */
   fabric?: string;
+  /** Sides asked for last in "Add a polygon". */
+  polygonSides?: number;
   welcomed?: boolean;
 };
 

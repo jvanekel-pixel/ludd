@@ -9,6 +9,7 @@ import "@fontsource-variable/archivo/wdth.css";
 import "@fontsource/space-mono/400.css";
 import "./styles.css";
 import * as actions from "./actions";
+import "./cmd";
 import { loadPrefs } from "./prefs";
 import { applyTheme } from "./theme";
 import { blockBrowserKeys } from "./browserKeys";

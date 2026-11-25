@@ -46,12 +46,12 @@ Why it matters: two QA passes and the Phase 1 audit fixes had to be committed, m
 Why it matters: today a new stitch type means editing five files of over 1,000 lines each, so only one worker can build at a time; this phase puts a seam at each of those places and proves them with two real features.
 Spec: docs/phases/PHASE-03-build-seams.md
 > Verify: `python scripts/check.py --all` | Done when: every earlier test passes with the two old snapshot files byte-for-byte unchanged, a spiral fill sews, five new shapes add from the Shapes menu, and the spiral change touched no existing file beyond its registry lines
-- [ ] P3-A Engine seams: `layout/` and `methods/` packages, render hooks, fill and line registries, feature-flag table
-- [ ] P3-B UI seams: command registry and `cmd/`, panel split, pattern descriptors, dialog registry, canvas hooks
-- [ ] P3-C Tooling: `scripts/check.py`, `kb_commands.py --check`, snapshot files per suite, stitch invariants
-- [ ] P3-D1 Spiral fill
-- [ ] P3-E1 More shapes: rounded rectangle, oval, triangle, polygon, heart
-- [ ] P3-Z1 Docs and the frozen-engine smoke check
+- [x] P3-A Engine seams: `layout/` and `methods/` packages, render hooks, fill and line registries, feature-flag table
+- [x] P3-B UI seams: command registry and `cmd/`, panel split, pattern descriptors, dialog registry, canvas hooks
+- [x] P3-C Tooling: `scripts/check.py`, `kb_commands.py --check`, snapshot files per suite, stitch invariants
+- [x] P3-D1 Spiral fill
+- [x] P3-E1 More shapes: rounded rectangle, oval, triangle, polygon, heart
+- [x] P3-Z1 Docs and the frozen-engine smoke check
 
 ## Phase 4: Merge-Safe Stitch Files
 Why it matters: merged and resized bought designs are the top cause of needle breaks, and Embrilliance sells the fix as a separate product (Density Repair Kit).

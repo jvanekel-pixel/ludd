@@ -43,6 +43,8 @@ import { markSpacePanned } from "../spacePan";
 import { cursorCss, type CursorName } from "../cursors";
 import { OPPOSITE, resizeCursorFor, sideAxis, sideMids, stretchFactor } from "../design/handles";
 import { columnRing, columnTips, fillDirection, fillRing, nearestOnLine, nearestOnRings } from "../design/direction";
+import { drawOverlays, runCanvasTool, snapToSources, type CanvasCtx } from "../canvas/hooks";
+import { fixedFillEnd } from "../design/fillPatterns";
 import { selectCanvasDark, selectHoop, useStore, type Ghost, type Pen } from "../store";
 
 const TRAVEL_COLOR = 0x8a8a8a; // trimmed travel: the thread is cut, nothing is left
@@ -551,7 +553,28 @@ function selectedObject(): ObjectItem | null {
   return it && isObject(it) ? it : null;
 }
 
+/** What canvas hooks (canvas/hooks.ts) are given. */
+function hookCtx(scene: Scene): CanvasCtx {
+  return {
+    toMm: (e) => {
+      const r = scene.app.canvas.getBoundingClientRect(); // fills the host exactly
+      return [(e.clientX - r.left - scene.view.x) / scene.view.scale, (e.clientY - r.top - scene.view.y) / scene.view.scale];
+    },
+    pxMm: () => 1 / scene.view.scale,
+    redraw: () => {
+      const now = sceneRefForTextures?.(); // the scene on screen: a new render replaces it
+      if (now) drawOverlay(now);
+    },
+  };
+}
+
 function drawOverlay(scene: Scene, live?: { id: string; list: NodeList; index: number; at: Pt }) {
+  drawOwnOverlay(scene, live);
+  // Features' overlays go on top, on every path (drawOwnOverlay returns early on several).
+  drawOverlays(scene.overlay, 1 / scene.view.scale, hookCtx(scene));
+}
+
+function drawOwnOverlay(scene: Scene, live?: { id: string; list: NodeList; index: number; at: Pt }) {
   const g = scene.overlay;
   g.clear();
   const st = useStore.getState();
@@ -1458,6 +1481,7 @@ export function StitchCanvas() {
         return [gx ?? Math.round(p[0] / step) * step, gy ?? Math.round(p[1] / step) * step];
       }
       if (gx !== null || gy !== null) return [gx ?? p[0], gy ?? p[1]];
+      const hooked = snapToSources(p, reach); if (hooked) return hooked;
       let best: Pt | null = null;
       let bestD = reach;
       for (const it of st.history.present?.layout.items ?? []) {
@@ -1514,9 +1538,9 @@ export function StitchCanvas() {
       if (!o || o.locked || o.kind === "applique") return null;
       const ends = stitchEnds(scene, o);
       if (!ends) return null;
-      // Contour, stipple and cross-stitch fills end where their pattern does: their red dot shows it
-      // but can't be moved.
-      const fixedEnd = o.kind === "fill" && ["contour", "stipple", "cross"].includes(String((o.params as { pattern?: string }).pattern));
+      // Open fill patterns (contour, stipple, cross-stitch…) end where their pattern does: their red
+      // dot shows it but can't be moved.
+      const fixedEnd = o.kind === "fill" && fixedFillEnd((o.params as { pattern?: string }).pattern);
       for (const which of ["end", "start"] as const) {
         if (which === "end" && fixedEnd) continue;
         if (near(scene, ends[which], sx, sy, ENDS_PX + 3)) return { id: o.id, which, at: ends[which] };
@@ -1709,6 +1733,7 @@ export function StitchCanvas() {
     const startPointer = (e: PointerEvent) => {
       const scene = sceneRef.current;
       if (!scene || e.button > 2) return;
+      if (runCanvasTool("down", e, hookCtx(scene))) return;
       const [sx, sy] = local(e);
       const st = useStore.getState();
       if (e.button === 1) {
@@ -1941,6 +1966,7 @@ export function StitchCanvas() {
       if (!scene) return;
       // Only the pointer that started a drag moves it.
       if (drag && e.pointerId !== dragPointer) return;
+      if (runCanvasTool("move", e, hookCtx(scene))) return;
       const [sx, sy] = local(e);
       pointerAt = { sx, sy, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey };
       refreshCursor();
@@ -2070,6 +2096,7 @@ export function StitchCanvas() {
       const scene = sceneRef.current;
       // Another pointer coming up doesn't end (or drop) this drag.
       if (drag && e.pointerId !== dragPointer) return;
+      if (scene && runCanvasTool("up", e, hookCtx(scene))) return;
       if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
       el.classList.remove("panning");
       releaseEsc?.();

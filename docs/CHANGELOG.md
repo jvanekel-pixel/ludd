@@ -1,5 +1,12 @@
 # Changelog
 
+## Next (unreleased)
+
+### Phase 3: spiral fill, more shapes (2026-11-24)
+- **Spiral fill**: a new fill pattern that winds one line from the middle of the shape out to its edge. Set how far apart the rings are (Ring spacing).
+- **More shapes**: the Shapes menu adds a rounded rectangle, an oval, a triangle, a polygon (you choose 3 to 12 sides) and a heart (Ctrl+Alt+4 to 8).
+- **Behind the scenes**: the stitch engine and the panel were rearranged so new stitch types and tools can be added without touching the old ones; one command (`python scripts/check.py`) runs every check. Nothing that already existed sews differently.
+
 ## 1.0.1 (Oct 11, 2026)
 
 ### Sewing time and thread estimate (2026-11-24)

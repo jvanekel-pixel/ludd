@@ -28,6 +28,7 @@ LUDD (formerly Threadline) is a free, open-source, offline desktop embroidery di
 Subscription-First, `$0 extra API`. The app handles no PII (embroidery designs and thread charts only), so local-only AI rules are not forced. The app's own AI add-on stays off by default and is user-keyed.
 
 ## Verification Commands
+- Every check: `python scripts/check.py` (every check, quiet, 30 lines; `--all` adds the build and the Rust tests)
 - Engine tests: `cd engine && uv run --locked pytest -q`
 - UI typecheck: `pnpm typecheck`
 - UI tests: `pnpm test`
@@ -49,6 +50,7 @@ Work one milestone at a time. Stop at its acceptance criteria and explain how to
 - apps/desktop: Tauri 2 + React + TypeScript + Vite; PixiJS canvas, SVG overlay for handles
 - engine/: Python 3.12 sidecar, JSON-RPC 2.0 over stdio
   - deps: pyembroidery, shapely, numpy, opencv-python-headless; onnxruntime is bundled everywhere except Intel Macs, which have no wheels (AI tracing is simply unavailable there)
+  - `threadline_engine/layout/` and `threadline_engine/methods/` are packages. New fill patterns, line styles, commands, dialogs and canvas hooks register themselves (docs/phases/PHASE-03-build-seams.md, 5.3)
 - schemas/: JSON Schemas (source of truth). Only `machine.schema.json` exists so far; project, fabric and thread-chart schemas are on the backlog, and until then the TypeScript types in `design/types.ts` and the engine's own validation are the reference
 - fixtures/: real design files for golden tests
 - docs/: PLAN.md, CHANGELOG.md, stitchout-log.md, LUDD-KNOWLEDGE-BASE.md (the help agent's source; instructions in LUDD-HELP-AGENT-INSTRUCTIONS.md)
