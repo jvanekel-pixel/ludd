@@ -2,6 +2,7 @@
 package and the project feature tables. None of them may change a stitch."""
 
 import dataclasses
+import importlib
 import json
 from pathlib import Path
 
@@ -77,10 +78,12 @@ def hooks():
 
 def test_layout_package_keeps_every_old_name():
     for module, names in A1_NAMES.items():
-        sub = getattr(layout, module)
+        # import_module: `layout.render` and `layout.export` are the functions, as they always were.
+        sub = importlib.import_module(f"threadline_engine.layout.{module}")
         for name in names:
             assert hasattr(layout, name), name
             assert getattr(layout, name) is getattr(sub, name), f"{module}.{name}"
+    assert callable(layout.render) and callable(layout.export)
 
 
 def test_layout_caches_are_shared_objects():
