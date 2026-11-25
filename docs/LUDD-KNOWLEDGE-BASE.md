@@ -564,10 +564,11 @@ cross-hatch underlay; Gradient keeps only its edge run.
 
 **Spiral** settings: **Ring spacing** (how far apart the turns are) 0.4–6 mm, default 1.5; stitch
 **Length** up to 4 mm (the turns near the middle get shorter stitches). No Angle, Density, Random or
-Edge pad. With Underlay on Auto it has no underlay (an edge run would need a cut to get back to the
-middle); you can still choose Edge. Rings closer than 0.6 mm get a warning that they can pucker. It
-starts in the middle of the widest part of the shape. On shapes that aren't round, see L-026. A
-project with a Spiral fill needs this version of LUDD or newer to open.
+Edge pad. With Underlay on Auto it has no underlay; you can still choose Edge, and the thread then
+runs from the edge back to the middle before the spiral. Rings closer than 0.6 mm get a warning
+that they can pucker. It starts in the middle of the widest part of the shape (a rectangle's
+center). On ovals and ring shapes, see L-026. A project with a Spiral fill needs this version of
+LUDD or newer to open.
 
 ### F-1306 Line styles and motifs — YES
 Single, Triple (three passes), Bean (each stitch three times), **Motif**: Wave, Zigzag, Scallop,
@@ -828,7 +829,7 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | L-023 | **Stitch Advisor changing a closed line to satin** | PARTIAL | It makes a satin border along the line; Stitch as → Satin makes a satin fill instead. | Yes. |
 | L-024 | **Memory guard for damaged or crafted .vp3 / .hus files** | NO | Only open stitch files you trust (LUDD is offline, so this only matters for files from strangers). A damaged one can make LUDD use a lot of memory and slow down; close LUDD from the task manager if so. | Yes, by reading files in a separate memory-limited process. |
 | L-025 | **A placed stitch file with edits doesn't pick up changes made to the original later** | By design (2026-11-24) | Add the changed file again and redo the edits (recolor, delete, stops). Without edits, a placed file follows the original. | Possibly (a "reload and keep what still fits" option). |
-| L-026 | **Spiral on shapes that aren't round**: where the spiral leaves the shape and comes back in (squares, ovals, rings and odd shapes), the short moves between those pieces can cross rings already sewn and may show | Known weakness (not yet checked on fabric) | Round shapes work best; for rings and long shapes, Contour keeps to the outline. | Yes (join the pieces another way). |
+| L-026 | **Spiral on ovals, rings and odd shapes**: where the spiral leaves the shape and comes back in, the short moves between those pieces can cross rings already sewn and may show. Circles have none, squares and rectangles few or none; ovals and ring shapes have the most | Known weakness (not yet checked on fabric) | Use Spiral on circles, squares and rectangles; for ovals and rings, Contour follows the outline. | Yes (join the pieces another way). |
 
 ---
 

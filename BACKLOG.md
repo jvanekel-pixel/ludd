@@ -44,10 +44,10 @@ Parked ideas, tech debt and nice-to-haves. Do not build these without the owner 
 - JEF hoop and stop codes wait for a Janome stitch-out (item 9, queued in stitchout-log.md).
 
 ## From Phase 3 (2026-11-24)
-- [ ] Spiral: join its pieces without crossing rings already sewn (L-026). Crossings measured at 1.5 mm: round shapes 0, a 40 mm square 6, a 48 × 28 mm oval 120, a ring (donut) 204. The Phase 15 stitch-out shows whether they matter
+- [ ] Spiral: join its pieces without crossing rings already sewn (L-026). Crossings measured at 1.5 mm: circle 0, rectangles 0 to 4, a 40 mm square 6, ovals about 120, a ring (donut) about 200. The Phase 15 stitch-out shows whether they matter
 - [ ] The green start dot can be dragged on Stipple, Cross-stitch and Spiral fills but changes nothing (only Contour uses it): honor it, or don't offer the drag
 - [ ] Cross-stitch fills show the purple direction dots although the angle doesn't change them (as before Phase 3)
-- [ ] Rare engine quirks found stress-testing Spiral (all older): a travel stitch can reach 2.75 mm and run 0.31 mm outside a shape; ties between the parts of a self-crossing outline can be under 0.3 mm; one too-tiny piece makes a whole open-pattern fill refuse
+- [ ] Rare engine quirks found stress-testing Spiral (all older): a travel stitch can reach 2.75 mm and run 0.31 mm outside a shape; ties between the parts of a self-crossing outline can be under 0.3 mm; one too-tiny piece makes a whole open-pattern fill refuse; with an Edge underlay, moving a symmetric open-pattern fill can start its edge run on another side
 
 ## From docs/PLAN.md backlog (not yet started)
 Planned on 2026-11-24: every item in this section, and the nice-to-haves above that name a phase there, now sits in a phase (3 to 14) with a spec in `docs/phases/`. `docs/phases/README.md` has the index. The list stays for history; tick an item when its phase ships it.

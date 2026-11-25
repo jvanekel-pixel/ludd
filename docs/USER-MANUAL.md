@@ -584,7 +584,7 @@ A fill's **Pattern** (in its section) changes how the area is stitched:
 | **Contour** | Rows that follow the outline inwards, ring by ring. | Row spacing is the density; Light gives an open, ringed look. |
 | **Stipple** | One meandering line over every part of the shape, never crossing itself: the quilting look, great for backgrounds and applique. It says if a part is too narrow for the loop size. | **Loop size**. |
 | **Cross-stitch** | Little Xs on a square grid. Squares over about 5 mm get a needle point in the middle of each diagonal. | **Square** size. |
-| **Spiral** | One line that winds from the middle of the shape out to its edge. It looks best on round shapes; on others, the short moves between its outer parts may show. With Underlay on **Auto** it has none. Rings closer than 0.6 mm can pucker, and LUDD says so. | **Ring spacing**: how far apart the turns are (0.4 to 6 mm, normally 1.5). Stitch Length goes up to 4 mm. |
+| **Spiral** | One line that winds from the middle of the shape out to its edge. It looks best on circles, squares and rectangles; on ovals and ring shapes, the short moves between its outer parts may show. With Underlay on **Auto** it has none. Rings closer than 0.6 mm can pucker, and LUDD says so. | **Ring spacing**: how far apart the turns are (0.4 to 6 mm, normally 1.5). Stitch Length goes up to 4 mm. |
 
 Contour, Stipple, Cross-stitch and Spiral are open patterns: they skip the cross-hatch underlay (it
 would show through) and have no Angle, Random or Edge pad; Stipple, Cross-stitch and Spiral have no
