@@ -1,0 +1,22 @@
+{
+ "star_clump": {
+  "jumps": 2,
+  "records": 219,
+  "sha1": "b2ebb8c1d9eb7393e4a2be9742f98311d343e623",
+  "stitches": 215,
+  "threads": [
+   "#ff0000"
+  ],
+  "trims": 1
+ },
+ "tiny_line": {
+  "jumps": 0,
+  "records": 34,
+  "sha1": "9675976bb030d69550688c7c669aa89d7d7494d3",
+  "stitches": 33,
+  "threads": [
+   "#ff0000"
+  ],
+  "trims": 0
+ }
+}
