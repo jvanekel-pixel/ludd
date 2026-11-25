@@ -82,6 +82,14 @@ def test_it_starts_in_the_middle_wherever_the_start_point_is(start):
     assert recs == _recs()
 
 
+@pytest.mark.parametrize("width,height", [(48, 24), (48, 40), (60, 42)])  # 60 x 42: the rounded rectangle shape's
+def test_a_rectangle_starts_in_its_middle(width, height):
+    """A rectangle is as wide as its widest spot all along a line: the spiral takes the middle of it."""
+    obj = _spiral(_nodes([(0, 0), (width, 0), (width, height), (0, height)]), underlay="auto")  # as the app's fills are
+    invariants.assert_sane(generate(obj)[0], inside=_area(obj), tolerance_mm=0.3, max_stitch_mm=STITCH_MM + 0.05,
+                           max_jumps=0, max_trims=0, starts_near=(width / 2, height / 2), near_mm=1.5)
+
+
 @pytest.mark.parametrize("spacing", [1.5, 3.0])
 def test_rings_are_evenly_spaced(spacing):
     # The ray to the right of the middle. It stops just short of the edge, where travel runs along it.
