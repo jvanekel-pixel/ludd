@@ -35,9 +35,9 @@
   },
   "phase": 3,
   "status": "active",
-  "nextAction": "Start Phase 3 in a fresh session on Sonnet 5.5 with the 'Start a phase' prompt in BUILDPLAN.md section 10; then the phase audit on the top model",
-  "blockedOnHuman": null,
-  "lastSessionAt": "2026-11-25T01:04:16Z",
+  "nextAction": "Owner: decide whether to fix Spiral's lines across hearts and ovals (L-026), then say when to merge Phase 3; then the Phase 3 audit on the top model, before Phase 4",
+  "blockedOnHuman": "Phase 3: the Spiral lines decision (L-026) and the go-ahead to push and merge",
+  "lastSessionAt": "2026-11-25T03:13:00Z",
   "health": {
     "tests": "passing",
     "build": "passing",
