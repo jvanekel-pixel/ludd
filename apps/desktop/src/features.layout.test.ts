@@ -56,6 +56,19 @@ describe("stitch editing", () => {
     expect(items()[0].ops).toEqual([{ op: "move_stitches", indices: [3, 4, 5], dx_mm: 1, dy_mm: 2, local: true }]);
   });
 
+  it("says which stitches can't be picked once Rebuild or Limit density remade some", () => {
+    for (const op of ["rebuild", "density_limit", "filter_small"] as const) {
+      const it = { ...file("f"), ops: [op === "filter_small" ? { op, min_mm: 0.4 } : { op }] } as LayoutItem;
+      setDoc(engine(), it);
+      useStore.setState({ selectedId: "f" } as never);
+      F.startStitchEdit();
+      const said = useStore.getState().notice?.text ?? "";
+      expect(said).toMatch(/^Editing stitches/);
+      expect(said.includes("can't be picked"), op).toBe(op !== "filter_small");
+      F.endStitchEdit();
+    }
+  });
+
   it("Delete with no stitch selected is taken by stitch editing, so it never deletes the design", () => {
     setDoc(engine(), file("f"));
     useStore.setState({ selectedId: "f", stitchEdit: { id: "f", selected: [] } } as never);

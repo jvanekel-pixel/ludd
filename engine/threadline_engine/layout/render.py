@@ -85,11 +85,12 @@ def render(layout: dict[str, Any]) -> Rendered:
         for b, t in enumerate(it.get("threads") or []):
             if t and b < len(blocks):
                 blocks[b].thread = {k: str(t.get(k, "")) for k in ("color", "name", "catalog", "brand")}
-        blocks = _apply_ops(blocks, it.get("ops") or [], jt_mm)
+        notes: list[str] = []  # plain-words notes about this item's edits and repairs
+        blocks = _apply_ops(blocks, it.get("ops") or [], jt_mm, notes)
         _move_stitches(blocks, it.get("ops") or [], local=True)
         t = Transform.from_dict(it.get("transform"))
         # Render hooks (layout/passes.py): registered item ops, in the file's own frame, then placed.
-        ctx = passes.OpContext(it, idx, t, center, layout.get("fabric"), [])
+        ctx = passes.OpContext(it, idx, t, center, layout.get("fabric"), notes)
         blocks = passes.run_item_ops(passes.ITEM_OPS_LOCAL, blocks, ctx)
         t = ctx.transform
         _transform(blocks, t, center)

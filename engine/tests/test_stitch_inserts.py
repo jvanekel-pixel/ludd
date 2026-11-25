@@ -229,6 +229,13 @@ def test_stale_insert_is_skipped_with_a_note(path):
     assert records(render(path, gone)) == records(render(path))
 
 
+def test_stale_insert_note_reaches_the_design(path):
+    """render() passes the note on, so the app (and the repair preview) can show it."""
+    r = render(path, [{"op": "insert_jump", "after": 999}])
+    mine = [w["message"] for w in r.warnings if w["code"].startswith("item_0_")]
+    assert len(mine) == 1 and "left out" in mine[0], r.warnings
+
+
 def test_damaged_insert_ops_are_ignored(path):
     after = src_of(path, (20, 0))
     junk = [{"op": "insert_stitch", "after": "x", "index": NEW}, {"op": "insert_stitch", "after": after, "index": -1},

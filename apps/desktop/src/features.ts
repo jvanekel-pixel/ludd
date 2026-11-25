@@ -417,7 +417,12 @@ export function startStitchEdit() {
   s.setStitchEdit({ id: it.id, selected: [] });
   releaseEdit?.();
   releaseEdit = holdEscape(endStitchEdit);
-  info("Editing stitches: click a stitch (Shift+click for more, or drag a box), drag to move, Delete removes. Esc when done.");
+  // The stitches Rebuild and Limit density make aren't the file's, so no edit can name them.
+  const remade = it.ops.some((o) => o.op === "rebuild" || o.op === "density_limit");
+  info(
+    "Editing stitches: click a stitch (Shift+click for more, or drag a box), drag to move, Delete removes. Esc when done." +
+      (remade ? " Stitches that Rebuild or Limit density remade can't be picked: take those repairs off to edit them." : ""),
+  );
 }
 
 export function endStitchEdit() {

@@ -45,6 +45,7 @@ import { OPPOSITE, resizeCursorFor, sideAxis, sideMids, stretchFactor } from "..
 import { columnRing, columnTips, fillDirection, fillRing, nearestOnLine, nearestOnRings } from "../design/direction";
 import { drawOverlays, runCanvasTool, snapToSources, type CanvasCtx } from "../canvas/hooks";
 import { useRepairHighlight } from "./RepairDialog";
+import { nearestStitch, pickable, stitchesInBox } from "../design/stitchPick";
 import { fixedFillEnd } from "../design/fillPatterns";
 import { selectCanvasDark, selectHoop, useStore, type Ghost, type Pen } from "../store";
 
@@ -935,7 +936,7 @@ function drawStitchEdit(scene: Scene, g: Graphics, px: number) {
   const idx = st.history.present?.layout.items.findIndex((it) => it.id === e.id) ?? -1;
   if (!d?.records.item || !d.records.src || idx < 0) return;
   const sel = new Set(e.selected);
-  const { x, y, kind, item, src } = d.records;
+  const { x, y, kind, src } = d.records;
   const off = liveStitches?.mode === "move" ? [liveStitches.to[0] - liveStitches.from[0], liveStitches.to[1] - liveStitches.from[1]] : [0, 0];
   const r = 2.2 * px;
   // Only the points on screen, and one per few pixels: a 30,000-stitch file stays smooth to drag.
@@ -953,12 +954,12 @@ function drawStitchEdit(scene: Scene, g: Graphics, px: number) {
     return true;
   };
   for (let i = 0; i < kind.length; i++) {
-    if (item[i] !== idx || kind[i] !== Kind.Stitch || sel.has(src[i]) || !shown(x[i], y[i], false)) continue;
+    if (!pickable(d.records, idx, i) || sel.has(src![i]) || !shown(x[i], y[i], false)) continue;
     g.rect(x[i] - r, y[i] - r, 2 * r, 2 * r);
   }
   g.fill({ color: 0xffffff, alpha: 0.9 }).stroke({ width: 0.8 * px, color: C.select, alpha: 0.7 });
   for (let i = 0; i < kind.length; i++) {
-    if (item[i] !== idx || kind[i] !== Kind.Stitch || !sel.has(src[i]) || !shown(x[i] + off[0], y[i] + off[1], true)) continue;
+    if (!pickable(d.records, idx, i) || !sel.has(src![i]) || !shown(x[i] + off[0], y[i] + off[1], true)) continue;
     g.circle(x[i] + off[0], y[i] + off[1], r * 1.4);
   }
   g.fill({ color: KNIFE_COLOR }).stroke({ width: 0.8 * px, color: 0xffffff });
@@ -1534,19 +1535,7 @@ export function StitchCanvas() {
       const idx = st.history.present?.layout.items.findIndex((it) => it.id === st.stitchEdit?.id) ?? -1;
       if (!d?.records.item || !d.records.src || idx < 0) return null;
       const p = toWorld(scene, sx, sy);
-      const reach = 6 / scene.view.scale;
-      let best: number | null = null;
-      let bestD = reach;
-      const { x, y, kind, item, src } = d.records;
-      for (let i = 0; i < kind.length; i++) {
-        if (item[i] !== idx || kind[i] !== Kind.Stitch) continue;
-        const dd = Math.hypot(x[i] - p[0], y[i] - p[1]);
-        if (dd < bestD) {
-          bestD = dd;
-          best = src[i];
-        }
-      }
-      return best;
+      return nearestStitch(d.records, idx, p[0], p[1], 6 / scene.view.scale);
     };
     /** The selected shape's start or end dot under the pointer (applique and lettering have none
      *  to move). The end dot wins where both sit together. */
@@ -2157,12 +2146,7 @@ export function StitchCanvas() {
             const idx = st.history.present?.layout.items.findIndex((it) => it.id === st.stitchEdit!.id) ?? -1;
             const [x0, x1] = [Math.min(ls.from[0], ls.to[0]), Math.max(ls.from[0], ls.to[0])];
             const [y0, y1] = [Math.min(ls.from[1], ls.to[1]), Math.max(ls.from[1], ls.to[1])];
-            const inBox: number[] = [];
-            if (des?.records.item && des.records.src) {
-              const { x, y, kind, item, src } = des.records;
-              for (let i = 0; i < kind.length; i++)
-                if (item[i] === idx && kind[i] === Kind.Stitch && x[i] >= x0 && x[i] <= x1 && y[i] >= y0 && y[i] <= y1) inBox.push(src[i]);
-            }
+            const inBox = des ? stitchesInBox(des.records, idx, x0, y0, x1, y1) : [];
             const keep = d.shift && (useStore.getState().stitchEdit?.selected ?? []).length > 0 && liveShift;
             const selected = keep ? [...new Set([...st.stitchEdit.selected, ...inBox])] : inBox;
             st.setStitchEdit({ ...st.stitchEdit, selected });
@@ -2289,6 +2273,9 @@ export function StitchCanvas() {
       if (st.tool !== "select" && st.tool !== "text") return;
       const [sx, sy] = local(e);
       if (st.stitchEdit) {
+        // Right-clicking selects the stitch under the pointer first, as it does everywhere else.
+        const hit = stitchAt(scene, sx, sy);
+        if (hit !== null && !st.stitchEdit.selected.includes(hit)) st.setStitchEdit({ ...st.stitchEdit, selected: [hit] });
         const edits = [{ id: "stitch.insert" }, { id: "stitch.insertJump" }, { id: "stitch.lockJump" }, "separator" as const, { id: "stitch.deleteSelected" }];
         return openContextMenu(e, [...edits, "separator", { label: "Done editing stitches", run: endStitchEdit }], "Stitches");
       }
