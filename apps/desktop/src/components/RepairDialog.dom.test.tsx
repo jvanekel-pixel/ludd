@@ -401,6 +401,7 @@ describe("Show on the design", () => {
     expect(useStore.getState().zoomRequest.n).toBe(zooms + 1);
     expect(useStore.getState().zoomRequest.kind).toBe("box");
     expect(useRepairHighlight.getState().shown).toEqual({ id: "f", ranges: [[1, 3]] });
+    expect(dialog()!.textContent).toContain("In red: the stitches that would come out.");
     // Stitches 1 and 2 of the second file are at x = 22 and 24, on y = 5.
     const marks = drawn().filter(([name]) => name === "circle").map(([, x, y]) => [x, y]);
     expect(marks).toEqual([[22, 5], [24, 5]]);
@@ -419,6 +420,16 @@ describe("Show on the design", () => {
     await click(button("Cancel"));
     expect(useRepairHighlight.getState().shown).toBeNull();
     expect(drawn()).toEqual([]);
+  });
+
+  it("says made again, not just taken out, when a repair remakes stitches", async () => {
+    await show([file("f")]);
+    await open();
+    await click(tickBox("Tiny"));
+    await click(tickBox("Rebuild"));
+    await pause();
+    await click(button("Show on the design"));
+    expect(dialog()!.textContent).toContain("In red: the stitches that would be taken out or made again.");
   });
 });
 

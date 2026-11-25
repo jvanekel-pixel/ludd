@@ -211,6 +211,9 @@ export function RepairDialog() {
 
   const limit = results?.preview.limit;
   const anyRemoved = !!removed?.length;
+  // Rebuild and the density limit replace stitches rather than just taking them out.
+  const remade = ops.some((o) => o.op === "rebuild" || o.op === "density_limit");
+  const inRed = remade ? "In red: the stitches that would be taken out or made again." : "In red: the stitches that would come out.";
   return (
     <dialog ref={ref} className={`modal repair-dialog${showing ? " peek" : ""}`} onClose={close} onKeyDown={onKeyDown} aria-labelledby="repair-title">
       <h2 id="repair-title">Repair this design</h2>
@@ -289,7 +292,7 @@ export function RepairDialog() {
         <button type="button" aria-pressed={showing} onClick={toggleShowing} disabled={!showing && !anyRemoved}>
           Show on the design
         </button>
-        <small>{showing && anyRemoved ? "In red: the stitches that would come out." : fresh && results && !anyRemoved ? "Nothing would come out." : ""}</small>
+        <small>{showing && anyRemoved ? inRed : fresh && results && !anyRemoved ? "Nothing would come out." : ""}</small>
       </div>
       <div className="actions">
         <button onClick={close}>Cancel</button>
