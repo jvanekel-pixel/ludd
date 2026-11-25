@@ -567,8 +567,9 @@ cross-hatch underlay; Gradient keeps only its edge run.
 Edge pad. With Underlay on Auto it has no underlay; you can still choose Edge, and the thread then
 runs from the edge back to the middle before the spiral. Rings closer than 0.6 mm get a warning
 that they can pucker. It starts in the middle of the widest part of the shape (a rectangle's
-center). On hearts, ovals and ring shapes, the thread joining its outer pieces shows across the
-rings (L-026). A project with a Spiral fill needs this version of LUDD or newer to open.
+center). Where the shape cuts the spiral into pieces, the thread joining them follows the edge (the
+outline or a hole's rim), so nothing runs across the rings; on most shapes it builds up along the
+edge (L-026). A project with a Spiral fill needs this version of LUDD or newer to open.
 
 ### F-1306 Line styles and motifs — YES
 Single, Triple (three passes), Bean (each stitch three times), **Motif**: Wave, Zigzag, Scallop,
@@ -829,7 +830,7 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | L-023 | **Stitch Advisor changing a closed line to satin** | PARTIAL | It makes a satin border along the line; Stitch as → Satin makes a satin fill instead. | Yes. |
 | L-024 | **Memory guard for damaged or crafted .vp3 / .hus files** | NO | Only open stitch files you trust (LUDD is offline, so this only matters for files from strangers). A damaged one can make LUDD use a lot of memory and slow down; close LUDD from the task manager if so. | Yes, by reading files in a separate memory-limited process. |
 | L-025 | **A placed stitch file with edits doesn't pick up changes made to the original later** | By design (2026-11-24) | Add the changed file again and redo the edits (recolor, delete, stops). Without edits, a placed file follows the original. | Possibly (a "reload and keep what still fits" option). |
-| L-026 | **Spiral on hearts, ovals and rings shows lines across it**: where the spiral leaves the shape and comes back in, the thread joining those pieces runs straight across rings already sewn when it can, and shows (clearly on the ready-made Heart and Oval, a little on the Rounded rectangle). On circles, rectangles, stars, triangles and polygons it follows the outline instead, where it can look like an edge line | Known weakness (seen in the app; not yet checked on fabric) | Use Spiral on circles, rectangles, stars and polygons; on hearts, ovals and rings, Contour follows the outline. | Yes (join the pieces along the outline). |
+| L-026 | **Spiral's joining thread builds up along the edge**: where the shape cuts the spiral into pieces, LUDD joins them along the edge (outline or hole rim), so nothing crosses the rings. That puts many threads on the same stretch of edge: up to 27 in one spot on the ready-made Heart, 16 to 19 on the Rectangle, Triangle and Star, 6 to 14 on the Hexagon, Oval and Rounded rectangle (60 mm shapes, default settings). The ready-made Circle has almost none. It can look like a thick, uneven outline, and may sew stiff | Known weakness (measured in the app's stitches; not yet checked on fabric) | Use Spiral on circles. Where the edge must look clean on other shapes, use Contour. | Possibly (sew each time the nearest piece next). |
 
 ---
 
@@ -895,7 +896,7 @@ Use this to answer "did that change?" or "why is it different?". Full detail: `d
 
 | Date | Change |
 | --- | --- |
-| 2026-11-24 | **Spiral fill and more shapes** (nothing already sewn changes): a new **Spiral** fill pattern (F-1305); the Shapes menu adds a rounded rectangle, oval, triangle, polygon and heart (`Ctrl+Alt+4`–`8`, F-501). Behind the scenes, the stitch engine and panel were split into smaller parts, and `python scripts/check.py` runs every check. Also corrected: Stipple and Cross-stitch don't move their start with the green dot (F-701). |
+| 2026-11-24 | **Spiral fill and more shapes** (nothing already sewn changes): a new **Spiral** fill pattern (F-1305; the thread joining its pieces follows the edge, L-026); the Shapes menu adds a rounded rectangle, oval, triangle, polygon and heart (`Ctrl+Alt+4`–`8`, F-501). Behind the scenes, the stitch engine and panel were split into smaller parts, and `python scripts/check.py` runs every check. Also corrected: Stipple and Cross-stitch don't move their start with the green dot (F-701). |
 | 2026-11-24 | **Sewing time and thread estimate** (F-406): the Design section shows about how long the design sews on your machine, how many thread changes, and about how much top and bobbin thread it uses, per color under **Thread used**. Machine profiles can set `speed_spm`. |
 | 2026-11-24 | **Phase 1 audit fixes**: `S` zooms to everything selected (was one item); the AI key file is written whole and private from the start on Mac/Linux. No stitch changes. |
 | 2026-11-24 | **QA pass 2 decisions** (changes stitches): fills with a thin neck travel along their edges and never end on a jump; zigzag underlay crosses back in an X; long moves between applique edges are trimmed; Split long stitches holds at sharp corners of ribbons and applique borders; a placed stitch file with edits sews from LUDD's copy taken when it was added; sample PES/JEF made again; Ctrl+Z while drawing removes the last point, Ctrl+Y waits; CI builds the Mac code. |

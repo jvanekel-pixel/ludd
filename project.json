@@ -35,9 +35,9 @@
   },
   "phase": 3,
   "status": "active",
-  "nextAction": "Owner: decide whether to fix Spiral's lines across hearts and ovals (L-026), then say when to merge Phase 3; then the Phase 3 audit on the top model, before Phase 4",
-  "blockedOnHuman": "Phase 3: the Spiral lines decision (L-026) and the go-ahead to push and merge",
-  "lastSessionAt": "2026-11-25T03:13:00Z",
+  "nextAction": "Owner: decide whether Spiral should also sew the nearest piece next, so its joining thread stops piling up along the edge (L-026), then say when to merge Phase 3; then the Phase 3 audit on the top model, before Phase 4",
+  "blockedOnHuman": "Phase 3: the Spiral edge build-up decision (L-026) and the go-ahead to push and merge",
+  "lastSessionAt": "2026-11-25T05:42:09Z",
   "health": {
     "tests": "passing",
     "build": "passing",

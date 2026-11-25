@@ -1,10 +1,10 @@
 """The spiral fill: one line that winds from the middle of a shape out to its edge.
 
 An Archimedean spiral, its rings `spiral_mm` apart, is drawn round the middle of the shape's
-widest spot and cut to the shape. Each stretch of it inside the shape is one path, in order from
-the middle out; the fill sews them one after another, travelling inside the shape in between. On
-the tight turns near the middle the needle goes down more often, so a stitch doesn't cut far
-across the curve.
+widest spot and cut to the shape. The stretches of it inside the shape are sewn in order from the
+middle out, each joined to the next along the edge that cut them apart: nothing covers an open
+fill, so a thread straight across it would show. On the tight turns near the middle the needle
+goes down more often, so a stitch doesn't cut far across the curve.
 
 Written from first principles for LUDD. Coordinates are mm. Imports from `..stitches` stay inside
 the function bodies: stitches imports this package.
@@ -16,9 +16,10 @@ import math
 
 import numpy as np
 import shapely
-from shapely.geometry import LineString
+from shapely.geometry import LineString, Point as ShapelyPoint
+from shapely.ops import substring
 
-from ..paths import Point, dist
+from ..paths import Point, dist, resample, sharp_points
 from . import FillPattern, Param, register
 
 SAMPLE_MM = 0.5  # how finely the spiral is drawn before it's cut to the shape
@@ -120,10 +121,48 @@ def _needle_points(piece: list[Point], middle: Point, stitch_mm: float) -> list[
     return out
 
 
+def _along(ring: LineString, s0: float, s1: float) -> list[Point]:
+    """The ring's points walking forward from `s0` to `s1` along it, past where it starts if need be."""
+    if s0 <= s1:
+        return list(substring(ring, s0, s1).coords)
+    return list(substring(ring, s0, ring.length).coords) + list(substring(ring, 0, s1).coords)[1:]
+
+
+def _way_round(a: Point, b: Point, rings: list[LineString], cover) -> list[Point] | None:
+    """The way from the end of one stretch of the spiral to the start of the next, along an edge of
+    the shape. What lies between them is outside the shape or inside one hole, so they normally end on
+    the same edge, and the way keeps to it even when cutting across to another would be shorter. If
+    they don't (a stretch too short to sew lay between), it takes the edge that needs the least
+    stepping across the shape. None if no way stays inside `cover`."""
+    ends = ShapelyPoint(a), ShapelyPoint(b)
+    for ring in sorted(rings, key=lambda r: r.distance(ends[0]) + r.distance(ends[1])):
+        sa, sb = ring.project(ends[0]), ring.project(ends[1])
+        ways = [[a, *_along(ring, sa, sb), b], [a, *_along(ring, sb, sa)[::-1], b]]
+        ways = [w for w in ways if cover.covers(LineString(w))]
+        if ways:
+            return min(ways, key=lambda w: round(LineString(w).length, 3))
+    return None
+
+
+def _join(path: list[Point], stretch: list[Point], way: list[Point], longest: float) -> None:
+    """Carry `path` on along `way` to the next `stretch` of the spiral, and then along that. The way's
+    stitches are at most `longest`, and none anywhere is too short to keep."""
+    from ..stitches import MIN_STITCH_MM, _subdivide
+
+    walk = [path[-1]]
+    for p in resample(way, longest, sharp_points(way))[1:-1]:
+        if dist(walk[-1], p) >= MIN_STITCH_MM and dist(p, stretch[0]) >= MIN_STITCH_MM:
+            walk.append(p)
+    while stretch and dist(walk[-1], stretch[0]) < MIN_STITCH_MM:  # already there
+        stretch = stretch[1:]
+    path += _subdivide(walk + stretch[:1], longest)[1:] + stretch[1:]
+
+
 def _spiral_paths(poly, params, pos):
-    """The spiral over one piece of a fill, as paths from the middle out. `pos`, where the fill was
-    asked to start, isn't used: a spiral starts in the middle."""
-    from ..stitches import MIN_STITCH_MM
+    """The spiral over one piece of a fill, as one path from the middle out. (Stretches that no way
+    along an edge could join would be separate paths, which the fill joins as it does any others.)
+    `pos`, where the fill was asked to start, isn't used: a spiral starts in the middle."""
+    from ..stitches import MIN_STITCH_MM, TRAVEL_STITCH_MM
 
     spacing = params.value("spiral_mm")
     warnings = [TIGHT_WARNING] if spacing < TIGHT_MM else []
@@ -134,9 +173,17 @@ def _spiral_paths(poly, params, pos):
     local = shapely.transform(poly, lambda xy: np.round(xy - (x0, y0), 6))
     middle = _middle(local)
     reach = max(dist(middle, p) for p in local.exterior.coords) + spacing
+    rings = [LineString(r.coords) for r in [local.exterior, *local.interiors]]
+    cover = local.buffer(0.3)  # as far outside the shape as the fill lets any travel go
+    shapely.prepare(cover)
+    longest = min(TRAVEL_STITCH_MM, params.stitch_mm)
     paths: list[list[Point]] = []
     for piece in _pieces(_spiral(middle, spacing, reach), local):
         points = _needle_points(piece, middle, params.stitch_mm)
+        way = _way_round(paths[-1][-1], points[0], rings, cover) if paths else None
+        if way:
+            _join(paths[-1], points, way, longest)
+            continue
         if paths and dist(paths[-1][-1], points[0]) < MIN_STITCH_MM:
             points = points[1:]  # already there
         if points:

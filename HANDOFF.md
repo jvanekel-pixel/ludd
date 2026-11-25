@@ -4,8 +4,10 @@
 - **Current Phase:** Phase 3 is built and checked on local branch `claude/goofy-goldwasser-7af929` (not pushed, no PR). `phase` stays 3 until it is merged and the top-model audit passes.
 - **Active Routing:** balanced (top model plans and audits, Sonnet builds; BUILDPLAN.md section 3)
 - **What Changed:** engine and UI seams (`layout/`, `methods/`; fill, line, command, dialog and canvas-hook registries), `scripts/check.py`, Spiral fill, five new shapes, docs. Track branches `phase-03/track-a` to `-e` are kept.
-- **Checks Run:** `check.py --all` PASS: engine 1024 passed, 1 skipped (before: 657 + 1); UI 276 (before: 241); typecheck, command table, build, Rust (2). No test removed; `digitize.json` and `layout.json` unchanged. No `fixtures/` in this worktree: run it once in the main checkout.
-  - `pnpm build:engine` run, smoke ok; the frozen engine renders like the source. Preview: shapes, Spiral, polygon Enter/Esc ok. The canvas hooks have no real user yet.
+  - Then, owner approved: Spiral joins its pieces along the edge, so nothing runs across the rings (`fills/spiral.py` only; only the Spiral snapshots re-recorded).
+- **Checks Run:** `check.py --all` PASS: engine 1030 passed, 1 skipped (before the phase: 657 + 1); UI 276 (before: 241); typecheck, command table, build, Rust (2). No test removed; `digitize.json` and `layout.json` unchanged. No `fixtures/` in this worktree: run it once in the main checkout.
+  - `pnpm build:engine` run, smoke ok; the frozen engine renders like the source. Preview: shapes, Spiral (Heart: nothing across), polygon Enter/Esc ok. The canvas hooks have no real user yet.
+  - Spiral stress test (39 shapes, 36 settings each): nothing more than 0.3 mm outside, no stitch over its length, nothing across the rings.
 - **Spec deviations** (details: spec section 12, Build notes):
   - The canvas dots read the pattern descriptors (new `directionDots`, only on cross-stitch).
   - Wave 1 tests now let wave 2 add items (old ones still required, in order); the menu test imports `./cmd`.
@@ -14,8 +16,9 @@
   - Overlays wrap `drawOverlay`; `CanvasTool.cursor` is not applied; `registerDialog` replaces a repeated id.
   - Rounded rectangle has 20 points; the width test checks the star's tips; the polygon dialog handles Enter and Esc itself.
   - `check.py -k` runs vitest through node, and an engine run matching no test counts as skipped.
+  - Spiral step 6: it joins its own pieces along the edge, not with the shared joining (owner approved).
 - **Blocked On Human:**
-  1. Spiral shows lines across the Heart and Oval (L-026). Joining along the outline fixed it in a trial (spiral only, but spec step 6 says the shared joining). Fix before merging, or keep?
+  1. Those joins pile up on the edge: up to 27 threads in one spot on the ready-made Heart (L-026). Also sew the nearest piece next? In a trial: at most 4, still nothing across; changes spec step 4 ("in order along the spiral").
   2. Say when to push and merge Phase 3.
   3. Older: tag v1.0.1 (on the PR #23 commit if Phase 3 merges first); AI tracing Download check; patent checks (P4-A1, P6-A1); photo stitch (Phase 9). Phase 2's audit is not stamped.
 - **Next Action:** owner answers 1 and 2; then the Phase 3 audit on the top model (`phase-audit-gate`), before Phase 4.

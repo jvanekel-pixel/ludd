@@ -44,7 +44,8 @@ Parked ideas, tech debt and nice-to-haves. Do not build these without the owner 
 - JEF hoop and stop codes wait for a Janome stitch-out (item 9, queued in stitchout-log.md).
 
 ## From Phase 3 (2026-11-24)
-- [ ] **Spiral shows lines across hearts and ovals** (L-026): the shared joining goes straight across rings already sewn (at 60 mm: 426 mm of thread across the ready-made Heart, 354 mm across the Oval, 49 mm on the Rounded rectangle; ring shapes too). Joining its pieces along the outline instead, in `fills/spiral.py` only, left nothing across any ready-made shape in a trial (donuts not tried). The spec (step 6) says to use the shared joining, so this needs the owner's or the planner's decision
+- [x] Spiral showed lines across hearts, ovals and ring shapes: its pieces are now joined along the edge that cut them apart (done 2026-11-24, owner approved)
+- [ ] **Spiral piles its joining thread along the edge** (L-026): joined in spiral order, up to 27 threads share one spot on the ready-made Heart (16 to 19 on the Rectangle, Triangle and Star, which already did this before the joining changed). In a trial, sewing each time the unsewn piece nearest along the same edge, from either end, left at most 4 on every ready-made shape and two ring shapes, kept 0 mm across the rings, and used 24 to 56% fewer stitches than now. It changes the spec's "in order along the spiral" (step 4), so it needs the owner's or the planner's decision
 - [ ] The green start dot can be dragged on Stipple, Cross-stitch and Spiral fills but changes nothing (only Contour uses it): honor it, or don't offer the drag
 - [ ] Cross-stitch fills show the purple direction dots although the angle doesn't change them (as before Phase 3)
 - [ ] The side panel's "Check before stitching" title runs into its "Density map" box (seen at 1280 × 800; older than Phase 3)

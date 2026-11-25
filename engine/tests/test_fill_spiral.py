@@ -13,6 +13,7 @@ import invariants
 from snapshot_util import check, digest_recs
 from threadline_engine import project
 from threadline_engine.digitize import fills
+from threadline_engine.digitize.fills import spiral
 from threadline_engine.digitize.stitches import (MIN_STITCH_MM, STITCH, DigitizeError, FillParams, fill_parts,
                                                  fill_polygon, generate)
 
@@ -23,6 +24,19 @@ TIGHT = "Rings this close sew like a solid fill and can pucker in the middle; 1 
 
 def _nodes(points):
     return [[x, y, "c"] for x, y in points]
+
+
+# Ready-made shapes from the Shapes menu, as design/shapes.ts draws them at 60 mm (the size in a 4" hoop).
+_HEART_SIDE = [(6.58, -23.4), (16.14, -27), (26, -23.4), (29.89, -12.6), (22.12, 5.7)]
+READY_HEART = [[0, -15.6, "c"], *([x, y, "s"] for x, y in _HEART_SIDE), [0, 27, "c"],
+               *([-x, y, "s"] for x, y in reversed(_HEART_SIDE))]
+READY_OVAL = [[x, y, "s"] for x, y in [(30, 0), (21.21, 14.85), (0, 21), (-21.21, 14.85), (-30, 0),
+                                        (-21.21, -14.85), (0, -21), (21.21, -14.85)]]
+READY_ROUNDED_RECTANGLE = [list(n) for n in [
+    (21, -21, "l"), (24.44, -20.31, "s"), (27.36, -18.36, "s"), (29.31, -15.44, "s"), (30, -12, "c"),
+    (30, 12, "l"), (29.31, 15.44, "s"), (27.36, 18.36, "s"), (24.44, 20.31, "s"), (21, 21, "c"),
+    (-21, 21, "l"), (-24.44, 20.31, "s"), (-27.36, 18.36, "s"), (-29.31, 15.44, "s"), (-30, 12, "c"),
+    (-30, -12, "l"), (-29.31, -15.44, "s"), (-27.36, -18.36, "s"), (-24.44, -20.31, "s"), (-21, -21, "c")]]
 
 
 def _round(r, n=96, middle=MIDDLE):
@@ -126,6 +140,48 @@ def test_short_stitches_near_the_middle_long_ones_outside():
     assert min(size for size, _ in sizes) >= MIN_STITCH_MM
 
 
+def _across_the_rings(recs, shape, spacing=1.5):
+    """How much thread (mm) lies more than 1 mm inside the shape and off the spiral. Only a join
+    between two stretches of the spiral can, and nothing covers it, so it shows."""
+    middle = (recs[0][0] + spacing / 2, recs[0][1])  # the spiral begins half a ring to the left of it
+    inside = shape.buffer(-1.0)
+    shapely.prepare(inside)
+    total = 0.0
+    for a, b in _threads(recs):
+        n = max(1, math.ceil(math.dist(a, b) / 0.1))
+        for i in range(n):
+            x, y = (a[k] + (b[k] - a[k]) * (i + 0.5) / n for k in (0, 1))
+            dx, dy = x - middle[0], y - middle[1]
+            # On the spiral, the distance from the middle matches the angle, give or take whole rings.
+            off = (math.hypot(dx, dy) - spacing * math.atan2(dy, dx) / (2 * math.pi)) % spacing
+            if min(off, spacing - off) > 0.3 and inside.contains(Point(x, y)):
+                total += math.dist(a, b) / n
+    return total
+
+
+@pytest.mark.parametrize("outline,holes", [
+    (READY_HEART, []), (READY_OVAL, []), (READY_ROUNDED_RECTANGLE, []),
+    (_round(20), [_round(10)]),  # a ring: the way round must keep to one edge, not cut across the band
+    (SQUARE, [HOLE]),
+], ids=["heart", "oval", "rounded_rectangle", "ring", "donut"])
+def test_no_thread_crosses_the_rings(outline, holes):
+    obj = _spiral(outline, holes, underlay="auto")
+    recs = generate(obj)[0]
+    invariants.assert_sane(recs, inside=_area(obj), tolerance_mm=0.3, max_stitch_mm=STITCH_MM + 0.05,
+                           max_jumps=0, max_trims=0)
+    assert _across_the_rings(recs, _area(obj)) < 0.5
+
+
+def test_stretches_no_edge_can_join_are_still_sewn(monkeypatch):
+    """Should no way along an edge stay inside the shape, the stretches stay apart and the fill
+    travels between them as it does for any open pattern."""
+    monkeypatch.setattr(spiral, "_way_round", lambda *args: None)
+    obj = _spiral(holes=[HOLE])
+    shape = fill_polygon(*obj["geometry"].values())
+    assert len(fills.get("spiral").paths(shape, FillParams.from_dict(obj["params"]), (0.0, 0.0))[0]) > 1
+    invariants.assert_sane(generate(obj)[0], inside=_area(obj), tolerance_mm=0.3, max_stitch_mm=STITCH_MM + 0.05)
+
+
 def test_a_hole_stays_empty():
     recs = _recs(holes=[HOLE])
     inner = Polygon([(x, y) for x, y, _ in HOLE]).buffer(-0.3)
@@ -187,7 +243,7 @@ def test_deterministic(obj):
 @pytest.mark.parametrize("stitch_mm", [1.0, 1.3, 2.2, 3.4, 3.5, 4.0, 8.0])
 @pytest.mark.parametrize("name", ["square", *ODD])
 def test_needle_points_stay_inside_and_within_the_stitch_length(name, stitch_mm, spacing):
-    """The spiral's own stitches (travel between its pieces has its own length, up to 2.5 mm)."""
+    """Every stitch of the spiral's path, the joins along the edge included."""
     outline, holes = ODD.get(name, (SQUARE, []))
     shape = fill_polygon(outline, holes)
     params = FillParams.from_dict({"pattern": "spiral", "spiral_mm": spacing, "stitch_mm": stitch_mm})

@@ -65,7 +65,7 @@ The user is testing on the machine once the software is about 95% done (decided 
 | 1.0.1 (QA2 3) | **Trims between applique edges** | A 60 × 20 mm applique with two holes, Have the machine cut jump threads on | No thread left lying between the edges; any extra stops resume cleanly |
 | 1.0.1 (QA2 4) | **Sharp corners with Split long stitches** | An 8 mm ribbon with a 30° corner, and a star applique (25 mm points) with an 8 mm border | Corners full, with no loose stitch at the outer tip |
 | 1.0.1 | Dragged start, end and direction dots | A rectangle fill with its red dot dragged to the middle of an edge and its purple dots set to 20°; a satin fill with its tips moved; a closed line started mid-side | The fill's last stitch is at that spot with no thread showing across the fill; rows run at 20°; the satin runs between the chosen tips |
-| Phase 3 | **Spiral fill** | A 40 mm circle and a 40 mm star in Spiral at 1.5 mm; the circle again at 0.8 mm; a 48 × 28 mm oval and the ready-made Heart at 1.5 mm | One unbroken line from the middle out; rings evenly spaced; no pucker in the middle at 0.8 mm; on the oval and the heart, how much the joining thread across the rings shows, and on the star, the thread along its outline (L-026) |
+| Phase 3 | **Spiral fill** | A 40 mm circle and a 40 mm star in Spiral at 1.5 mm; the circle again at 0.8 mm; a 48 × 28 mm oval and the ready-made Heart at 1.5 mm | One unbroken line from the middle out; rings evenly spaced; no pucker in the middle at 0.8 mm; nothing runs across the rings on the oval or the heart; on the heart and the star, whether the joining thread along the edge looks like a thick or uneven outline, sews stiff or breaks thread (L-026) |
 
 ## Log
 
