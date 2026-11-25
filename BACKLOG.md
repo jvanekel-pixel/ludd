@@ -44,9 +44,10 @@ Parked ideas, tech debt and nice-to-haves. Do not build these without the owner 
 - JEF hoop and stop codes wait for a Janome stitch-out (item 9, queued in stitchout-log.md).
 
 ## From Phase 3 (2026-11-24)
-- [ ] Spiral: join its pieces without crossing rings already sewn (L-026). Crossings measured at 1.5 mm: circle 0, rectangles 0 to 4, a 40 mm square 6, ovals about 120, a ring (donut) about 200. The Phase 15 stitch-out shows whether they matter
+- [ ] **Spiral shows lines across hearts and ovals** (L-026): the shared joining goes straight across rings already sewn (at 60 mm: 426 mm of thread across the ready-made Heart, 354 mm across the Oval, 49 mm on the Rounded rectangle; ring shapes too). Joining its pieces along the outline instead, in `fills/spiral.py` only, left nothing across any ready-made shape in a trial (donuts not tried). The spec (step 6) says to use the shared joining, so this needs the owner's or the planner's decision
 - [ ] The green start dot can be dragged on Stipple, Cross-stitch and Spiral fills but changes nothing (only Contour uses it): honor it, or don't offer the drag
 - [ ] Cross-stitch fills show the purple direction dots although the angle doesn't change them (as before Phase 3)
+- [ ] The side panel's "Check before stitching" title runs into its "Density map" box (seen at 1280 × 800; older than Phase 3)
 - [ ] Rare engine quirks found stress-testing Spiral (all older): a travel stitch can reach 2.75 mm and run 0.31 mm outside a shape; ties between the parts of a self-crossing outline can be under 0.3 mm; one too-tiny piece makes a whole open-pattern fill refuse; with an Edge underlay, moving a symmetric open-pattern fill can start its edge run on another side
 
 ## From docs/PLAN.md backlog (not yet started)
