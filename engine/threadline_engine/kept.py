@@ -94,15 +94,26 @@ def prune(days: float = KEEP_DAYS) -> int:
     return gone
 
 
+#: The repairs a placed stitch file can have (threadline_engine/repair).
+REPAIR_OPS = frozenset({"filter_small", "declump", "density_limit", "rebuild", "remove_hidden"})
+#: Edits that name no stitch or color, so they hold however the file changes (Phase 4 decision 2).
+INDEX_FREE_OPS = REPAIR_OPS | {"jumps_to_trims"}
+
+
+def _index_free(op: object) -> bool:
+    return isinstance(op, dict) and isinstance(op.get("op"), str) and op["op"] in INDEX_FREE_OPS
+
+
 def has_edits(item: dict) -> bool:
     """A placed stitch file with edits tied to its colour and stitch numbers: recolours, deleted
-    colours or stitches, inserted stops or trims, moved stitches. Such an item sews from the copy
-    taken when the file was added (as_added), so a file re-saved elsewhere later can't put those
-    edits on other stitches (QA2 P3). "Trim jumps" doesn't name any stitch, so it doesn't count."""
+    colours or stitches, inserted stops, trims, stitches or jumps, locked jumps, moved stitches.
+    Such an item sews from the copy taken when the file was added (as_added), so a file re-saved
+    elsewhere later can't put those edits on other stitches (QA2 P3). "Trim jumps" and the repairs
+    don't name any stitch (INDEX_FREE_OPS), so they don't count."""
     threads = item.get("threads")
     ops = item.get("ops")
     return bool((isinstance(threads, list) and any(threads))
-                or (isinstance(ops, list) and any(not isinstance(o, dict) or o.get("op") != "jumps_to_trims" for o in ops)))
+                or (isinstance(ops, list) and not all(_index_free(o) for o in ops)))
 
 
 def pinned(items: list) -> set[str]:

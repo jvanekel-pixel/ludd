@@ -3,7 +3,10 @@ package and the project feature tables. None of them may change a stitch."""
 
 import dataclasses
 import importlib
+import importlib.util
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pyembroidery as pe
@@ -63,7 +66,8 @@ def _width(blocks) -> float:
 @pytest.fixture
 def hooks():
     """Registries restored after the test, whatever it registered."""
-    saved = (dict(passes.ITEM_OPS_LOCAL), dict(passes.ITEM_OPS_PLACED), list(passes.AFTER_ITEMS), list(passes.AFTER_ORDER))
+    saved = (dict(passes.ITEM_OPS_LOCAL), dict(passes.ITEM_OPS_PLACED), list(passes.AFTER_ITEMS), list(passes.AFTER_ORDER),
+             list(passes.BEFORE_ITEMS))
     yield passes
     passes.ITEM_OPS_LOCAL.clear()
     passes.ITEM_OPS_LOCAL.update(saved[0])
@@ -71,6 +75,7 @@ def hooks():
     passes.ITEM_OPS_PLACED.update(saved[1])
     passes.AFTER_ITEMS[:] = saved[2]
     passes.AFTER_ORDER[:] = saved[3]
+    passes.BEFORE_ITEMS[:] = saved[4]
 
 
 # ---------------------------------------------------------------- layout package
@@ -97,11 +102,66 @@ def test_layout_caches_are_shared_objects():
 # ---------------------------------------------------------------- render hooks
 
 
-def test_render_hooks_start_empty():
-    assert passes.ITEM_OPS_LOCAL == {}
-    assert passes.ITEM_OPS_PLACED == {}
-    assert passes.AFTER_ITEMS == []
-    assert passes.AFTER_ORDER == []
+def _unused_passes(monkeypatch):
+    """A fresh copy of passes.py, which no feature has registered anything on."""
+    name = "threadline_engine.layout._unused_passes"
+    spec = importlib.util.spec_from_file_location(name, passes.__file__)
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, name, module)  # dataclasses look their module up
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_render_hooks_start_empty(monkeypatch):
+    fresh = _unused_passes(monkeypatch)
+    assert fresh.ITEM_OPS_LOCAL == {}
+    assert fresh.ITEM_OPS_PLACED == {}
+    assert fresh.AFTER_ITEMS == []
+    assert fresh.AFTER_ORDER == []
+
+
+def test_before_items_starts_empty(monkeypatch):
+    assert _unused_passes(monkeypatch).BEFORE_ITEMS == []
+
+
+def test_the_repairs_register_on_the_hooks_the_spec_names():
+    assert "rebuild" in passes.ITEM_OPS_LOCAL
+    assert {"filter_small", "declump", "density_limit"} <= set(passes.ITEM_OPS_PLACED)
+    assert "remove_overlap" in [name for name, _ in passes.BEFORE_ITEMS]
+    assert "remove_hidden" in [name for name, _ in passes.AFTER_ITEMS]
+
+
+def test_importing_the_repairs_first_registers_them_once():
+    """The repairs import the layout package, which imports them back: either order must work."""
+    code = """
+import threadline_engine.repair.recognize
+from threadline_engine.layout import passes
+
+assert "rebuild" in passes.ITEM_OPS_LOCAL
+assert [n for n, _ in passes.BEFORE_ITEMS].count("remove_overlap") == 1
+"""
+    done = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=120,
+                          cwd=Path(__file__).resolve().parents[1])
+    assert done.returncode == 0, done.stderr
+
+
+def test_before_items_pass_changes_the_layout_and_can_leave_a_note(tmp_path, hooks):
+    def shifted(lay):
+        moved = [{**it, "transform": {"x": -7}} for it in lay["items"]]
+        note = {"level": "info", "code": "test_moved", "message": "Moved 7 mm left"}
+        return {**lay, "items": moved, passes.NOTES_KEY: [*lay.get(passes.NOTES_KEY, []), note]}
+
+    sq = _square(tmp_path / "sq.pes")
+    lay = {"items": [{"id": "a", "path": sq}], passes.NOTES_KEY: [{"level": "error", "code": "planted", "message": "x"}]}
+    before = layout.render({"items": [{"id": "a", "path": sq}]})
+    hooks.register_pass("before_items", "test_shifted", shifted)
+    with pytest.raises(ValueError):
+        hooks.register_pass("before_items", "test_shifted", shifted)
+    kept_copy = json.dumps(lay, sort_keys=True)
+    after = layout.render(lay)
+    assert min(r[0] for b in after.blocks for r in b.recs) == pytest.approx(min(r[0] for b in before.blocks for r in b.recs) - 70)
+    assert [w["code"] for w in after.warnings] == ["test_moved"]  # the pass's note, never one planted in the file
+    assert json.dumps(lay, sort_keys=True) == kept_copy  # the caller's layout is left alone
 
 
 def test_placed_item_op_runs_after_the_transform(tmp_path, hooks):
@@ -195,7 +255,7 @@ def test_line_styles_and_motifs_registered():
 
 def test_rpc_method_list_matches_the_manifest():
     names = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert len(names) == 60
+    assert len(names) == 61
     assert sorted(dispatcher._methods) == names
 
 

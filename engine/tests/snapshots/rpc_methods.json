@@ -40,6 +40,7 @@
   "project.recovery",
   "project.restore",
   "project.save",
+  "repair.preview",
   "shape.cut_out",
   "shape.merge",
   "shape.offset",

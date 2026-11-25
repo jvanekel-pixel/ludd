@@ -29,12 +29,13 @@ class Rendered:
 
 
 def render(layout: dict[str, Any]) -> Rendered:
-    items = layout.get("items") or []
-    if not items:
+    if not (layout.get("items") or []):
         raise LayoutError("Nothing to show: the layout has no designs")
+    # Render hooks (layout/passes.py): passes that change the layout before any item is made.
+    layout, warnings = passes.run_before_items(layout)
+    items = layout.get("items") or []
     all_blocks: list[Block] = []
     item_info: list[dict[str, Any]] = []
-    warnings: list[dict[str, str]] = []
 
     # "Trim jumps longer than …" for the whole design (older projects keep it as an op per item).
     jt_mm = _mm(layout.get("jumps_to_trims")) if layout.get("jumps_to_trims") is not None else None

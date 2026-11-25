@@ -6,6 +6,8 @@ a pass. With every registry empty, rendering is exactly what it was before the h
 - An item op runs for each op in an item's `ops` whose `op` names it, in list order:
   "local" ops before the item's transform (the file's own frame, 0.1 mm), "placed" ops after it
   (hoop millimetres x 10). Op names nobody registered are ignored, as they always were.
+- A "before_items" pass takes the layout and returns the one to render (a changed copy, never the
+  one it was given), before any item is made. It leaves notes for the user under NOTES_KEY.
 - An "after_items" pass runs once every item is rendered, before empty blocks are dropped and
   before the color sort; an "after_order" pass after sort, join and merge, before knockdown and basting.
 """
@@ -30,14 +32,20 @@ class OpContext:
 
 ItemOp = Callable[[list[Block], dict, OpContext], list[Block]]  # (blocks, op, ctx) -> blocks
 Pass = Callable[[list[Block], dict, list[dict]], list[Block]]  # (blocks, layout, warnings) -> blocks
+LayoutPass = Callable[[dict], dict]  # (layout) -> the layout to render
+
+#: Where a "before_items" pass leaves its notes in the layout it returns, in the shape of render's
+#: warnings: [{"level": "info" or "warning", "code": a unique id, "message": plain words}].
+NOTES_KEY = "pass_notes"
 
 ITEM_OPS_LOCAL: dict[str, ItemOp] = {}  # run before the item's transform (the file's own frame)
 ITEM_OPS_PLACED: dict[str, ItemOp] = {}  # run after it (hoop millimeters x 10)
+BEFORE_ITEMS: list[tuple[str, LayoutPass]] = []  # before any item is rendered
 AFTER_ITEMS: list[tuple[str, Pass]] = []  # after every item is rendered, before color sort
 AFTER_ORDER: list[tuple[str, Pass]] = []  # after sort, join and merge; before knockdown and basting
 
 _STAGES = {"local": ITEM_OPS_LOCAL, "placed": ITEM_OPS_PLACED}
-_PASSES = {"after_items": AFTER_ITEMS, "after_order": AFTER_ORDER}
+_PASSES = {"before_items": BEFORE_ITEMS, "after_items": AFTER_ITEMS, "after_order": AFTER_ORDER}
 
 
 def register_item_op(name: str, fn: ItemOp, *, stage: str) -> None:
@@ -49,8 +57,9 @@ def register_item_op(name: str, fn: ItemOp, *, stage: str) -> None:
     _STAGES[stage][name] = fn
 
 
-def register_pass(stage: str, name: str, fn: Pass) -> None:
-    """Register a pass for stage "after_items" or "after_order". A name registered twice raises."""
+def register_pass(stage: str, name: str, fn: Pass | LayoutPass) -> None:
+    """Register a pass for stage "before_items" (a LayoutPass), "after_items" or "after_order"
+    (a Pass). A name registered twice raises."""
     if stage not in _PASSES:
         raise ValueError(f"Unknown pass stage: {stage}")
     if any(n == name for n, _ in _PASSES[stage]):
@@ -66,6 +75,16 @@ def run_item_ops(registry: dict[str, ItemOp], blocks: list[Block], ctx: OpContex
         if fn is not None:
             blocks = fn(blocks, o, ctx)
     return blocks
+
+
+def run_before_items(layout: dict) -> tuple[dict, list[dict]]:
+    """The layout as the "before_items" passes leave it, and the notes they put under NOTES_KEY
+    (only theirs: the key is cleared first, whatever a project file holds there)."""
+    layout = {k: v for k, v in layout.items() if k != NOTES_KEY}
+    for _, fn in BEFORE_ITEMS:
+        layout = fn(layout)
+    notes = list(layout.get(NOTES_KEY) or [])
+    return {k: v for k, v in layout.items() if k != NOTES_KEY}, notes
 
 
 def run_passes(stage: list[tuple[str, Pass]], blocks: list[Block], layout: dict, warnings: list[dict]) -> list[Block]:

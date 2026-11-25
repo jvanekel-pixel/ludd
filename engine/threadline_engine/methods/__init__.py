@@ -10,6 +10,6 @@ Every group is imported by name below (no scanning: PyInstaller must see each im
 from __future__ import annotations
 
 from .registry import dispatcher
-from . import core, designs, machines, threads, layouts, projects, tracing, shapes, text, ai, help  # noqa: F401,E402
+from . import core, designs, machines, threads, layouts, projects, tracing, shapes, text, ai, help, repair  # noqa: F401,E402
 
 __all__ = ["dispatcher"]

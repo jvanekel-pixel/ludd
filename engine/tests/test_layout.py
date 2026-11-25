@@ -675,3 +675,20 @@ def test_qa2_p3_edits_stay_on_their_stitches_when_the_file_is_re_saved_elsewhere
     assert stitches(layout.render_summary(reopened["layout"])) == stitches(before)
     # Without edits the item follows the file on disk, as before.
     assert len(layout.render_summary(lay({"path": str(f)}))["blocks"]) == 3
+
+
+def test_repairs_and_trim_jumps_do_not_pin_a_stitch_file():
+    """Phase 4 decision 2: the repairs name no stitch or color, so a file with only repairs still
+    follows the file on disk. Inserts and jump locks name stitches, so they pin it like other edits."""
+    from threadline_engine import kept
+
+    free = ["jumps_to_trims", "filter_small", "declump", "density_limit", "rebuild", "remove_hidden"]
+    for name in free:
+        assert not kept.has_edits({"ops": [{"op": name}]}), name
+    assert not kept.has_edits({"ops": [{"op": name} for name in free], "threads": [None]})
+    for name in ("insert_stitch", "insert_jump", "lock_jump", "delete_stitches", "insert"):
+        assert kept.has_edits({"ops": [{"op": "rebuild"}, {"op": name}]}), name
+    assert kept.has_edits({"threads": [{"color": "#000000"}], "ops": [{"op": "rebuild"}]})
+    # A damaged op still counts as an edit, whatever its "op" is.
+    for junk in ("junk", {"op": ["rebuild"]}, {"op": {}}, {}):
+        assert kept.has_edits({"ops": [junk]}), junk

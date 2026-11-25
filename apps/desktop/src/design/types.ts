@@ -84,7 +84,24 @@ export type LayoutOp =
   /** `n`: for drawn shapes and lettering, how many records the item had when the stop or trim was
    *  added; if the shape changes, that place no longer exists and the engine leaves it out. */
   | { op: "insert"; after: number; command: "stop" | "trim"; n?: number }
-  | { op: "jumps_to_trims"; min_mm: number };
+  | { op: "jumps_to_trims"; min_mm: number }
+  /** Repairs on a stitch file, applied when it's drawn or saved (the file never changes). An item
+   *  holds at most one of each, written in the order rebuild, filter_small, declump,
+   *  density_limit, remove_hidden (feat/repair/steps.ts). */
+  | { op: "filter_small"; min_mm: number }
+  | { op: "declump"; max_hits?: number }
+  /** Uses the layout's fabric. */
+  | { op: "density_limit" }
+  /** At the item's current size. */
+  | { op: "rebuild" }
+  | { op: "remove_hidden"; keep_mm?: number }
+  /** Stitch editing: a stitch added after stitch `after`, numbered `index` (one past the highest
+   *  number in use on this item), at (x_mm, y_mm) in the file's frame, or else halfway to the next. */
+  | { op: "insert_stitch"; after: number; index: number; x_mm?: number; y_mm?: number }
+  /** The move after stitch `after` becomes a jump. */
+  | { op: "insert_jump"; after: number }
+  /** Lock stitches on both sides of the jump after stitch `after`. */
+  | { op: "lock_jump"; after: number };
 
 /** A stitch file placed in the layout. */
 export type FileItem = {
@@ -269,6 +286,9 @@ export type Layout = {
   knockdown?: { enabled: boolean; margin_mm: number; /** Its thread (one matching the fabric). */ thread?: Thread };
   /** Moves between same-thread shapes run under later stitching where they can (fewer jumps and trims). */
   travel_under?: boolean;
+  /** "Don't sew what's hidden under shapes on top" (drawn fills), and how far under their edge
+   *  to keep sewing. */
+  remove_overlap?: { enabled: boolean; keep_mm: number };
   /** Saved sets of thread colors (colorways), to switch between. */
   colorways?: Colorway[];
   /** Guide lines dragged from the rulers (mm). */

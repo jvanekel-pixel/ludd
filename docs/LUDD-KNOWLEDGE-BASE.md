@@ -1145,6 +1145,17 @@ drawing a satin).
 | Show whole design | `End` | `player.end` |
 | Faster playback | `]` | `player.fasterAlt` |
 | Slower playback | `[` | `player.slowerAlt` |
+| Repair this design… | `Mod+Alt+D` | `stitch.repair` |
+| Remove stitches hidden under what's on top | `Alt+Shift+H` | `stitch.removeHidden` |
+| Thin out dense spots | `Alt+Shift+D` | `stitch.declump` |
+| Remove tiny stitches | `Alt+Shift+S` | `stitch.filterSmall` |
+| Limit density for this fabric | `Alt+Shift+L` | `stitch.densityLimit` |
+| Rebuild stitches at this size | `Alt+Shift+R` | `stitch.rebuild` |
+| Insert a stitch here | `Insert` | `stitch.insert` |
+| Insert a jump here | `Shift+Insert` | `stitch.insertJump` |
+| Lock both sides of this jump | `Alt+Shift+T` | `stitch.lockJump` |
+| Remove stitching hidden under shapes on top | `Alt+Shift+O` | `object.removeOverlap` |
+| Needle path only | `Shift+P` | `view.wireframe` |
 | Add a rounded rectangle | `Mod+Alt+4` | `shape.roundedRect` |
 | Add an oval | `Mod+Alt+5` | `shape.ellipse` |
 | Add a triangle | `Mod+Alt+6` | `shape.triangle` |

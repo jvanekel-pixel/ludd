@@ -198,6 +198,8 @@ type State = {
   showStitches: boolean;
   /** See-through stitches (Shift+N): thread drawn faint, to work over a picture. */
   seeThrough: boolean;
+  /** Needle path view (Shift+P): hairlines with a dot at every needle point. */
+  showWire: boolean;
   showPictures: boolean;
   crosshair: boolean;
   /** The drawing tool used last (D and X go back to it). */
@@ -230,6 +232,7 @@ type Actions = {
   setGhost: (g: Ghost | null) => void;
   setEdgeFit: (f: State["edgeFit"]) => void;
   toggleSeeThrough: () => void;
+  toggleWire: () => void;
   setTraceStep: (mm: number) => void;
   toggleTraceAssist: () => void;
   selectNode: (n: NodeRef | null) => void;
@@ -393,6 +396,7 @@ export const useStore = create<State & Actions>()((set) => ({
   spaceDown: false,
   showStitches: true,
   seeThrough: prefs.seeThrough ?? false,
+  showWire: prefs.showWire ?? false,
   edgeFit: null,
   showPictures: true,
   crosshair: false,
@@ -450,6 +454,11 @@ export const useStore = create<State & Actions>()((set) => ({
   setPen: (pen) => set({ pen, ghost: null }),
   setGhost: (ghost) => set({ ghost }),
   setEdgeFit: (edgeFit) => set({ edgeFit }),
+  toggleWire: () =>
+    set((s) => {
+      savePrefs({ showWire: !s.showWire });
+      return { showWire: !s.showWire };
+    }),
   toggleSeeThrough: () =>
     set((s) => {
       savePrefs({ seeThrough: !s.seeThrough });

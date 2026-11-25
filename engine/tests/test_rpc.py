@@ -221,6 +221,7 @@ def _sample_params(tmp: Path) -> dict[str, dict]:
         "applique.export_svg": {"layout": lay, "dest": str(tmp / "cut.svg")},
         "layout.optimize_order": {"layout": lay},
         "layout.optimize_jumps": {"layout": lay},
+        "repair.preview": {"layout": lay, "item_id": "a", "ops": []},
         "fabrics.list": {},
         "image.load": {"path": str(png)},
         "project.save": {"path": saved, "project_data": proj},
