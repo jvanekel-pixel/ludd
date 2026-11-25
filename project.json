@@ -33,11 +33,11 @@
     "monthlyCapUsd": 0,
     "spentThisMonthUsd": 0
   },
-  "phase": 2,
+  "phase": 3,
   "status": "active",
-  "nextAction": "QA pass 2 and its 10 decisions are merged (PRs #20, #21). Owner checks the AI model download once (Settings > AI tracing); then tag v1.0.1 when the owner asks",
-  "blockedOnHuman": null,
-  "lastSessionAt": "2026-11-24T18:00:00Z",
+  "nextAction": "Owner: merge PR #23; OK pushing branch docs/build-plan and opening its pull request; once the plan is on main, start Phase 3 in a fresh session with the prompt in BUILDPLAN.md section 10",
+  "blockedOnHuman": "Merge PR #23; say when to push docs/build-plan and open its pull request; decide whether to tag v1.0.1 before Phase 3 merges",
+  "lastSessionAt": "2026-11-24T23:50:00Z",
   "health": {
     "tests": "passing",
     "build": "passing",

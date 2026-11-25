@@ -44,6 +44,7 @@ Parked ideas, tech debt and nice-to-haves. Do not build these without the owner 
 - JEF hoop and stop codes wait for a Janome stitch-out (item 9, queued in stitchout-log.md).
 
 ## From docs/PLAN.md backlog (not yet started)
+Planned on 2026-11-24: every item in this section, and the nice-to-haves above that name a phase there, now sits in a phase (3 to 14) with a spec in `docs/phases/`. `docs/phases/README.md` has the index. The list stays for history; tick an item when its phase ships it.
 - [ ] Thread inventory and shopping list
 - [ ] SVG, DXF and PDF import
 - [ ] Guided first-design tutorial; contextual hints and F1 help per tool
