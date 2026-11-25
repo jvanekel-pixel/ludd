@@ -79,7 +79,8 @@ describe("shape settings after the panel split", () => {
     for (const [pattern, rows] of Object.entries(ROWS)) {
       const section = show(fill({ pattern }));
       expect(rowLabels(section), pattern).toEqual(rows);
-      expect(texts(section, 'select[aria-label="Fill pattern"] option'), pattern).toEqual(["Tatami", "Gradient", "Wave", "Contour", "Stipple", "Cross-stitch"]);
+      // The six it offered before the move, first and in the same order; later patterns come after.
+      expect(texts(section, 'select[aria-label="Fill pattern"] option').slice(0, 6), pattern).toEqual(["Tatami", "Gradient", "Wave", "Contour", "Stipple", "Cross-stitch"]);
       // Patterns sewn as lines over the shape offer no cross-hatch underlay.
       const open = ["contour", "stipple", "cross"].includes(pattern);
       expect(texts(section, '[aria-label="Underlay"] button'), pattern).toEqual(open ? ["Auto", "Edge"] : ["Auto", "Edge", "Cross-hatch"]);

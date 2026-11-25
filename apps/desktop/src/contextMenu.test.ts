@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { COMMANDS } from "./actions";
+import "./cmd"; // the feature commands the menus may offer, registered as the app does
 import { matchesShortcut } from "./commands";
 import { canvasMenu, itemMenu, pictureMenu, tidySeparators, type ContextItem } from "./contextMenu";
 import type { LayoutItem } from "./design/types";

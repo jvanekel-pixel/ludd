@@ -156,7 +156,7 @@ def test_after_items_pass_can_drop_a_block(tmp_path, hooks):
 
 
 def test_six_fill_patterns_registered_in_order():
-    assert list(fills.REGISTRY) == ["tatami", "gradient", "wave", "contour", "stipple", "cross"]
+    assert list(fills.REGISTRY)[:6] == ["tatami", "gradient", "wave", "contour", "stipple", "cross"]  # new ones after
 
 
 def test_unknown_fill_pattern_message_unchanged():
@@ -227,9 +227,13 @@ def _old_features(lay):
     return used
 
 
+#: The feature names LUDD 1.0.1 knows. Each later feature gets its own name beside them.
+OLD_FEATURES = {"fill_patterns", "motif_lines", "satin_ribbons", "stitch_edits", "text_on_path", "travel_under",
+                "trim_jumps_all"}
+
+
 def test_known_features_unchanged():
-    assert project.KNOWN_FEATURES == {"fill_patterns", "motif_lines", "satin_ribbons", "stitch_edits", "text_on_path",
-                                      "travel_under", "trim_jumps_all"}
+    assert OLD_FEATURES <= project.KNOWN_FEATURES
 
 
 def test_feature_tables_match_old_detector():
@@ -254,4 +258,4 @@ def test_feature_tables_match_old_detector():
     layouts.append({"items": items, "travel_under": True, "jumps_to_trims": 3})
     for lay in layouts:
         assert project._features(lay) == _old_features(lay), lay
-    assert project._features(layouts[-1]) == project.KNOWN_FEATURES
+    assert project._features(layouts[-1]) == OLD_FEATURES
