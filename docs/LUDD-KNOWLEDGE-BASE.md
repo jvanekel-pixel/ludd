@@ -831,9 +831,10 @@ original file isn't changed) and turn/resize with the design.
 Fills and satins in a stitch file that are sewn closer than the **Stitching on** fabric takes are made
 again at its normal spacing. Cotton, woven or denim: a fill closer than 0.33 mm becomes 0.40; a satin
 closer than 0.30 mm (between stitches on one side) becomes 0.36. T-shirt knit and felt: fills under
-0.37 become 0.44. Fleece is a little tighter than cotton's numbers, towel a little looser, stretchy
-sportswear the widest (0.47 for fills). These are first guesses until the stitch-outs. Only fills and
-satins it recognizes change; places where layers lie on each other stay thick (a note says so, L-032).
+0.37 become 0.44. Remade fills are sewn at 0.42 on fleece, 0.36 on towel and 0.47 on stretchy
+sportswear (each fabric's limits follow its density). These are first guesses until the stitch-outs.
+Only fills and satins it recognizes change; places where layers lie on each other stay thick (a note
+says so, L-032).
 
 ### F-1905 Rebuild stitches at this size — YES (added 2026-11-25)
 - For a resized stitch file: `Alt+Shift+R`, or tick it in Repair this design (F-1902). It recognizes
