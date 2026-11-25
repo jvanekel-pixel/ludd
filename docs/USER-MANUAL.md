@@ -844,6 +844,13 @@ machine.
 - **Knockdown stitches** (Ctrl+Shift+N): a light grid sewn first under the design so towel loops
   and fleece pile don't poke through. Set its thread to match the fabric: the ✎ next to
   **Knockdown** in Order & colors.
+- **Don't sew what's hidden under shapes on top** (Alt+Shift+O), for shapes you draw in LUDD:
+  a fill leaves out the part that a shape sewn later covers (a dense fill or satin, lettering or an
+  applique), so overlaps don't sew thick and hard. It keeps a margin under the edge so no fabric
+  shows (**More options → Keep under the edge**, 1 mm, in the Design section while it's on); the
+  margin itself is sewn by both. It follows the shapes as you move them. A fill that would be
+  completely hidden is sewn whole, with a note. Now and then a short travel line shows across the
+  lower fill. If a gap shows at an edge, raise the margin.
 - **Fewer jumps & trims** (Ctrl+Alt+T, also a tick box in the Design section; on for new
   designs): when the needle moves from one shape to the next in the same thread, and the way
   there will be covered by stitching sewn later (rows close enough to really hide it), it sews a
@@ -1096,6 +1103,7 @@ Shortcuts are also shown in every menu and on every button's tooltip.
 
 | Do this | Press |
 | --- | --- |
+| Don't sew what's hidden under shapes on top | Alt+Shift+O |
 | Combine same colors next to each other | Ctrl+Shift+C |
 | Sort colors (fewest thread changes) | Ctrl+Shift+L |
 | Put back the original colors | Ctrl+Shift+R |

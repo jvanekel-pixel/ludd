@@ -10,6 +10,7 @@
 - **Fix it** buttons on the checks for very short stitches, needle clumps and thick spots in a stitch file.
 - **Edit stitches** can add a stitch (Insert), turn a move into a jump (Shift+Insert) and lock both sides of a jump (Alt+Shift+T). Right-click selects the stitch first; stitches a repair or a lock added can't be picked.
 - **Needle path view** (Shift+P): hairlines with a dot at every needle point, whatever the zoom.
+- **Don't sew what's hidden under shapes on top** (⋯ menu, Alt+Shift+O), for shapes drawn in LUDD: fills leave out what a shape sewn later covers, keeping 1 mm under its edge (adjustable in the Design section). That kept edge is sewn by both shapes, and a short travel line can show across a lower fill (a known weak spot).
 - Fixed: the note that an added stitch, jump or lock no longer fits now shows on the design.
 - Not built: removing the hidden stitches of one stitch file under another (waiting on a patent check).
 

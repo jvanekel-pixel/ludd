@@ -113,6 +113,7 @@ One line per common question. Status, then where to read more.
 | fix a design that is too dense? | PARTIAL (dense fills and satins; layers aren't thinned) | F-1904, L-032 |
 | insert a stitch or a jump, or lock a jump? | YES (Edit stitches) | F-1906 |
 | see exactly where the needle goes? | YES (Needle path view) | F-407 |
+| stop sewing what's hidden under another shape? | YES for shapes drawn in LUDD; NO under merged stitch files | F-1207, L-030 |
 | recolor threads, match to real thread brands? | YES | F-1601, F-1603 |
 | search threads by color code (#hex)? | YES | F-1602 |
 | keep my own spools (My threads)? | YES | F-1604 |
@@ -521,6 +522,25 @@ using comes back afterwards.
 `Shift+O`: put a shape over a fill, select the fill and it, cut → hole, bite or pieces. The cutter
 stays (Delete it if only for cutting).
 
+### F-1207 Don't sew what's hidden under shapes on top — YES (added 2026-11-25)
+- ⋯ → **Don't sew what's hidden under shapes on top**, or `Alt+Shift+O`: one switch for the whole
+  design. Off by default; older projects sew as before. While it's on, the Design section shows the
+  switch with **More options → Keep under the edge** (1 mm; 0.5 to 3 mm).
+- A fill sewn in rows leaves out the part that a shape sewn later covers: a fill in rows or a satin
+  with rows 0.6 mm apart or closer (after the fabric choice), lettering, or an applique (its fabric
+  covers all inside its outline). Open patterns (contour, stipple, cross-stitch, spiral), gradients and
+  lines cover nothing. Stitch files neither cover nor get trimmed (L-030).
+- It keeps sewing a margin under the edge, so no fabric shows. Hidden patches under 9 mm² or
+  narrower than 2 mm are sewn as before. It follows the shapes as you move or reorder them. A fill
+  that would be completely hidden is sewn whole, with a note to delete it or move it up.
+- The margin under the edge is sewn by both shapes, so the density map can still show that thin band
+  over the limit. Past it, nothing is over (in the tests).
+- Because the lower fill now has a hole, a short travel line can run across rows already sewn (L-002).
+- Size boxes and alignment still measure the whole shape.
+- A design with hundreds of overlapping shapes takes a few seconds longer to draw the first time (about
+  12 s instead of 3 s with 400).
+- A project with the switch on needs this version of LUDD or newer to open.
+
 ### F-1204 Knife and merge — YES
 Knife `Shift+K`: cut a fill, line or satin ribbon along a line (two clicks) into pieces with the
 same settings. Merge `Ctrl+M`: two or more touching/overlapping fills → one. If you change or undo
@@ -886,7 +906,7 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | ID | What | Status | Workaround | Could it be built? |
 | --- | --- | --- | --- | --- |
 | L-001 | **Two-color gradient / color blend** (one color fading into another by interleaved rows) | NO | Gradient pattern fades one color to sparse; layer two Gradient fills at opposite angles by hand. | Yes: a "Blend" fill was offered and not yet requested. |
-| L-002 | **Fill with holes may show a travel line on top**: when holes split a tatami fill into regions, the needle can travel across rows already sewn. | Known weakness | Cut the fill into hole-free bands with cuts parallel to the rows (Knife), or use Contour/Stipple. | Yes (engine route planning). |
+| L-002 | **Fill with holes may show a travel line on top**: when holes split a tatami fill into regions, the needle can travel across rows already sewn. With **Don't sew what's hidden** on (F-1207) a lower fill can get such a line too (in the tests: about 19 mm across a square under a square, 35 mm under lettering). | Known weakness | Cut the fill into hole-free bands with cuts parallel to the rows (Knife), or use Contour/Stipple. | Yes (engine route planning). |
 | L-003 | **Multi-line text** in one lettering object | NO | One text per line; group them. | Yes. |
 | L-004 | **Open running line starting mid-line** | NO (ends only) | Split it with the Knife, or close it into a loop. | Possibly. |
 | L-005 | **Per-letter stitch angle / direction** in lettering | NO | Break into shapes (F-1407), then use each letter's purple dots. | Yes. |
@@ -911,7 +931,7 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | L-024 | **Memory guard for damaged or crafted .vp3 / .hus files** | NO | Only open stitch files you trust (LUDD is offline, so this only matters for files from strangers). A damaged one can make LUDD use a lot of memory and slow down; close LUDD from the task manager if so. | Yes, by reading files in a separate memory-limited process. |
 | L-025 | **A placed stitch file with edits doesn't pick up changes made to the original later** | By design (2026-11-24) | Add the changed file again and redo the edits (recolor, delete, stops). Without edits, a placed file follows the original. | Possibly (a "reload and keep what still fits" option). |
 | L-026 | **Spiral leaves a light outline on most shapes**: where the shape cuts the rings, the thread joining the pieces runs along the edge (outline or hole rim), never across the rings. At most a few threads share any one spot (4 on most ready-made shapes at 60 mm, 5 on the Hexagon); the ready-made Circle has almost none | By design (not yet checked on fabric) | A satin border covers it round the outside, not round holes (**Add a satin border**, `Shift+B`). | No. |
-| L-030 | **Remove the stitches of one stitch file hidden under another** (after merging designs) | NO (not built: waiting on a patent check) | Move the designs apart; delete the color underneath (Order & colors) or the hidden stitches (Edit stitches); **Repair → Thin out dense spots / Limit density**. | Yes, if the check allows. |
+| L-030 | **Remove the stitches of one stitch file hidden under another** (after merging designs) | NO (not built: waiting on a patent check). Shapes drawn in LUDD can use Don't sew what's hidden (F-1207) | Move the designs apart; delete the color underneath (Order & colors) or the hidden stitches (Edit stitches); **Repair → Thin out dense spots / Limit density**. | Yes, if the check allows. |
 | L-031 | **Rebuild doesn't recognize motif fills, cross-stitch or programmed fill patterns** (nor satins with stitches over 0.6 mm apart) | By design for now | Those parts are resized as they are; check them on the density map. | Yes. |
 | L-032 | **Thick spots made by layers inside one stitch file aren't thinned** | NO | Limit density re-spaces dense fills and satins only; delete hidden layers by color, or in Edit stitches. | Possibly. |
 | L-033 | **Stitches remade by Rebuild or Limit density can't be edited one by one** | By design | Take the repair off (✕ in the panel's Repair section), edit, then turn it on again. | No. |
@@ -943,7 +963,8 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | T-019 | I changed a stitch file in another program, but LUDD still sews the old one | The placed copy has edits, so LUDD keeps its own copy (L-025) | Add the file again (Ctrl+Shift+O) and redo the edits; delete the old copy. |
 | T-020 | An applique now has more machine stops than before (cut-stops on) | Since 2026-11-24 moves over 3 mm between applique edges are trimmed, and cut-stops turn trims into stops | Expected: each stop cuts a thread that used to lie over the fabric. Untick "Have the machine cut jump threads" to sew without them. |
 | T-023 | "I resized a bought design and it's stiff, or fabric shows through" | Resizing a stitch file only stretches or squeezes its stitches | **Repair this design → Rebuild stitches at this size** (`Alt+Shift+R`, F-1905). For parts it can't rebuild, check the density map. |
-| T-024 | "Two designs overlap and the needle breaks" (a hard lump) | Thread piled up where they overlap | Check the density map. For stitch files: Repair this design → **Thin out dense spots** and **Limit density** (F-1902); stitches hidden under another file aren't removed yet (L-030), so move them apart or delete what's underneath. |
+| T-024 | "Two designs overlap and the needle breaks" (a hard lump) | Thread piled up where they overlap | Check the density map. Shapes drawn in LUDD: turn on **Don't sew what's hidden** (`Alt+Shift+O`, F-1207). For stitch files: Repair this design → **Thin out dense spots** and **Limit density** (F-1902); stitches hidden under another file aren't removed yet (L-030), so move them apart or delete what's underneath. |
+| T-025 | A gap shows at the edge where one shape covers another | Don't sew what's hidden (F-1207) keeps too little under the edge for this fabric | In the Design section, raise **More options → Keep under the edge**, or turn the switch off. |
 | T-026 | In Edit stitches only a few stitches show handles | Rebuild or Limit density made the others (L-033) | Take those repairs off (✕ in the panel's Repair section), edit, turn them on again. |
 
 ---
@@ -983,7 +1004,7 @@ Use this to answer "did that change?" or "why is it different?". Full detail: `d
 
 | Date | Change |
 | --- | --- |
-| 2026-11-25 | **Repair bought designs** (a stitch file with no repair sews as before): **Repair this design** (F-1902, `Ctrl+Alt+D`, with before and after numbers and Show on the design); **Remove tiny stitches** and **Thin out dense spots** (F-1903); **Limit density for this fabric** (F-1904); **Rebuild stitches at this size** (F-1905); **Fix it** on three checks; insert stitches and jumps and lock a jump (F-1906); needle path view (F-407). Removing hidden stitches under another stitch file is not built (L-030). |
+| 2026-11-25 | **Repair bought designs** (a stitch file with no repair sews as before): **Repair this design** (F-1902, `Ctrl+Alt+D`, with before and after numbers and Show on the design); **Remove tiny stitches** and **Thin out dense spots** (F-1903); **Limit density for this fabric** (F-1904); **Rebuild stitches at this size** (F-1905); **Fix it** on three checks; insert stitches and jumps and lock a jump (F-1906); needle path view (F-407); **Don't sew what's hidden under shapes on top** for drawn shapes (F-1207). Removing hidden stitches under another stitch file is not built (L-030). |
 | 2026-11-24 | **Spiral fill and more shapes** (nothing already sewn changes): a new **Spiral** fill pattern (F-1305; the thread joining its pieces follows the edge, L-026); the Shapes menu adds a rounded rectangle, oval, triangle, polygon and heart (`Ctrl+Alt+4`–`8`, F-501). Behind the scenes, the stitch engine and panel were split into smaller parts, and `python scripts/check.py` runs every check. Also corrected: Stipple and Cross-stitch don't move their start with the green dot (F-701). |
 | 2026-11-24 | **Sewing time and thread estimate** (F-406): the Design section shows about how long the design sews on your machine, how many thread changes, and about how much top and bobbin thread it uses, per color under **Thread used**. Machine profiles can set `speed_spm`. |
 | 2026-11-24 | **Phase 1 audit fixes**: `S` zooms to everything selected (was one item); the AI key file is written whole and private from the start on Mac/Linux. No stitch changes. |
