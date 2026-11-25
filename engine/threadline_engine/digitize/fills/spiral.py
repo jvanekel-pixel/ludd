@@ -24,6 +24,7 @@ from . import FillPattern, Param, register
 SAMPLE_MM = 0.5  # how finely the spiral is drawn before it's cut to the shape
 CLIP_SAMPLES = 500  # samples cut at a time: ordering the cuts of a whole big spiral at once is slow
 SHORTEST_PIECE_MM = 1.0  # stretches inside the shape no longer than this are left out
+SAME_WIDTH_MM = 0.1  # a spot that near the biggest circle's radius from the outline is as wide
 SHORTEST_STITCH_MM = 0.8  # the stitch length aimed for on the tightest turns
 SAG_MM = 0.15  # on a circle of radius r, a stitch 2 * sqrt(2 * SAG_MM * r) long cuts this far inside it
 TIGHT_MM = 0.6  # rings closer than this get a warning
@@ -31,9 +32,15 @@ TIGHT_WARNING = "Rings this close sew like a solid fill and can pucker in the mi
 
 
 def _middle(shape) -> Point:
-    """The middle of the shape's widest spot: the center of the biggest circle that fits inside."""
+    """The middle of the shape's widest spot: the center of the biggest circle that fits inside. When
+    many spots are as wide (all along the middle of a rectangle), the search may pick one near an
+    end, so the shape's centroid is used if it is one of them."""
     if hasattr(shapely, "maximum_inscribed_circle"):  # shapely 2.1 and later
-        x, y = shapely.maximum_inscribed_circle(shape).coords[0]
+        circle = shapely.maximum_inscribed_circle(shape)  # a line from its center to the outline
+        centroid = shape.centroid
+        if shape.contains(centroid) and shape.boundary.distance(centroid) >= circle.length - SAME_WIDTH_MM:
+            return centroid.x, centroid.y
+        x, y = circle.coords[0]
         return x, y
     p = shape.representative_point()
     return p.x, p.y
