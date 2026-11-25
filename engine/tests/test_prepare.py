@@ -255,6 +255,8 @@ def test_qa4_long_jumps_not_marked_for_trimming_are_mentioned_for_the_pe550d():
     {"hoops": [{"id": "h", "width_mm": "100", "height_mm": 100}]},
     {"hoops": [{"id": "h", "width_mm": 0, "height_mm": 100}]},
     {"max_colors": "8"},
+    {"speed_spm": 0},
+    {"speed_spm": "650"},
     {"formats": []},
     {"formats": "pes"},
     {"hoops": ["x"]},
@@ -276,3 +278,16 @@ def test_qa4_a_profile_saved_with_a_byte_order_mark_is_read(isolated_data_dir):
     prof = {"id": "bom", "name": "BOM", "formats": ["pes"], "cuts": "trim", "hoops": [{"id": "h", "width_mm": 100, "height_mm": 100}]}
     (d / "bom.json").write_bytes(codecs.BOM_UTF8 + json.dumps(prof).encode("utf-8"))
     assert "bom" in [m["id"] for m in profiles.list_machines()]
+
+
+def test_machine_speed_for_the_sewing_time_estimate(isolated_data_dir):
+    by_id = {m["id"]: m for m in profiles.list_machines()}
+    assert by_id["brother-pe550d"]["speed_spm"] == 650
+    d = isolated_data_dir / "machines"
+    d.mkdir(parents=True, exist_ok=True)
+    prof = {"id": "mine", "name": "Mine", "formats": ["pes"], "cuts": "trim", "hoops": [{"id": "h", "width_mm": 100, "height_mm": 100}]}
+    (d / "mine.json").write_text(json.dumps(prof), encoding="utf-8")
+    (d / "fast.json").write_text(json.dumps({**prof, "id": "fast", "speed_spm": 1000}), encoding="utf-8")
+    by_id = {m["id"]: m for m in profiles.list_machines()}
+    assert by_id["mine"]["speed_spm"] is None  # LUDD assumes 600 when a profile doesn't say
+    assert by_id["fast"]["speed_spm"] == 1000

@@ -1,17 +1,11 @@
 # Session Handoff (Overwrite Every Session — <=25 Lines)
 
 - **Updated:** 2026-11-24
-- **Current Phase:** Phase 2: 1.0.1 Hardening & Release
+- **Current Phase:** Phase 2: 1.0.1 Hardening & Release (only the owner's model-download check and the v1.0.1 tag left); first Phase 4 item started early at the owner's request
 - **Active Routing:** balanced
-- **What Changed:** The owner's 10 QA pass 2 decisions (docs/QA-REPORT-2.md) are in, on branch `claude/qa2-decisions-e5fc5b` (cut from `claude/qa-pass-2-b93602`, PR #20), committed in 6 groups, not pushed:
-  1-4 (stitch output): fills with a neck under 0.6 mm route travel along edges (all pieces of the shrunk zone, then a 0.05 mm inset); a fill never ends on a jump; tie_off locks before a trailing trim/jump; zigzag underlay crosses back; applique moves >3 mm between edges get TRIM+JUMP; Split long stitches subdivides the outer-edge step at sharp corners.
-  5: a placed stitch file with edits (kept.has_edits) sews and saves from its private copy (`kept.pinned`, `as_added`); no format change.
-  6: samples' PES/JEF regenerated (1.0.0 .ludd kept as-is); golden test renders each .ludd vs its PES.
-  7-8: vitest pairs Tauri plugin crates with npm packages (Cargo.toml/package.json and both lockfiles); ci.yml `rust-macos` job with placeholder sidecar; release.yml runs `cargo test --lib` after the freeze (tauri-build needs the sidecar, so not inside the Tests step).
-  9: Ctrl+Z while drawing removes the last point, Ctrl+Y waits. 10: 1.0.1 changelog in US spelling.
-  Docs: CHANGELOG, KB (F-103/502/1307/1501/1901/204, L-025, T-019/020, index, history), manual, in-app Help; 4 stitch-out rows (QA2 1-4).
-- **Snapshots re-recorded (intended):** applique_with_hole_run_tack (S3 trims), satin_ribbon_auto_comp_widen and satin_ribbon_split (S2 crossing).
-- **Checks Run:** engine `CI=1 uv run --locked pytest -q` pass (697 passed, 1 skipped); `pnpm typecheck` pass; `pnpm test` pass (43 files, 230); desktop build pass (known >500 kB chunk warning); `cargo test --lib` with a placeholder sidecar pass on Windows. Not run: macOS CI (needs a push), installer, the app.
-- **Note:** `test_ai.py::test_qa2_t1_a_redirect…` failed twice early in the session (sandbox couldn't reach its local test servers), then passed in the final run. The report's "fill ends on a jump" repro no longer reproduces on current code; the fix is kept and the lock-stitch part is unit-tested.
-- **Blocked On Human:** Owner OK to push the branch and open a PR into `claude/qa-pass-2-b93602` (or main if #20 merged).
-- **Next Action:** Push + PR after the owner's OK; then tag v1.0.1 when the owner asks. The LUDD-User-Manual.pdf was not regenerated.
+- **What Changed:** Merged to main today: #19 (Phase 1 audit notes, D-018), #20 (QA pass 2 report + 29 fixes), #21 (owner's 10 QA decisions, stitch output changes), #22 (3 Phase 1 audit fixes). CI on main green.
+  This branch (`feat/stitch-estimate`): sewing time and thread estimate (F-406). `design/estimate.ts` (stitches ÷ machine speed; thread = stitch + uncut jump lengths + 1 mm per stitch; bobbin = 1/3), shown in the Design section (Sewing time, Thread, Thread used per color). Machine profiles gain optional `speed_spm` (PE550D and generic Janome 650; null = 600) in profiles.py, machine.schema.json, types.ts.
+- **Checks Run:** `pnpm typecheck` pass; `pnpm test` pass (44 files, 241); engine pytest pass (657 passed, 1 skipped; this worktree has no git-ignored fixtures/, so the fixture tests aren't collected). Not run: the app by hand, cargo test.
+- **Two-Strike (installer):** `pnpm tauri build --config '{"bundle":{"createUpdaterArtifacts":false}}'` on main failed twice at the NSIS bundling step with "os error 32: file in use" (after "NSIS.exe is outdated / directory missing files. Recreating it"). No LUDD/NSIS process was running. Likely antivirus holding the freshly downloaded NSIS tools in %LOCALAPPDATA%\tauri\NSIS. Engine freeze + smoke and the Rust build both passed. Workaround: CI's `ludd-windows` artifact from the main run.
+- **Blocked On Human:** Owner OK to download the CI installer artifact (or to retry after excluding %LOCALAPPDATA%\tauri from the antivirus); owner checks Settings > AI tracing > Download once; owner OK to commit/PR this branch.
+- **Next Action:** PR this branch after the owner's OK; tag v1.0.1 when the owner asks; stitch-out row not needed (no stitch output change).

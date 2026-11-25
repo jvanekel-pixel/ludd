@@ -2,6 +2,10 @@
 
 ## 1.0.1 (Oct 11, 2026)
 
+### Sewing time and thread estimate (2026-11-24)
+- **Design** section: **Sewing time** (about how long the machine sews at its top speed, plus how many thread changes) and **Thread** (top and bobbin). **Thread used** lists each color with about how much it uses, so you can check the spool before you start.
+- Machine profiles have a new optional `speed_spm` (stitches per minute): 650 for the Brother PE550D and the generic Janome; 600 is assumed when a profile doesn't say.
+
 ### Phase 1 audit fixes (2026-11-24)
 From docs/PHASE1-AUDIT-REVIEW.md. No stitch output changed.
 - **S (Zoom to the selection)** with several things selected zooms to all of them (it zoomed to just one).

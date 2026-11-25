@@ -31,9 +31,10 @@ import { heldCount, holdEscape } from "../escape";
 import { MM_PER_IN, type Units } from "../design/grid";
 import { hasRecolors, scaleBy, scaleImageByMeasure, updateTransform } from "../design/layout";
 import { hoopFit } from "../design/machine";
+import { estimate, fmtMinutes, fmtThread } from "../design/estimate";
 import { blockAt, visibleRecords } from "../design/player";
 import { isObject, isRibbon, isText, type FileItem, type Layout, type LayoutItem, type LayoutItemInfo, type ObjectItem, type RefImage, type Thread } from "../design/types";
-import { selectHoop, selectImages, selectLayout, useStore } from "../store";
+import { selectHoop, selectImages, selectLayout, selectMachine, useStore } from "../store";
 import { Section, Sub, Row, type SelKind } from "./Accordion";
 import { Menu } from "./Menu";
 import { itemMenu, openContextMenu, pictureMenu } from "../contextMenu";
@@ -1187,8 +1188,10 @@ function DesignSection({ sel }: { sel: SelKind }) {
   const units = useStore((s) => s.units);
   const preview = useStore((s) => s.preview);
   const setPreview = useStore((s) => s.setPreview);
+  const machine = useStore(selectMachine);
   if (!layout) return null;
   const fit = design && hoop ? hoopFit(design.info, hoop) : null;
+  const est = design && design.info.stitches > 0 ? estimate(design, machine) : null;
   return (
     <Section
       id="design"
@@ -1216,6 +1219,24 @@ function DesignSection({ sel }: { sel: SelKind }) {
               <dt>Colors</dt>
               <dd>{design.info.colors}</dd>
             </div>
+            {est && (
+              <>
+                <div title={`At ${est.speedSpm} stitches a minute, the machine's top speed. Long stitches slow it down, so allow a little more. Thread changes are extra.`}>
+                  <dt>Sewing time</dt>
+                  <dd>
+                    {fmtMinutes(est.minutes)}
+                    {est.threadChanges > 0 && <small> + {est.threadChanges} thread {est.threadChanges === 1 ? "change" : "changes"}</small>}
+                  </dd>
+                </div>
+                <div title="Top thread, counting about 1 mm per stitch for going into the fabric. The bobbin uses about a third as much.">
+                  <dt>Thread</dt>
+                  <dd>
+                    {fmtThread(est.topMeters, units)}
+                    <small> · bobbin {fmtThread(est.bobbinMeters, units)}</small>
+                  </dd>
+                </div>
+              </>
+            )}
           </dl>
         </>
       ) : (
@@ -1247,6 +1268,23 @@ function DesignSection({ sel }: { sel: SelKind }) {
         </Row>
         <p className="hint">Just a picture behind the design, to see how it looks: nothing is stitched.</p>
       </Sub>
+      {design && est && (
+        <Sub id="design-thread" title="Thread used" summary={fmtThread(est.topMeters, units)}>
+          <ul className="thread-use">
+            {est.perThread.map((t) => {
+              const th = design.threads[t.thread];
+              return (
+                <li key={t.thread}>
+                  <span className="swatch small" style={{ background: th?.color }} />
+                  <span className="name">{th ? th.name || th.color : `Thread ${t.thread + 1}`}</span>
+                  <span className="amount">{fmtThread(t.meters, units)}</span>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="hint">Estimates, to check you have enough on the spool. Real use depends on the fabric and tension.</p>
+        </Sub>
+      )}
       {design && (
         <Sub id="design-details" title="File details" summary={design.format.toUpperCase()}>
           <dl>

@@ -35,9 +35,9 @@
   },
   "phase": 2,
   "status": "active",
-  "nextAction": "QA pass 2 and its 10 decisions are merged (PRs #20, #21). Owner checks the AI model download once (Settings > AI tracing); then tag v1.0.1 when the owner asks",
-  "blockedOnHuman": null,
-  "lastSessionAt": "2026-11-24T18:00:00Z",
+  "nextAction": "Owner: check Settings > AI tracing > Download once; OK the stitch-estimate PR; tag v1.0.1 when ready. Local installer build blocked by os error 32 (see HANDOFF)",
+  "blockedOnHuman": "Installer: local NSIS bundling fails with 'file in use' twice; download the CI artifact or exclude %LOCALAPPDATA%\tauri from antivirus",
+  "lastSessionAt": "2026-11-24T21:30:00Z",
   "health": {
     "tests": "passing",
     "build": "passing",

@@ -321,6 +321,8 @@ export type Machine = {
   max_stitch_mm: number | null;
   max_stitches: number | null;
   max_colors: number | null;
+  /** Top sewing speed (stitches per minute), for the time estimate; null = LUDD assumes 600. */
+  speed_spm?: number | null;
   notes: string;
   builtin: boolean;
 };
