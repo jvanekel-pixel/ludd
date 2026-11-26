@@ -110,7 +110,7 @@ def _layout(**text):
     item = {"id": "t", "kind": "text", "text": "Name", "font": {"family": "Arial", "style": "Regular"}, "size_mm": 15,
             "spacing_mm": 0, "style": "satin", "shape": {"type": "line"}, "monogram": False, "thread": RED,
             "transform": {}, "threads": [], "ops": [], "placeholder": True, "bind": "number", "fit_width_mm": 60, **text}
-    return {"title": "My design", "layout": {"items": [item], "merge_colors": False, "color_sort": False}, "images": []}
+    return {"title": "Team set", "layout": {"items": [item], "merge_colors": False, "color_sort": False}, "images": []}
 
 
 def test_templates_are_saved_in_the_data_folder_and_listed(isolated_data_dir):

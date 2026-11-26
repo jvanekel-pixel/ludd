@@ -86,3 +86,4 @@ Planned on 2026-11-24: every item in this section, and the nice-to-haves above t
 - [ ] Shadow plus outline adds 2 to 3 s to the first drawing of a two-word text (mostly choosing the shadow fills' angles)
 - [ ] Order & colors has no "Back to ..." for a single letter's own color (the letter panel can undo it)
 - [ ] Color sets don't include single letters' own colors (L-035)
+- [ ] True satin shows a start and end dot on every column (74 on "Happy Birthday"): consider showing them only for the letter under the mouse, or only on fills
