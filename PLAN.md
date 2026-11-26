@@ -89,17 +89,17 @@ Why it matters: two-color blend is Hatch 4's headline feature and is locked to i
 Spec: docs/phases/PHASE-06-fills-and-stitch-quality.md
 > Verify: `python scripts/check.py --all` | Done when: every new fill and option has its tests, snapshots, invariants and a PES and JEF round trip; a two-color blend's combined density is within 15% of a plain fill; rows follow each angle line within 5 degrees
 - [ ] P6-A1 Push compensation ("End trim") for fills and satins (held: owner decision 1 in the spec)
-- [ ] P6-A2 Weave: standard, brick, twill, smooth, random
-- [ ] P6-A3 Carved lines in a fill (emboss)
-- [ ] P6-A4 Feathered edges
-- [ ] P6-A5 Hand-sewn look for lines, satins and fills
-- [ ] P6-B1 Motif fill
-- [ ] P6-B2 My motifs: save a drawn line as a motif; import and export
-- [ ] P6-B3 Maze fill
-- [ ] P6-B4 Ripple fill
-- [ ] P6-B5 Mesh fill
-- [ ] P6-C1 Blend: two or three colors fading into each other (lifts L-001)
-- [ ] P6-C2 Turning fills: several angle lines in one fill
+- [x] P6-A2 Weave: standard, brick, twill, smooth, random
+- [x] P6-A3 Carved lines in a fill (emboss)
+- [x] P6-A4 Feathered edges
+- [x] P6-A5 Hand-sewn look for lines, satins and fills
+- [x] P6-B1 Motif fill
+- [x] P6-B2 My motifs: save a drawn line as a motif; import and export
+- [x] P6-B3 Maze fill
+- [x] P6-B4 Ripple fill
+- [x] P6-B5 Mesh fill
+- [x] P6-C1 Blend: two or three colors fading into each other (lifts L-001)
+- [x] P6-C2 Turning fills: several angle lines in one fill
 
 ## Phase 7: Lines, Sequencing & Drawing Tools
 Why it matters: branching is sold only in StitchArtist Level 3 ($699); freehand drawing and SVG import are what people expect from any drawing program.

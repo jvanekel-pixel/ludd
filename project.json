@@ -35,9 +35,9 @@
   },
   "phase": 6,
   "status": "active",
-  "nextAction": "Phase 6 (fills and stitch quality) in a fresh session once Phase 5 is merged: answer its spec's Owner decisions first",
-  "blockedOnHuman": "Answer the Phase 6 spec's Owner decisions",
-  "lastSessionAt": "2026-11-26T06:40:00Z",
+  "nextAction": "Phase 6 audit (built on claude/wonderful-gauss-247164, not pushed); push and pull request only on the owner's yes after it",
+  "blockedOnHuman": "P6-A1 push compensation: the patent check (spec decision 1)",
+  "lastSessionAt": "2026-11-26T20:18:38Z",
   "health": {
     "tests": "passing",
     "build": "passing",

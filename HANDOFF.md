@@ -1,19 +1,13 @@
 # Session Handoff (Overwrite Every Session — <=25 Lines)
 
 - **Updated:** 2026-11-26
-- **Current Phase:** Phase 5 (lettering) audit **PASSED** at `6e78498` (branch `claude/phase-05-lettering-f1ee69`): first audited at `79a6ea0` with five findings, none blocking; all five fixed and re-checked. This stamp lands on `main` with the Phase 5 pull request. `phase` is now 6. P5-C2 (BX fonts) not done by owner decision 1; L-036 says to use the letter files that came with the font.
+- **Current Phase:** 6 (fills and stitch quality) is **built, not audited**, on local branch `claude/wonderful-gauss-247164`. Not pushed, no pull request. `phase` stays 6 until the audit passes.
 - **Active Routing:** balanced (top model plans and audits, Sonnet builds)
-- **Checks Run (audit, at `6e78498`):** `check.py --all` PASS with a frozen engine: engine 1630 passed, 2 skipped; UI 420; types, kb, build; Rust 2 passed. Engine with `fixtures/` copied in: 1675 passed, 1 skipped (copies removed). No snapshot file changed since `main` except Phase 5's three new ones and `rpc_methods.json`; no test deleted. True satin fall-backs re-measured on Arial (62 letters): 0 at 5 and 12 mm, 1 at 25, 27 at 60.
-- **Findings, all fixed (each fix's tests fail with the fix switched off):**
-  1. The under-6 mm rule read the typed height; underlay and the note now go by the height each letter sews at (handles, a turned or curved letter, a letter's own size; an envelope isn't counted, stitched fonts keep their stitches) (`1835d07`).
-  2. Names-list file names: "Con.Smith"-style device names get a `_`, names cut at 100 characters or 200 bytes (`c7f5fde`).
-  3. True satin's Satin-look pieces, and a letter with no columns, go in a fixed order (`24d4faa`).
-  4. Done-when 4 now has a test of the app's own export against the real engine, in a temporary data folder, inside `pnpm test` (`968aec4`).
-  5. The pull request text was corrected; the motif list test asserts all five motifs (`6e78498`).
-- **Audit verdicts on the planner's points:** old text sews the same except letters sewn under 6 mm (decision 3, told in CHANGELOG, KB F-1420, stitchout-log); older tests changed only as the spec needs; True satin tests check shape and 97% cover; snapshots are exact on fonts built in the tests, cross-computer risk low; every new setting reaches every cache, including resizing across 6 mm and back; names-list files never leave the folder or overwrite; tests use a temporary data folder, names are made up, frames and placements are LUDD's own, plain text sets no project flag.
-- **After the audit (pull request 27):** the first GitHub run failed on both Macs in one snapshot (`bulge`): a stitch exactly on a rounding step, rounded by the last digit of a sine. The Phase 5 snapshot suites now use `digest_pattern_steady` and were re-recorded (13 hashes; no stitch changed, engine code untouched), and a new test nudges that last digit. Engine tests are now 1634 passed, 2 skipped. Done by the planning session; not audited separately.
-- **Parked (BACKLOG, "From the Phase 5 audit"):** a stitched font under 6 mm says underlay is left out though its stitches don't change; the thin-stroke note ignores the handles; envelopes aren't counted in the 6 mm rule; True satin's pass checks have no margin; an older stand-in-font cache gap.
-- **Blocked On Human:**
-  1. Answer the Phase 6 spec's Owner decisions.
-  2. Older: P4-A1 patent check; tag v1.0.1; AI tracing download check; P6-A1 patent; photo stitch (Phase 9).
-- **Next Action:** After the merge, Phase 6 (fills and stitch quality) in a fresh session: answer its spec's Owner decisions first.
+- **What Changed:** Blend, Motif, Maze, Ripple and Mesh fills; My motifs; Weave; carved lines; feathered edges; hand-sewn look; turning fills; docs; golden PES/JEF round trips. **P6-A1 (push compensation) not built:** decision 1 unanswered, so decision 2 wasn't needed (L-044 says why). Every departure: PHASE-06 spec section 12.
+- **Numbers:** blend rows per band 20,20,20,20,20, the same as one color (0.0% apart); turning fills have **no turn limit** (lines 60° apart; at most 1.7° off at a line); **no Ink/Stitch code adapted**.
+- **Not met exactly:** done-when 1: weave, carve, feather, hand-sewn look and turning are settings, so they have no registry or descriptor entry of their own. Turning step 7 changed: only the loops are cut, not a whole side (the spec's way covered 18% of a plausible fill).
+- **Seen in the app (scratch data):** blend fades, with its panel controls; carving shows a groove and ⋯ removes it; a second angle line turns the rows, warns on a hard turn, can be dragged and removed; the Motifs window saved a line that then filled a shape. Fixed after looking: turning lines acting on other patterns, the carve hint, the turning heading, Blend's dead Cross-hatch button, Motifs missing from the menus (the last two checked by tests only).
+- **Checks Run:** `check.py --all` PASS at `a0adf0d` with a frozen engine: engine 2201 passed, 2 skipped (was 1634/2); UI 559 (was 420); types, kb, build; Rust 2 passed. With the owner's designs: 2246 passed, 1 skipped (was 1679/1); copies, temp folder and `_logs/rebuild-coverage.txt` deleted, no copies found. The frozen engine sews every new feature exactly like the source. Later commits change only plan and note files.
+- **Parked:** BACKLOG "From Phase 6".
+- **Blocked On Human:** P6-A1 patent check (decision 1). Older: P4-A1 patent check; tag v1.0.1; AI tracing download check; photo stitch (Phase 9).
+- **Next Action:** the Phase 6 audit on the stronger model; push and pull request only on the owner's yes.
