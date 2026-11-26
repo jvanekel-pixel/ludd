@@ -205,7 +205,7 @@ def test_text_follows_a_drawn_line(font_path):
 
 def test_qa_c7_missing_font_is_shown_in_a_stand_in_with_a_warning(font_path, monkeypatch):
     stand_in = {"family": "Threadline Test", "style": "Regular", "path": font_path, "index": 0, "kind": "outline"}
-    monkeypatch.setattr(lettering, "list_fonts", lambda: [stand_in])
+    monkeypatch.setattr(lettering.fonts, "list_fonts", lambda: [stand_in])
     missing = {"path": "C:/nowhere/Fancy.ttf", "index": 0, "family": "Fancy Script", "style": "Regular"}
     objs, warnings = lettering.layout_text({"text": "IO", "font": missing, "size_mm": 10, "style": "satin"})
     assert objs

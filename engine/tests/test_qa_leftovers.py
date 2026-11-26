@@ -53,7 +53,7 @@ def test_advisor_skips_a_picture_it_cannot_read(tmp_path):
 
 
 def test_font_index_holding_a_list_is_rebuilt(monkeypatch, isolated_data_dir):
-    monkeypatch.setattr(lettering, "font_dirs", lambda: [])
+    monkeypatch.setattr(lettering.fonts, "font_dirs", lambda: [])
     isolated_data_dir.mkdir(parents=True, exist_ok=True)
     (isolated_data_dir / "font-index.json").write_text("[1, 2, 3]", encoding="utf-8")
     assert lettering.list_fonts() == []
