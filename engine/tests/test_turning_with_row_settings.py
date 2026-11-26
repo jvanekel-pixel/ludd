@@ -79,12 +79,15 @@ def test_a_line_that_bends_the_rows_back_on_themselves_still_fills_the_shape():
 
 
 def test_a_sharp_turn_never_lays_rows_on_top_of_each_other():
-    # Rows that would loop back across their neighbors are cut where they loop, so no spot gets
-    # much more thread than a plain fill gives it.
+    # Rows that would loop back across their neighbors are cut where they loop: over the whole
+    # shape about a plain fill's thread, and even in the crease where the rows meet no 2 mm
+    # square gets 1.8 times it (1.6 as written; 3 times with the loops left in).
     obj = _fill(RECTANGLE, BENT_BACK, underlay=[])
     plain = {**obj, "params": {k: v for k, v in obj["params"].items() if k != "angle_lines"}}
-    dense = invariants.thread_per_mm2(generate(obj)[0], _area(obj))
-    assert dense <= invariants.thread_per_mm2(generate(plain)[0], _area(obj)) * 1.15
+    recs = generate(obj)[0]
+    usual = invariants.thread_per_mm2(generate(plain)[0], _area(obj))
+    assert invariants.thread_per_mm2(recs, _area(obj)) <= usual * 1.15
+    assert invariants.densest_square(recs, _area(obj), 2.0) <= usual * 1.8
 
 
 def _ragged_side(recs) -> str:

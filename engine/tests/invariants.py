@@ -40,6 +40,25 @@ def _stitch_lines(recs) -> list[LineString]:
     return [LineString([a[:2], b[:2]]) for a, b in zip(recs, recs[1:]) if a[2] == b[2] == STITCH and a[:2] != b[:2]]
 
 
+def densest_square(recs, poly, side_mm: float) -> float:
+    """The most thread (mm per mm², every pass counted) in any square of a side_mm grid wholly
+    inside `poly`: where thread piles up, however even it is over the whole."""
+    lines = _stitch_lines(recs)
+    if not lines:
+        return 0.0
+    tree = shapely.STRtree(lines)
+    minx, miny, maxx, maxy = poly.bounds
+    most = 0.0
+    for i in range(int((maxx - minx) // side_mm)):
+        for j in range(int((maxy - miny) // side_mm)):
+            x, y = minx + i * side_mm, miny + j * side_mm
+            square = shapely.box(x, y, x + side_mm, y + side_mm)
+            near = [lines[k] for k in tree.query(square)] if poly.contains(square) else []
+            if near:
+                most = max(most, float(shapely.length(shapely.intersection(near, square)).sum()) / square.area)
+    return most
+
+
 def _outside(recs, area, tolerance_mm: float) -> list[str]:
     """What sews more than `tolerance_mm` outside `area`: needle drops, and the thread between
     them (which can cross a hole or a notch while both its ends are inside)."""
