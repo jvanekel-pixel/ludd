@@ -1,10 +1,13 @@
-/** How the letters are stitched: Satin look or Fill (a stitch font sews its own stitches), what
+/** How the letters are stitched: Satin look, True satin or Fill (a stitch font sews its own stitches), what
  *  each letter does, and the buttons for their starts and ends. */
 import { command, setText } from "../../actions";
 import { formatShortcut } from "../../commands";
 import type { TextItem } from "../../design/types";
 import { selectLayout, useStore } from "../../store";
 import { isStitchFont, type TextSlotProps } from "./slots";
+
+/** Shown under the buttons while True satin is chosen. */
+export const TRUE_SATIN_HINT = "Each stroke is its own satin column. New: check the preview, and switch to Satin look if a letter looks wrong.";
 
 /** The look in a few words, for the panel section's summary. */
 export const styleLabel = (item: TextItem) => (item.style === "satin" ? "Satin" : item.style === "columns" ? "True satin" : "Fill");
@@ -20,7 +23,9 @@ function LetterNotes({ item, stitchFont }: { item: TextItem; stitchFont: boolean
     ? "each letter sews the stitches its stitch font was made with"
     : item.style === "satin"
       ? "each letter is filled with long, smooth satin stitches across its strokes, at the angle that crosses them best"
-      : "each letter is a woven (tatami) fill";
+      : item.style === "columns"
+        ? "each stroke of a letter is its own satin column that follows the stroke, as hand-digitized fonts are; parts too wide or too small for a column are sewn in Satin look first"
+        : "each letter is a woven (tatami) fill";
   return (
     <div className="letter-notes">
       <p className="hint">
@@ -49,14 +54,20 @@ export function StyleControls({ item }: TextSlotProps) {
       {stitchFont ? (
         <p className="hint">A stitch font sews the stitches it was made with.</p>
       ) : (
-        <div className="seg" role="group" aria-label="Stitch look">
-          <button aria-pressed={item.style === "satin"} onClick={() => setText(item.id, { style: "satin" })} title="Smooth, shiny stitches across each stroke: best for names and small text">
-            Satin look
-          </button>
-          <button aria-pressed={item.style === "fill"} onClick={() => setText(item.id, { style: "fill" })} title="Woven fill: best for big, bold letters">
-            Fill
-          </button>
-        </div>
+        <>
+          <div className="seg" role="group" aria-label="Stitch look">
+            <button aria-pressed={item.style === "satin"} onClick={() => setText(item.id, { style: "satin" })} title="Smooth, shiny stitches across each stroke: best for names and small text">
+              Satin look
+            </button>
+            <button aria-pressed={item.style === "columns"} onClick={() => setText(item.id, { style: "columns" })} title="A satin column for each stroke that follows it, as hand-digitized fonts are">
+              True satin
+            </button>
+            <button aria-pressed={item.style === "fill"} onClick={() => setText(item.id, { style: "fill" })} title="Woven fill: best for big, bold letters">
+              Fill
+            </button>
+          </div>
+          {item.style === "columns" && <p className="hint">{TRUE_SATIN_HINT}</p>}
+        </>
       )}
       <LetterNotes item={item} stitchFont={stitchFont} />
     </>
