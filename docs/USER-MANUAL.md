@@ -796,8 +796,9 @@ whole design with the selected lettering changed to that name. Each file is prep
 for machine** would (your machine and hoop; for the PE550D, a stop wherever the thread needs
 cutting). Files already in the folder are never replaced: a repeated name is saved as "Emma (1).pes",
 and LUDD tells you which files got a number. It also tells you if any name is too wide for your
-hoop, and if one name can't be saved, the others still are and the message lists it. It's offered
-when lettering is selected. For team shirts, party favors and gifts.
+hoop, and if one name can't be saved, the others still are and a message names it, says why and
+stays until you close it. It's offered when lettering is selected. For team shirts, party favors
+and gifts.
 
 To fill more than one piece (say a name and a number), tick each under **Lettering to fill** and
 pick its column. If a cell is empty, that piece is left out of that file. **Shrink long names to

@@ -767,15 +767,16 @@ Only make fonts from designs you're allowed to use this way. Projects carry the 
 In One file per name (`Ctrl+Alt+N`): type names, or **Load a list…** (CSV or text; commas,
 semicolons or tabs; quoted fields; Excel's CSV or "Unicode Text"; up to 2,000 rows; a first row of
 words like name, number, color, file is the header, else the first column is "name"). Under
-**Lettering to fill**, tick each piece the list fills and pick its **Column** (two pieces make a name
-and a number). An empty cell leaves that lettering out of that row's file (LUDD never sews the sample
-words for someone else); a row with nothing to fill makes no file. **Shrink long names to fit** with
-**Widest**: a longer name gets smaller letters and spacing. A `color` column takes a hex color or a
-thread number from the chart you choose; a `file` column names the file. **Preview on the design**
-(◀ ▶) shows each row without changing the design. **Name templates**: **Save this layout as a name
-template…** (in that window, or `Ctrl+Alt+P`) saves the whole design into the data folder's
-`templates`; **Start from a template** opens one as a new design (Save asks for a name, so the
-template stays as it was).
+**Lettering to fill**, tick each piece the list fills and pick its **Column** (two pieces make a
+name and a number). An empty cell leaves that lettering out of that row's file (LUDD never sews the
+sample words for someone else); a row with nothing to fill makes no file. A row that can't be saved
+doesn't stop the others: LUDD names it and says why, in a message that stays until you close it.
+**Shrink long names to fit** with **Widest**: a longer name gets smaller letters and spacing. A
+`color` column takes a hex color or a thread number from the chart you choose; a `file` column
+names the file. **Preview on the design** (◀ ▶) shows each row without changing the design. **Name
+templates**: **Save this layout as a name template…** (in that window, or `Ctrl+Alt+P`) saves the
+whole design into the data folder's `templates`; **Start from a template** opens one as a new
+design (Save asks for a name, so the template stays as it was).
 
 ### F-1417 Monogram styles and frames — YES (since 2026-11-25)
 With Monogram ticked: **Classic** (small, big, small; two letters: small, then big; one: big),

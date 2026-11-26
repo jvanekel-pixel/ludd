@@ -370,8 +370,9 @@ export async function exportList(list: NameList, folder: string, ext: string, ch
   ].filter(Boolean);
   const count = total - leftOut;
   if (failed.length) {
-    fail(firstError);
-    info(`Saved ${done} of ${count} files in ${folder}. Not saved: ${failed.map((n) => `"${n}"`).join(", ")}.${notes.length ? ` ${notes.join(" ")}` : ""}`);
+    // One notice with the reason: a second notice would replace the first. As an error, it stays.
+    const why = `${failed.length > 1 ? "The first problem: " : ""}${message(firstError).replace(/\.?$/, ".")}`;
+    fail(`Saved ${done} of ${count} files in ${folder}. Not saved: ${failed.map((n) => `"${n}"`).join(", ")}. ${why}${notes.length ? ` ${notes.join(" ")}` : ""}`);
   } else {
     info(`Saved ${done} file${done === 1 ? "" : "s"} (one per row) in ${folder}.${notes.length ? ` ${notes.join(" ")}` : ""}`);
   }

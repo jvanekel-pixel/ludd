@@ -198,6 +198,19 @@ describe("one file per name", () => {
     expect(said()).toMatch(/Row 2 is empty/);
   });
 
+  it("saves the other rows when one can't be saved, and keeps saying which and why", async () => {
+    const { engine } = await open([text("a", "ABC", { placeholder: true, monogram: true })]);
+    const call = engine.call.bind(engine);
+    engine.call = (async (method: string, params: Record<string, unknown> = {}) => {
+      if (method === "layout.export" && String(params.dest).includes("Olivia")) throw new Error("A monogram takes up to three letters");
+      return call(method, params);
+    }) as typeof engine.call;
+    await N.exportList(list(["name"], ["Olivia"], ["Kim"]), "C:\\out", "pes");
+    expect(exported(engine).map((f) => f.dest)).toEqual(["C:\\out\\Kim.pes"]);
+    expect(useStore.getState().notice?.kind).toBe("error"); // stays until closed
+    expect(said()).toBe('Saved 1 of 2 files in C:\\out. Not saved: "Olivia". A monogram takes up to three letters.');
+  });
+
   it("refuses a list without a placeholder's column before saving anything", async () => {
     const { engine } = await open([text("a", "Name", { placeholder: true }), text("b", "00", { placeholder: true, bind: "number" })]);
     await N.exportList(N.typedList("Emma"), "C:\\out", "pes");
