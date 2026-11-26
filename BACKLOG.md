@@ -83,7 +83,7 @@ Planned on 2026-11-24: every item in this section, and the nice-to-haves above t
 - [ ] Stitch fonts: the preview in the dialog repeats the engine's baseline rules in TypeScript; have the engine return each letter's drop instead
 - [ ] Stitched letters resized with the corner handles only stretch (LUDD says so): fold a handle resize into the letter height so they're rebuilt
 - [ ] True satin: many large letters fall back (Arial at 60 mm: 27 of 62), mostly columns whose sides cross near the 7 mm limit; split wide strokes or relax the fold test
-- [ ] True satin on letters whose strokes are all over 7 mm (Arial at 150 mm) sews exactly like Satin look, as designed, but with no note: say so
+- [ ] True satin on letters whose strokes are all over 7 mm (Arial at 150 mm) sews as Satin-look fills, as designed (edges within 0.04 mm of Satin look's), but with no note: say so
 - [ ] Shadow plus outline adds 2 to 3 s to the first drawing of a two-word text (mostly choosing the shadow fills' angles)
 - [ ] Order & colors has no "Back to ..." for a single letter's own color (the letter panel can undo it)
 - [ ] Color sets don't include single letters' own colors (L-035)
