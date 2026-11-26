@@ -1,0 +1,51 @@
+{
+ "maze_square": {
+  "jumps": 0,
+  "records": 266,
+  "sha1": "460d29941a8a8835dc960b572d37768d5a4e63e2",
+  "stitches": 266,
+  "trims": 0
+ },
+ "maze_star": {
+  "jumps": 0,
+  "records": 121,
+  "sha1": "d3955eaec8119d5ee49e0b61fccbc43ccf5a1880",
+  "stitches": 121,
+  "trims": 0
+ },
+ "mesh_60": {
+  "jumps": 0,
+  "records": 302,
+  "sha1": "3503362a4ed5745c27ce0b4a99131d1880b32798",
+  "stitches": 302,
+  "trims": 0
+ },
+ "mesh_90": {
+  "jumps": 0,
+  "records": 436,
+  "sha1": "4589784778991f9898c4dd38a4c96f6290662815",
+  "stitches": 436,
+  "trims": 0
+ },
+ "motif_user": {
+  "jumps": 0,
+  "records": 280,
+  "sha1": "a386b1a26a9533e40acde0d1f50161873a30904d",
+  "stitches": 280,
+  "trims": 0
+ },
+ "motif_wave": {
+  "jumps": 0,
+  "records": 606,
+  "sha1": "10bc5881800d06c2dbe2883a55ee8eb710b3856a",
+  "stitches": 606,
+  "trims": 0
+ },
+ "ripple_square": {
+  "jumps": 0,
+  "records": 343,
+  "sha1": "003719b1c6cb0054f074d85c8d63e964e233b50a",
+  "stitches": 343,
+  "trims": 0
+ }
+}
