@@ -691,7 +691,8 @@ fill: **Density** is the combined coverage.
     select it, open the window, press the button, name it. The line's start and end become the
     repeat's start and end, keeping your proportions. They must be at least 2 mm apart, the line
     can't be closed, and it can have at most 200 points once its curves are counted.
-  - **Import…**, **Export…** (any motif, as a small `.json` file) and **Delete** (only yours).
+  - **Import…**, **Export…** (any motif, as a small `.json` file; LUDD won't save one into its own
+    data folder) and **Delete** (only yours).
 - Use a motif of yours on a **motif line** or a **motif fill** under **Motif**. LUDD sets the
   Height (Width on a line) to your drawing's proportions, within the allowed sizes.
 - The shape keeps **its own copy**, so the project sews the same on any computer, even after you

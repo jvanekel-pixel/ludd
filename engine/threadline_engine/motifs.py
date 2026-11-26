@@ -212,15 +212,17 @@ def delete(motif_id: str) -> None:
         raise MotifError(f"Couldn't delete the motif: {exc.strerror or exc}") from exc
 
 
-def _in_motif_folder(path: Path) -> bool:
-    folder = _folder()
+def _in_data_folder(path: Path) -> bool:
+    """Whether a path is in LUDD's own data folder (your motifs, settings, fonts and so on). A
+    path that can't be checked counts as inside: nothing is written where LUDD can't tell."""
+    folder = data_dir()
     try:
         if path.resolve().is_relative_to(folder.resolve()):
             return True
         # The same folder under another spelling (upper and lower case on a Mac or Windows).
         return folder.is_dir() and any(p.is_dir() and os.path.samefile(p, folder) for p in path.parents)
     except (OSError, ValueError):
-        return False
+        return True
 
 
 def export(motif_id: str, dest: str) -> dict[str, Any]:
@@ -234,10 +236,12 @@ def export(motif_id: str, dest: str) -> dict[str, Any]:
     if not isinstance(dest, str) or not dest.strip() or "\0" in dest or not Path(dest).name:
         raise MotifError("Choose where to save the motif file.")
     path = Path(dest)
+    if not path.is_absolute():  # it would land wherever the engine happens to be running
+        raise MotifError("Choose where to save the motif file, folder and all.")
     if path.suffix.lower() != ".json":
         path = path.with_name(path.name + ".json")  # added, never replacing: "Bob v1.2" stays whole
-    if _in_motif_folder(path):
-        raise MotifError("Save the copy somewhere else: LUDD keeps your motifs in that folder itself.")
+    if _in_data_folder(path):
+        raise MotifError("Save the copy somewhere else: LUDD keeps its own files in that folder.")
     try:
         write_json(path, {"format": FORMAT, "version": VERSION, "name": name, "unit": unit})
     except (OSError, ValueError) as exc:

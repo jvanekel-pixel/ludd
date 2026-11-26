@@ -221,6 +221,32 @@ def test_export_refuses_unknown_ids_and_the_motif_folder(tmp_path):
     assert not (tmp_path / "x.json").exists()
 
 
+def test_export_refuses_a_destination_without_its_folder(tmp_path, monkeypatch):
+    """Without the full path, the file would land wherever the engine happens to be running."""
+    motifs.save("Hill", HILL)
+    monkeypatch.chdir(tmp_path)
+    for relative in ["foo.json", "foo", "./foo.json", "../foo.json", "sub/foo.json", "C:foo.json"]:
+        with pytest.raises(motifs.MotifError, match="folder and all"):
+            motifs.export("user:hill", relative)
+    assert list(tmp_path.glob("*.json")) == [] and not (tmp_path.parent / "foo.json").exists()
+
+
+def test_export_never_writes_into_ludds_own_data_folder(tmp_path):
+    motifs.save("Hill", HILL)
+    data = storage.data_dir()
+    settings = data / "settings.json"
+    settings.write_text('{"mine": true}', encoding="utf-8")
+    inside = [data / "settings", data / "settings.json", data / "x", data / "fonts" / "x.json",
+              data / "new" / ".." / "x"]
+    if (data.parent / data.name.upper()).exists():  # a computer that ignores capital letters
+        inside.append(data.parent / data.name.upper() / "settings")
+    for dest in inside:
+        with pytest.raises(motifs.MotifError, match="LUDD keeps"):
+            motifs.export("user:hill", str(dest))
+    assert settings.read_text(encoding="utf-8") == '{"mine": true}'
+    assert sorted(p.name for p in data.iterdir()) == ["motifs", "settings.json"]
+
+
 # ---------------------------------------------------------------- safety
 
 
