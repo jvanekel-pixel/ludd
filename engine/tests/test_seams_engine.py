@@ -11,11 +11,13 @@ from pathlib import Path
 
 import pyembroidery as pe
 import pytest
+from shapely.geometry import Polygon
 
+from invariants import assert_sane
 from threadline_engine import layout, project
 from threadline_engine.digitize import fills, lines
 from threadline_engine.digitize.fills import FillPattern, Param
-from threadline_engine.digitize.stitches import DigitizeError, FillParams
+from threadline_engine.digitize.stitches import STITCH, DigitizeError, FillParams, tatami
 from threadline_engine.layout import passes
 from threadline_engine.methods import dispatcher
 
@@ -257,6 +259,30 @@ def test_rpc_method_list_matches_the_manifest():
     names = json.loads(MANIFEST.read_text(encoding="utf-8"))
     assert len(names) == 66
     assert sorted(dispatcher._methods) == names
+
+
+# ---------------------------------------------------------------- tatami's row hooks (Phase 6)
+
+
+SQUARE_20 = Polygon([(0, 0), (20, 0), (20, 20), (0, 20)])
+
+
+def _row_heights(recs) -> list[float]:
+    return sorted({round(y, 6) for _, y, k in recs if k == STITCH})
+
+
+def test_row_ys_places_the_rows():
+    heights = [1.0, 2.5, 6.0, 6.4, 8.9]
+    recs = tatami(SQUARE_20, 0, 0.4, 3.5, 0.0, row_ys=heights)
+    assert _row_heights(recs) == heights
+    assert_sane(recs, inside=SQUARE_20)
+    assert tatami(SQUARE_20, 0, 0.4, 3.5, 0.0, row_ys=[]) == []
+
+
+def test_rows_far_apart_are_joined_by_travel_not_one_long_stitch():
+    recs = tatami(SQUARE_20, 0, 0.4, 3.5, 0.0, row_ys=[1.0, 1.4, 19.0, 19.4])
+    assert_sane(recs, inside=SQUARE_20, max_jumps=0)
+    assert {1.0, 1.4, 19.0, 19.4} <= set(_row_heights(recs))
 
 
 # ---------------------------------------------------------------- project features

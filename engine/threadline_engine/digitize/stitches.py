@@ -840,13 +840,20 @@ def _row_stitches(x0: float, x1: float, y: float, step: float, offset: float, fo
 def tatami(poly: Polygon, angle: float, spacing: float, stitch: float, extend: float,
            start_near: Point | None = None, travel_within: Polygon | None = None, random: float = 0.0,
            sparse_to: float | None = None, wave: tuple[float, float] | None = None,
-           end_near: Point | None = None) -> list[Rec]:
+           end_near: Point | None = None, row_ys: Sequence[float] | None = None) -> list[Rec]:
     """Tatami fill of `poly`: serpentine rows grouped into regions, regions joined by travel.
     Travel runs inside `travel_within` (default `poly`), where later stitching covers it.
     `end_near`: finish as near this point as the rows allow (the region that can end nearest it
     is sewn last, the way round that ends nearest it).
     `sparse_to`: rows open out to this spacing across the shape (a gradient). `wave`: (height,
-    length) of a ripple given to every row."""
+    length) of a ripple given to every row.
+
+    The row hooks, each optional; with none given, the stitches are what they always were:
+    `row_ys`: the heights of the rows in the turned frame, lowest first (a blend gives each of its
+    colors its own rows). Rows too far apart to step between are joined by travel."""
+    # With a hook, equally good choices are settled to a millionth of a mm, so the last digit of a
+    # sine (not the same on every computer) can't decide which region is sewn next.
+    steady = row_ys is not None
     rot = affinity.rotate(poly, -angle, origin=(0, 0))
     if not rot.is_valid:
         # A shape with a zero-width spike (an arm exactly twice the underlay inset) can turn
@@ -854,7 +861,7 @@ def tatami(poly: Polygon, angle: float, spacing: float, stitch: float, extend: f
         rot = max(polygons(rot.buffer(0)) or [Polygon()], key=lambda g: g.area)
         if rot.is_empty:
             return []
-    ys = gradient_ys(rot.bounds[1], rot.bounds[3], spacing, sparse_to) if sparse_to else None
+    ys = list(row_ys) if row_ys is not None else gradient_ys(rot.bounds[1], rot.bounds[3], spacing, sparse_to) if sparse_to else None
     rows = _rows(rot, angle, spacing, extend, ys)
     miny = rot.bounds[1]
     shapely.prepare(rot)
@@ -872,6 +879,10 @@ def tatami(poly: Polygon, angle: float, spacing: float, stitch: float, extend: f
             # along the rows (a star's arm, the rim of a hole) that step would be a long loose
             # stitch: start a new region there instead, and let travel() make the move inside the shape.
             nxt = [c for c in nxt if abs(rows[c[0]][c[1]][0] - x0) <= stitch and abs(rows[c[0]][c[1]][1] - x1) <= stitch]
+            if row_ys is not None:
+                # Rows at given heights can be far apart: join them only if the step stays a stitch.
+                nxt = [c for c in nxt if math.hypot(max(abs(rows[c[0]][c[1]][0] - x0), abs(rows[c[0]][c[1]][1] - x1)),
+                                                    ys[c[0]] - ys[r]) <= LONG_STITCH_MM]
             if not nxt:
                 break
             r, i = nxt[0]
@@ -924,7 +935,7 @@ def tatami(poly: Polygon, angle: float, spacing: float, stitch: float, extend: f
     remaining = list(range(len(options)))
     last = None
     if end_near and regions:
-        k, j, ends_at = _end_row(regions, rows, ys, miny, spacing, angle, end_near)
+        k, j, ends_at = _end_row(regions, rows, ys, miny, spacing, angle, end_near, steady)
         reg = regions[k]
         low, high = reg[:j], reg[j:][::-1]  # `high` is sewn from its far row back to the end row
         regions[k] = high
@@ -941,11 +952,11 @@ def tatami(poly: Polygon, angle: float, spacing: float, stitch: float, extend: f
     while remaining:
         if last is not None and remaining == [last]:
             # The last region: whichever way ends at the end point.
-            k, seq = last, min(options[last], key=lambda s: dist(s[-1], end_near))
+            k, seq = last, min(options[last], key=lambda s: _nearness(dist(s[-1], end_near), steady))
         else:
             k, seq = min(
                 ((k, seq) for k in remaining if k != last for seq in options[k]),
-                key=lambda ks: dist(pos, ks[1][0]) if pos else 0.0,
+                key=lambda ks: _nearness(dist(pos, ks[1][0]), steady) if pos else 0.0,
             )
         remaining.remove(k)
         if out:  # the first region starts where it starts; `start_near` only chose it
@@ -955,7 +966,13 @@ def tatami(poly: Polygon, angle: float, spacing: float, stitch: float, extend: f
     return out
 
 
-def _end_row(regions, rows, ys, miny: float, spacing: float, angle: float, end: Point) -> tuple[int, int, Point]:
+def _nearness(d: float, steady: bool) -> float:
+    """A distance to choose by: rounded when `steady`, so near ties go to the first choice."""
+    return round(d, 6) if steady else d
+
+
+def _end_row(regions, rows, ys, miny: float, spacing: float, angle: float, end: Point,
+             steady: bool = False) -> tuple[int, int, Point]:
     """Which region and row (its place in the region) has a row end nearest `end`, and that row end
     (mm). Rows are in the fill's turned frame; `end` is in the design's."""
     a = math.radians(-angle)
@@ -965,7 +982,7 @@ def _end_row(regions, rows, ys, miny: float, spacing: float, angle: float, end: 
         for j, (r, i) in enumerate(reg):
             y = ys[r] if ys is not None else miny + spacing / 2 + r * spacing
             for x in rows[r][i]:
-                d = math.hypot(x - ex, y - ey)
+                d = _nearness(math.hypot(x - ex, y - ey), steady)
                 if d < best[0]:
                     best = (d, k, j, (x, y))
     _, k, j, (x, y) = best
