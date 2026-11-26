@@ -675,7 +675,8 @@ coverage. Where a color thins out it sews at least two rows side by side, never 
   Angle, Random, Weave, Edge pad, Feather, the Hand-sewn look and carved lines all apply.
 - Sewn one color after the other (a thread change for each). Order & colors lists each color and
   can change it, and Color sets keep them.
-- Too few rows for every color (a small shape or a wide Spacing): it sews the colors it can and
+- Every color is sewn (at least two rows) whenever the shape has two rows or more per color.
+  Fewer rows than that (a small shape or a wide Spacing): it sews the colors it can and
   warns "This shape has too few rows to blend all its colors, so the second color is not sewn.
   Make the shape bigger or lower the spacing (a smaller number) to fit more rows." (naming the
   colors left out).

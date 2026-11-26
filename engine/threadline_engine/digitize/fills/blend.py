@@ -12,7 +12,11 @@ Rows are given out by error diffusion, lowest row first: each color adds its wei
 height to its tally, the color with the highest tally gets the row (equal tallies: the lower
 thread slot) and its tally drops by one row. A color whose last row is more than LONE_MM away (or
 that has none yet) keeps its turn for the next row too, so no color is ever sewn as a lone row
-across another. Weights are whole numbers (millionths), so no last digit decides a row.
+across another. No color is left out while there is room: each color not yet sewn is due by its
+last row with any weight, and a row goes only to a color that still lets every unsewn one start
+a pair by its due row (soonest due first), so with two rows per color every color is sewn. A
+color takes a row only where it has weight, unless nothing else fits. Weights are whole numbers
+(millionths), so no last digit decides a row.
 
 Written for LUDD from the Phase 6 spec (no code ported from other projects).
 """
@@ -82,13 +86,18 @@ def assign(ys: list[float], params, colors: int, lo: float, hi: float) -> list[i
         return [0] * len(ys)
     gamma = 2.0 ** (-params.value("blend_balance"))
     height = hi - lo
+    n = len(ys)
+    weights = [_whole_weights(((hi - y) if params.blend_flip else (y - lo)) / height if height > 0 else 0.5,
+                              gamma, colors) for y in ys]
+    # The latest row each color can start its first pair on: its last row with any weight (the
+    # pair's second row may lie just past it), and never the very last row.
+    due = [min(n - 2, max((i for i in range(n) if weights[i][c] > 0), default=-1)) for c in range(colors)]
     tally = [0] * colors
     last: list[float | None] = [None] * colors
     held = None
     out = []
     for i, y in enumerate(ys):
-        t = ((hi - y) if params.blend_flip else (y - lo)) / height if height > 0 else 0.5
-        for c, w in enumerate(_whole_weights(t, gamma, colors)):
+        for c, w in enumerate(weights[i]):
             tally[c] += w
 
         def alone(c: int) -> bool:  # a row of c here would be lone unless it keeps the next row too
@@ -97,8 +106,24 @@ def assign(ys: list[float], params, colors: int, lo: float, hi: float) -> list[i
         if held is not None:
             c, held = held, None
         else:
-            more = i + 1 < len(ys)
-            choices = [c for c in range(colors) if more or not alone(c)] or list(range(colors))
+            more = i + 1 < n
+
+            def fits(c: int) -> bool:
+                """After c takes this row (and the next, if it must keep its turn), every color not
+                yet sewn can still start a pair by its due row, soonest due first."""
+                if alone(c) and not more:
+                    return False
+                at = i + (2 if alone(c) else 1)
+                for d in sorted((d for d in range(colors) if last[d] is None and d != c), key=lambda d: (due[d], d)):
+                    if at > due[d]:
+                        return False
+                    at += 2
+                return True
+
+            choices = ([c for c in range(colors) if fits(c)]
+                       or [c for c in range(colors) if more or not alone(c)] or list(range(colors)))
+            # A color is sewn where it has weight; one without any here only when nothing else fits.
+            choices = [c for c in choices if weights[i][c] > 0] or choices
             c = max(choices, key=lambda c: (tally[c], -c))  # equal tallies: the lower thread slot
             if more and alone(c):
                 held = c

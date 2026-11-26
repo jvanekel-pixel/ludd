@@ -667,7 +667,8 @@ way, and **Balance** for which color takes more of the shape. The fade runs acro
 turn the **Angle** (or drag the purple dots) to point it. Each color sews in turn, with a thread
 change between them; Order & colors lists each one. Turning or mirroring the shape keeps every
 color on the same side of it. If a blend looks stripy, make it denser or set Weave to Smooth. A
-small shape or a wide Spacing may have too few rows for every color: the blend then sews the
+Every color is sewn whenever there are at least two rows per color; a small shape or a wide
+Spacing may have fewer rows than that: the blend then sews the
 colors it can and a warning says which color is left out (make the shape bigger or the Spacing
 smaller).
 

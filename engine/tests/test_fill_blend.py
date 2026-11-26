@@ -92,7 +92,12 @@ def _one_color_rows(obj=None, axis=1):
 
 
 DENSITY_CASES = {"two colors": {}, "three colors": {"others": (BLUE, GOLD)},
-                 "balance +0.8": {"blend_balance": 0.8}, "balance -0.8": {"blend_balance": -0.8}}
+                 "balance +0.8": {"blend_balance": 0.8}, "balance -0.8": {"blend_balance": -0.8},
+                 "flipped two colors": {"blend_flip": True},
+                 "flipped three colors": {"others": (BLUE, GOLD), "blend_flip": True},
+                 "flipped balance +0.8": {"blend_balance": 0.8, "blend_flip": True},
+                 "flipped balance -0.8": {"blend_balance": -0.8, "blend_flip": True},
+                 "flipped four colors +0.8": {"others": (BLUE, GOLD, RED), "blend_balance": 0.8, "blend_flip": True}}
 
 
 @pytest.mark.parametrize("spacing", [0.4, 0.8, 1.5, 3.0])
@@ -308,6 +313,38 @@ def test_a_color_keeps_its_turn_for_two_rows():
                 last[c] = y
             assert set(owners) == set(range(colors)), (spacing, colors, owners)
     assert held >= 10
+
+
+def test_every_color_is_sewn_when_there_is_room():
+    """With at least two rows per color, every color is sewn (at least a pair), for any Balance,
+    2 to 4 colors, either way round; each run of a color starts where that color has weight, or
+    at most 4 rows from it (a color whose weight lies only in the last rows, squeezed in among
+    the others); and below the 4 mm a lone row would need, no color is ever a lone row."""
+    for colors in (2, 3, 4):
+        for spacing in (0.4, 1.0, 1.5, 3.0, 5.0):
+            for b10 in range(-10, 11, 2):
+                for flip in (False, True):
+                    params = FillParams.from_dict({"pattern": "blend", "spacing_mm": spacing, "blend_balance": b10 / 10,
+                                                   "blend": [dict(BLUE)] * (colors - 1), "blend_flip": flip})
+                    gamma = 2.0 ** (-b10 / 10)
+                    for n in range(2 * colors, 41):
+                        hi = n * spacing
+                        ys = blend.plain_rows(0.0, hi, spacing)
+                        owners = blend.assign(ys, params, colors, 0.0, hi)
+                        case = (colors, spacing, b10 / 10, flip, n, owners)
+                        assert len(ys) == n and all(owners.count(c) >= 2 for c in range(colors)), case
+                        w = [blend._whole_weights(((hi - y) if flip else y) / hi, gamma, colors) for y in ys]
+                        for i, c in enumerate(owners):
+                            if i == 0 or owners[i - 1] != c:
+                                assert min(abs(j - i) for j in range(n) if w[j][c] > 0) <= 4, (case, i)
+                                if spacing <= blend.LONE_MM:
+                                    prev = [j for j in range(i) if owners[j] == c]
+                                    if not prev or ys[i] - ys[prev[-1]] > blend.LONE_MM + 1e-9:
+                                        assert i + 1 < n and owners[i + 1] == c, (case, i)
+    params = FillParams.from_dict({"pattern": "blend", "spacing_mm": 1.0, "blend_balance": 0.8,
+                                   "blend": [dict(BLUE)] * 3, "blend_flip": True})
+    owners = blend.assign(blend.plain_rows(0.0, 40.0, 1.0), params, 4, 0.0, 40.0)
+    assert [owners.count(c) for c in range(4)] == [2, 10, 16, 12] and owners[-3:] in ([0, 0, 1], [1, 0, 0])
 
 
 def test_too_few_rows_says_so():
