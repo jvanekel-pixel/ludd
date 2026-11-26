@@ -1,0 +1,58 @@
+{
+ "carve_cross": {
+  "jumps": 0,
+  "records": 613,
+  "sha1": "b506776fa6b0c7b352db4d13c960e7f3036535ab",
+  "stitches": 613,
+  "trims": 0
+ },
+ "feather_both": {
+  "jumps": 0,
+  "records": 412,
+  "sha1": "3a8e549b76dee19c094e613aac4eba0adaedad0e",
+  "stitches": 412,
+  "trims": 0
+ },
+ "hand_fill_60": {
+  "jumps": 0,
+  "records": 665,
+  "sha1": "b99d78836b6af7a8e206d3a1486dd5d12bea5f84",
+  "stitches": 665,
+  "trims": 0
+ },
+ "hand_run_60": {
+  "jumps": 0,
+  "records": 47,
+  "sha1": "f17ce84333bb7b7a0108ca5aefe3cdb11b0f0ff1",
+  "stitches": 47,
+  "trims": 0
+ },
+ "hand_satin_60": {
+  "jumps": 0,
+  "records": 233,
+  "sha1": "c6d1f99dc6e297f77b7ed2d9bf47fe3e2fbea3c7",
+  "stitches": 233,
+  "trims": 0
+ },
+ "weave_brick": {
+  "jumps": 0,
+  "records": 556,
+  "sha1": "a626250bffdd95d4cf4b185b1b6d0f5a78e17d80",
+  "stitches": 556,
+  "trims": 0
+ },
+ "weave_smooth": {
+  "jumps": 0,
+  "records": 198,
+  "sha1": "a560593199ad3129005c92bd98bbf6f4cfa9165c",
+  "stitches": 198,
+  "trims": 0
+ },
+ "weave_twill": {
+  "jumps": 0,
+  "records": 500,
+  "sha1": "250a956ced64e02238817476ab646ef6938566c6",
+  "stitches": 500,
+  "trims": 0
+ }
+}
