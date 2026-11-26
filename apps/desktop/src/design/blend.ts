@@ -32,3 +32,46 @@ export function slotThreads(o: ObjectItem): Thread[] {
   if (o.kind !== "fill" || o.params.pattern !== "blend") return [own];
   return [own, ...(o.params.blend ?? []).map((t, k) => o.threads?.[k + 1] ?? t)];
 }
+
+const fillParams = (o: ObjectItem) => o.params as FillParams;
+
+/** A blend's color `k` (1 or more: the shape's own is 0) set to `t`. Any Order & colors change of
+ *  that color is cleared, so the new one shows. */
+export function setBlendColor(o: ObjectItem, k: number, t: Thread): ObjectItem {
+  const blend = [...(fillParams(o).blend ?? [])];
+  if (k < 1 || k > blend.length) return o;
+  blend[k - 1] = { ...t };
+  const threads = [...(o.threads ?? [])];
+  if (k < threads.length) threads[k] = null;
+  return { ...o, params: { ...o.params, blend }, threads } as ObjectItem;
+}
+
+/** One more color at the far end of the blend (up to MAX_BLEND_COLORS in all). */
+export function addBlendColor(o: ObjectItem): ObjectItem {
+  const sewn = slotThreads(o);
+  if (sewn.length >= MAX_BLEND_COLORS) return o;
+  const blend = [...(fillParams(o).blend ?? []), secondColor(sewn[sewn.length - 1])];
+  return { ...o, params: { ...o.params, blend } } as ObjectItem;
+}
+
+/** A blend without its color `k` (1 or more); it keeps at least one color besides the shape's
+ *  own. Order & colors changes stay with the colors they were made to. */
+export function removeBlendColor(o: ObjectItem, k: number): ObjectItem {
+  const blend = [...(fillParams(o).blend ?? [])];
+  if (k < 1 || k > blend.length || blend.length <= 1) return o;
+  blend.splice(k - 1, 1);
+  const threads = (o.threads ?? []).filter((_, i) => i !== k);
+  return { ...o, params: { ...o.params, blend }, threads } as ObjectItem;
+}
+
+/** "Swap the colors": the shape sews its colors the other way round (its own thread included),
+ *  so the fade runs the other way. Order & colors changes are folded in and cleared; the balance
+ *  turns round too, so each color keeps the share of the shape it had. */
+export function swapBlendColors(o: ObjectItem): ObjectItem {
+  const sewn = slotThreads(o);
+  if (sewn.length < 2) return o;
+  const [first, ...rest] = [...sewn].reverse().map((t) => ({ ...t }));
+  const balance = fillParams(o).blend_balance;
+  const params = { ...o.params, blend: rest, ...(balance ? { blend_balance: -balance } : {}) };
+  return { ...o, thread: first, params, threads: [] } as ObjectItem;
+}
