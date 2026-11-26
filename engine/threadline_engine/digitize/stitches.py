@@ -7,7 +7,7 @@ Coordinates are mm. Output is a list of (x, y, cmd) with cmd STITCH, JUMP or TRI
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Sequence
 
 import pyembroidery as pe
@@ -347,10 +347,21 @@ def run_points(nodes: Sequence, stitch_mm: float, closed: bool = False) -> list[
 
 
 def running(nodes: Sequence, params: RunParams, closed: bool = False, start: Point | None = None) -> list[Rec]:
-    """A running-stitch line in its style (digitize/lines: single, triple, bean, motif, ...)."""
-    if params.hand_pct:
-        raise DigitizeError("The hand-sewn look isn't built yet")
+    """A running-stitch line in its style (digitize/lines: single, triple, bean, motif, ...).
+    The hand-sewn look (rows/hand.py) works on single, triple and bean lines: the line's needle
+    points are moved, then sewn once, three times or each stitch three times as the style does.
+    Other styles (motif) are sewn as they are."""
+    if params.hand_pct and params.style in HAND_LINE_STYLES:
+        pts = row_hooks.hand.line(lines.REGISTRY["single"].points(nodes, params, closed, start), params.hand_pct)
+        if len(pts) >= 2 and params.style == "triple":
+            pts = pts + pts[-2::-1] + pts[1:]  # the whole line three times, as lines/builtin.py
+        elif len(pts) >= 2 and params.style == "bean":
+            pts = [pts[0], *(p for a, b in zip(pts, pts[1:]) for p in (b, a, b))]  # each stitch three times
+        return stitch_run(pts)
     return stitch_run(lines.REGISTRY[params.style].points(nodes, params, closed, start))
+
+
+HAND_LINE_STYLES = ("single", "triple", "bean")  # the line styles the hand-sewn look moves
 
 
 # ---------------------------------------------------------------- satin column
@@ -549,6 +560,10 @@ def satin_with_ends(pairs: list[tuple[Point, Point]], params: SatinParams, start
     n = len(pairs)
     if (start is None and end is None) or n < 4:
         return satin_from_pairs(pairs, params)
+    if params.hand_pct:
+        # Sewn in parts: each rung gets its own hand-sewn look once, by its place in the whole satin.
+        pairs = row_hooks.hand.satin_pairs(pairs, params.hand_pct)
+        params = replace(params, hand_pct=0.0)
     mids = [((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) for a, b in pairs]
     near = lambda p: min(range(n), key=lambda i: dist(mids[i], p))  # noqa: E731
     s = near(start) if start is not None else None
@@ -658,9 +673,8 @@ def _split_across(p: Point, q: Point, max_mm: float, i: int) -> list[Point]:
 
 
 def satin_from_pairs(pairs: list[tuple[Point, Point]], params: SatinParams) -> tuple[list[Rec], list[str]]:
-    """Underlay and top stitching for a satin, given matching points on its two edges."""
-    if params.hand_pct:
-        raise DigitizeError("The hand-sewn look isn't built yet")
+    """Underlay and top stitching for a satin, given matching points on its two edges. The
+    hand-sewn look (rows/hand.py) moves the top stitching's rungs, not the underlay's."""
     widths = [dist(a, b) for a, b in pairs]
     warnings = []
     if params.auto_widen and min(widths) < SATIN_WIDEN_TO_MM:
@@ -707,7 +721,7 @@ def satin_from_pairs(pairs: list[tuple[Point, Point]], params: SatinParams) -> t
     # Top stitching, each side pushed out by half the pull compensation.
     top: list[Point] = []
     longest_piece = 0.0
-    for i, (a, b) in enumerate(pairs):
+    for i, (a, b) in enumerate(row_hooks.hand.satin_pairs(pairs, params.hand_pct) if params.hand_pct else pairs):
         comp = width_comp(params.pull_comp_mm, dist(a, b)) if params.comp_by_width else params.pull_comp_mm
         a2, b2 = inset(a, b, -comp / 2)
         p, q = (a2, b2) if i % 2 == 0 else (b2, a2)
@@ -789,6 +803,9 @@ class FillParams:
                 u = ["edge"] if d.get("underlay_level") == "light" else ["edge", "tatami"]
             if d.get("underlay_level") == "heavy":
                 under_spacing = 1.5
+            if d.get("feather") not in (None, "none"):
+                # A feathered fill's short rows would leave an edge run showing beyond them.
+                u = [x for x in u if x != "edge"]
         if not isinstance(u, (list, tuple)):
             raise DigitizeError("Unknown fill underlay")
         p = cls(
@@ -916,15 +933,25 @@ def _jitter(row: int, k: int) -> float:
 
 
 def _row_stitches(x0: float, x1: float, y: float, step: float, offset: float, forward: bool,
-                  random: float = 0.0, row: int = 0, forced_xs: Sequence[float] = ()) -> list[Point]:
+                  random: float = 0.0, row: int = 0, forced_xs: Sequence[float] = (),
+                  steady: bool = False) -> list[Point]:
     """Stitches along a row; inner penetrations sit on a grid shifted by `offset` (brick pattern).
     `random` (0..0.5) moves each penetration by up to that fraction of a stitch, which breaks up
     the lines a regular pattern makes across a fill (Embrilliance's "Rnd"). `forced_xs` must be
-    penetrations (where a carved line crosses the row); see _with_forced."""
-    k0 = math.floor((x0 - offset) / step) + 1
-    k1 = math.ceil((x1 - offset) / step)
+    penetrations (where a carved line crosses the row); see _with_forced.
+    `steady` (a fill with row hooks): a grid point exactly on an end or exactly the shortest
+    stitch from one is settled to a millionth of a mm, so the last digit of a sine can't decide
+    whether it is sewn (a shape's corner on the grid's origin puts one there)."""
+    if steady:
+        k0 = math.floor(round((x0 - offset) / step, 6)) + 1
+        k1 = math.ceil(round((x1 - offset) / step, 6))
+        clear = MIN_STITCH_MM + 1e-6
+    else:
+        k0 = math.floor((x0 - offset) / step) + 1
+        k1 = math.ceil((x1 - offset) / step)
+        clear = MIN_STITCH_MM
     grid = ((offset + k * step + (random * step / 2) * _jitter(row, k)) for k in range(k0, k1))
-    inner = [x for x in grid if x0 + MIN_STITCH_MM < x < x1 - MIN_STITCH_MM]
+    inner = [x for x in grid if x0 + clear < x < x1 - clear]
     if forced_xs:
         inner = _with_forced(inner, forced_xs, x0, x1)
     xs = [x0, *inner, x1]
@@ -1060,12 +1087,12 @@ def tatami(poly: Polygon, angle: float, spacing: float, stitch: float, extend: f
                     return q if rot.contains(ShapelyPoint(q)) else (x, yy)
 
                 cross = () if forced is None else forced(y, x0, x1, bend=lambda x: rippled(x, y)[1])
-                row = _row_stitches(x0, x1, y, step, 0.0, fwd, random, r, cross)
+                row = _row_stitches(x0, x1, y, step, 0.0, fwd, random, r, cross, steady=steady)
                 row = [rippled(x, yy) for x, yy in row]
             else:
                 shift = (r % 3) * stitch / 3 if offsets is None else offsets(r) * stitch
                 row = _row_stitches(x0, x1, y, stitch, shift, fwd, random, r,
-                                    () if forced is None else forced(y, x0, x1))
+                                    () if forced is None else forced(y, x0, x1), steady=steady)
             if end_shift is not None and pts and dist(pts[-1], row[0]) > stitch:
                 # Moved ends can leave a long step to the next row: split it.
                 pts += _subdivide([pts[-1], row[0]], stitch)[1:-1]
@@ -1201,6 +1228,25 @@ def _ring_run(ring: Sequence[Point]) -> list[Point]:
     return resample(ring, TRAVEL_STITCH_MM, sharp_points(ring))
 
 
+def _clear_of_feather(parts: list[Polygon], params: FillParams, angle: float) -> list[Polygon]:
+    """The cross-hatch underlay's pieces kept out of a feathered side: each row's end there can be
+    pulled in by up to the feather's depth, and the underlay must not show beyond it. A piece is
+    cut back from that side by the depth, along the rows (itself moved that far, intersected)."""
+    left, right = row_hooks.ends.pull_in(params)
+    if not left and not right:
+        return parts
+    a = math.radians(angle)
+    out: list[Polygon] = []
+    for part in parts:
+        kept = part
+        for d in (left, -right):
+            if d:
+                kept = kept.intersection(affinity.translate(part, d * math.cos(a), d * math.sin(a)))
+        out += polygons(kept)
+    # In a fixed order (biggest first, then by place), whatever order the intersection gave.
+    return sorted(out, key=lambda g: (-round(g.area, 6), round(g.bounds[0], 6), round(g.bounds[1], 6)))
+
+
 def fill_underlay(poly: Polygon, params: FillParams, spec, start: Point, target: Point | None = None) -> list[Rec]:
     """The underlay a fill piece asks for: an edge run and a cross-hatch. `start`: where the piece
     begins; `target`: for a pattern worked out beforehand, where it starts, so the edge run ends
@@ -1227,12 +1273,15 @@ def fill_underlay(poly: Polygon, params: FillParams, spec, start: Point, target:
     # Open patterns would show a cross-hatch underlay through them (unless they cover), and so
     # would the sparse end of a gradient (which should fade out to bare fabric).
     if "tatami" in params.underlay and (spec.kind == "rows" or spec.covers) and spec.tatami_underlay:
-        for under in polygons(poly.buffer(-0.6)):
+        angle = turning.mean_angle(params) if turning.takes_over(params) else params.angle_deg
+        for under in _clear_of_feather(polygons(poly.buffer(-0.6)), params, angle):
             if under.area < MIN_PART_MM2:
                 continue
             pos = (out[-1][0], out[-1][1]) if out else start
-            angle = turning.mean_angle(params) if turning.takes_over(params) else params.angle_deg
-            cross = tatami(under, angle + 90, params.underlay_spacing_mm, 3.0, 0.0, pos, travel_within=poly)
+            # A fill with rows settings has its cross-hatch sewn steadily too (the standard
+            # weave, given as the hook, settles equally good choices to a millionth of a mm).
+            steady = {"offsets": row_hooks.weave.standard} if row_hooks.in_use(params) else {}
+            cross = tatami(under, angle + 90, params.underlay_spacing_mm, 3.0, 0.0, pos, travel_within=poly, **steady)
             if out and cross:
                 # Walk from the edge run to where the cross-hatch starts (not one long stitch).
                 out += travel(pos, (cross[0][0], cross[0][1]), poly)
@@ -1245,6 +1294,8 @@ def _fill_part(poly: Polygon, params: FillParams, end_here: bool = True) -> tupl
     it ends near the fill's end point (if one is set)."""
     end_near = params.end_mm if end_here else None
     warnings: list[str] = []
+    # The hand-sewn look moves row ends up to this far out: moves to and from them may go as far.
+    reach = row_hooks.hand.FILL_END_MM * params.hand_pct / 100
     start = tuple(poly.exterior.coords[0])
     if params.start_mm is not None:
         # Begin at the edge nearest the chosen start (so the jump from the last piece is short).
@@ -1279,7 +1330,7 @@ def _fill_part(poly: Polygon, params: FillParams, end_here: bool = True) -> tupl
     if params.reverse and end_near is None and top and all(r[2] == STITCH for r in top):
         top = top[::-1]  # same stitches, sewn from the other end
     if out and top:
-        out += travel(pos, (top[0][0], top[0][1]), poly.buffer(params.pull_comp_mm / 2 + 0.05))
+        out += travel(pos, (top[0][0], top[0][1]), poly.buffer(params.pull_comp_mm / 2 + 0.05 + reach))
     _append(out, top)
     if end_near is not None and out and not open_pattern:
         # The rows finish at the row end nearest the end point; when that point is part way along
@@ -1288,7 +1339,7 @@ def _fill_part(poly: Polygon, params: FillParams, end_here: bool = True) -> tupl
         edge = poly.boundary
         q = edge.interpolate(edge.project(ShapelyPoint(end_near)))
         if dist(out[-1][:2], (q.x, q.y)) > 0.3:
-            last = travel(out[-1][:2], (q.x, q.y), poly.buffer(params.pull_comp_mm / 2 + 0.05))
+            last = travel(out[-1][:2], (q.x, q.y), poly.buffer(params.pull_comp_mm / 2 + 0.05 + reach))
             if all(r[2] == STITCH for r in last):  # never end a fill on a jump (QA2 S1)
                 out += last
     return out, warnings

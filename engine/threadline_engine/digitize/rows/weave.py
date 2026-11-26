@@ -24,6 +24,12 @@ def _scatter(row: int) -> float:
     return v / 2**32
 
 
+def standard(row: int) -> float:
+    """The standard weave written out: what tatami does without an offsets hook. Given as the
+    hook, it sews the same rows but settles equally good choices steadily (see tatami)."""
+    return (row % 3) / 3
+
+
 def offsets_for(weave: str) -> Callable[[int], float] | None:
     """The offsets hook for a weave; None for the standard one (tatami's own rule)."""
     if weave == "standard":

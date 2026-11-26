@@ -1,6 +1,6 @@
 /** The right panel for a drawn shape. Its fill patterns and line styles come from the
  *  descriptors in design/fillPatterns.ts and design/lineStyles.ts. */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { command, convertObject, hasOwnDefaults, resetDefaults, saveAppliqueSvg, setObjectParams, setObjectThread, setSatinWidth } from "../actions";
 import { FILL_PATTERN_DEFS, fillPatternDef, type Field } from "../design/fillPatterns";
 import { LINE_STYLE_DEFS, MOTIF_FIELDS } from "../design/lineStyles";
@@ -64,6 +64,103 @@ function PatternRows({ item, p, set }: { item: ObjectItem; p: Record<string, unk
       {!!def.threads && <BlendThreads item={item} />}
       <FieldSteppers fields={def.fields} p={p} set={set} />
       {def.hint && <p className="hint">{def.hint}</p>}
+    </>
+  );
+}
+
+const WEAVES = [
+  { id: "standard", label: "Standard", title: "Each row a third of a stitch along: the usual fill" },
+  { id: "brick", label: "Brick", title: "Every other row half a stitch along, like brickwork" },
+  { id: "twill", label: "Twill", title: "Each row a quarter of a stitch along: fine diagonal lines" },
+  { id: "smooth", label: "Smooth", title: "Spread out so no lines show" },
+  { id: "random", label: "Random", title: "A different place on each row: matte, no pattern" },
+];
+const FEATHERS = [
+  { id: "none", label: "Off" },
+  { id: "left", label: "Left ends" },
+  { id: "right", label: "Right ends" },
+  { id: "both", label: "Both" },
+];
+/** Patterns whose rows can be woven differently (wave rows copy each other, so they keep theirs). */
+const WEAVE_PATTERNS = ["tatami", "gradient", "blend"];
+
+/** Which row ends are left and right: rows as they run at 0°, the feathered ends ragged. */
+function FeatherPicture({ side }: { side: string }) {
+  const left = side === "left" || side === "both";
+  const right = side === "right" || side === "both";
+  const rows = [0.2, 0.9, 0.5, 0.0, 0.7];
+  return (
+    <svg className="feather-picture" width="96" height="40" viewBox="0 0 96 40" role="img" aria-label="Left and right are the ends of the rows as they run at 0°">
+      <title>Left and right are the ends of the rows as they run at 0° (before the fill is turned)</title>
+      {rows.map((j, i) => (
+        <line key={i} x1={14 + (left ? 4 + 12 * j : 0)} x2={82 - (right ? 4 + 12 * (1 - j) : 0)} y1={6 + i * 7} y2={6 + i * 7} stroke="currentColor" strokeWidth="2" />
+      ))}
+      <text x="2" y="24" fontSize="10" fill="currentColor">L</text>
+      <text x="87" y="24" fontSize="10" fill="currentColor">R</text>
+    </svg>
+  );
+}
+
+/** The hand-sewn look: 0 to 100%, committed when the slider is let go. */
+function HandSlider({ value, set }: { value: number; set: (patch: Record<string, unknown>) => void }) {
+  const [shown, setShown] = useState(value);
+  useEffect(() => setShown(value), [value]);
+  const commit = (e: { currentTarget: HTMLInputElement }) => {
+    const v = Math.round(Number(e.currentTarget.value));
+    if (v !== value) set({ hand_pct: v });
+  };
+  return (
+    <Row label="Hand-sewn look" hint="Small, even irregularities, as if sewn by hand. The same design always sews the same way.">
+      <input type="range" min={0} max={100} step={5} value={shown} aria-label="Hand-sewn look" aria-valuetext={`${shown}%`}
+        onChange={(e) => setShown(Number(e.currentTarget.value))} onPointerUp={commit} onKeyUp={commit} />
+      <output>{shown}%</output>
+    </Row>
+  );
+}
+
+/** Advanced settings for how a shape's rows and stitches lie: weave, feathered ends, the
+ *  hand-sewn look, and carving lines into a fill. */
+function RowLook({ item, p, set }: { item: ObjectItem; p: Record<string, unknown>; set: (patch: Record<string, unknown>) => void }) {
+  const fillDef = item.kind === "fill" ? fillPatternDef(p.pattern as string | undefined) : undefined;
+  const rowsFill = item.kind === "fill" && !fillDef!.open;
+  const hand = item.kind === "satin" || rowsFill || (item.kind === "run" && p.style !== "motif");
+  const feather = (p.feather as string | undefined) ?? "none";
+  return (
+    <>
+      {rowsFill && WEAVE_PATTERNS.includes(fillDef!.id) && (
+        <Row label="Weave" hint="How the needle points of neighboring rows line up">
+          <select value={(p.weave as string | undefined) ?? "standard"} onChange={(e) => set({ weave: e.target.value })} aria-label="Weave">
+            {WEAVES.map((w) => (
+              <option key={w.id} value={w.id} title={w.title}>
+                {w.label}
+              </option>
+            ))}
+          </select>
+        </Row>
+      )}
+      {rowsFill && (
+        <>
+          <Row label="Feather" hint="Ragged row ends, so the fill blends into what is beside it (fur, shading)">
+            <div className="seg wrap" role="group" aria-label="Feather">
+              {FEATHERS.map((f) => (
+                <button key={f.id} aria-pressed={feather === f.id} onClick={() => set({ feather: f.id })}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            {feather !== "none" && <FeatherPicture side={feather} />}
+          </Row>
+          {feather !== "none" && (
+            <Stepper label="Depth" value={(p.feather_mm as number | undefined) ?? 2} step={0.5} min={0.5} max={6} digits={1} suffix="mm" onCommit={(v) => set({ feather_mm: v })} title="How far in the ragged row ends can reach" />
+          )}
+        </>
+      )}
+      {hand && <HandSlider value={(p.hand_pct as number | undefined) ?? 0} set={set} />}
+      {rowsFill && (
+        <div className="btn-row">
+          <Cmd id="object.carve" label="Carve lines (Shift+C)" />
+        </div>
+      )}
     </>
   );
 }
@@ -299,6 +396,7 @@ export function ObjectSections({ item, info, sel }: { item: ObjectItem; info: La
                 </Row>
               </>
             ))}
+          <RowLook item={item} p={p} set={set} />
           {item.kind === "fill" && <Check label="Sew from the other end (reverse)" checked={!!p.reverse} onChange={(v) => set({ reverse: v, end_mm: undefined })} hint="Or drag the red dot (where it ends) on the design" />}
           {item.kind === "satin" && (
             <>
