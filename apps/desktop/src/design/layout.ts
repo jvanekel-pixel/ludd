@@ -10,6 +10,7 @@ import {
   type LayoutOp,
   type ObjectItem,
   type RefImage,
+  type TextItem,
   type Thread,
   type Transform,
 } from "./types";
@@ -60,7 +61,7 @@ export function itemLabel(it: LayoutItem, index: number): string {
   if (it.kind === "satin") return it.name || `Satin ${index + 1}`;
   if (it.kind === "fill") return it.name || `Fill ${index + 1}`;
   if (it.kind === "applique") return it.name || `Applique ${index + 1}`;
-  if (it.kind === "text") return it.name || `“${it.text.trim().slice(0, 24)}”`;
+  if (it.kind === "text") return it.name || `“${it.text.trim().replace(/\s*[\r\n]+\s*/g, " ").slice(0, 24)}”`;
   return (it as FileItem).name || ((it as FileItem).path.split(/[\\/]/).pop() ?? "Design");
 }
 
@@ -424,12 +425,22 @@ export function recolor(layout: Layout, sources: Sources, thread: Thread | null)
   return { ...layout, items };
 }
 
+/** Lettering without the colors given to single letters (their moves and turns stay). */
+function withoutLetterThreads(text: TextItem): TextItem {
+  if (!Object.values(text.letter_edits ?? {}).some((e) => e.thread)) return text;
+  const edits = Object.entries(text.letter_edits!)
+    .map(([letter, { thread: _own, ...rest }]) => [letter, rest] as const)
+    .filter(([, rest]) => Object.keys(rest).length);
+  const { letter_edits: _old, ...plain } = text;
+  return edits.length ? { ...plain, letter_edits: Object.fromEntries(edits) } : plain;
+}
+
 export function clearRecolors(layout: Layout): Layout {
-  return { ...layout, items: layout.items.map((it) => ({ ...it, threads: [] })) };
+  return { ...layout, items: layout.items.map((it) => ({ ...(it.kind === "text" ? withoutLetterThreads(it) : it), threads: [] })) };
 }
 
 export function hasRecolors(layout: Layout): boolean {
-  return layout.items.some((it) => it.threads.some(Boolean));
+  return layout.items.some((it) => it.threads.some(Boolean) || (it.kind === "text" && Object.values(it.letter_edits ?? {}).some((e) => e.thread)));
 }
 
 export function deleteColor(layout: Layout, sources: Sources): Layout {

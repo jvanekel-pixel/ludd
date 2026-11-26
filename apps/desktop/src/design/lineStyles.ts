@@ -16,6 +16,7 @@ export const MOTIF_DEFS: { id: string; label: string }[] = [
   { id: "zigzag", label: "Zigzag" },
   { id: "scallop", label: "Scallop" },
   { id: "blanket", label: "Blanket stitch (applique edge)" },
+  { id: "leaf", label: "Leaves" },
 ];
 
 export const MOTIF_FIELDS: Field[] = [

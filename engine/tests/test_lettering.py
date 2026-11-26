@@ -125,7 +125,7 @@ def test_monogram_has_a_bigger_middle_letter(font_path):
     heights = [max(n[1] for n in o["geometry"]["outline"]) - min(n[1] for n in o["geometry"]["outline"]) for o in objs]
     assert heights[1] == pytest.approx(10, abs=0.05) and heights[0] == pytest.approx(7, abs=0.05)
     with pytest.raises(LetteringError, match="three letters"):
-        lettering.layout_text(spec(font_path, text="IO", monogram=True))
+        lettering.layout_text(spec(font_path, text="IOIX", monogram=True))  # one to three letters
 
 
 def test_validation_and_small_text_warning(font_path):
@@ -205,7 +205,7 @@ def test_text_follows_a_drawn_line(font_path):
 
 def test_qa_c7_missing_font_is_shown_in_a_stand_in_with_a_warning(font_path, monkeypatch):
     stand_in = {"family": "Threadline Test", "style": "Regular", "path": font_path, "index": 0, "kind": "outline"}
-    monkeypatch.setattr(lettering, "list_fonts", lambda: [stand_in])
+    monkeypatch.setattr(lettering.fonts, "list_fonts", lambda: [stand_in])
     missing = {"path": "C:/nowhere/Fancy.ttf", "index": 0, "family": "Fancy Script", "style": "Regular"}
     objs, warnings = lettering.layout_text({"text": "IO", "font": missing, "size_mm": 10, "style": "satin"})
     assert objs
@@ -313,7 +313,7 @@ def test_qa_missing_characters_are_named_and_nothing_drawable_is_refused(font_pa
 
 def test_qa_text_is_cleaned_before_layout():
     assert lettering._clean_text("é") == "é"
-    assert lettering._clean_text("A\nB\tC​") == "A B C"
+    assert lettering._clean_text("A\nB\tC​") == "A\nB C"
 
 
 def test_qa_straight_text_keeps_its_baseline(font2_path):

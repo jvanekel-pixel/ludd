@@ -71,6 +71,13 @@ The user is testing on the machine once the software is about 95% done (decided 
 | Phase 4 | **Tiny stitches and clumps** | A dense bought design with both repairs on | No thread nests; nothing unravels where stitches were removed |
 | Phase 4 | **Locked jump** | A jump locked with Alt+Shift+T, cut by hand | Neither side pulls out |
 | Phase 4 | **Density limit** | A dense bought design on a T-shirt with the T-shirt preset and the limit on | Less puckering than without; fills still cover |
+| Phase 5 | **Two lines, slanted, in an envelope** | "Happy / Birthday", Arial 12 mm, slant 12°, Bulge | Even letters; no puckering where the envelope stretches them |
+| Phase 5 | **True satin against satin look** | "Emma" at 10 mm and 20 mm, both ways, side by side | True satin is smoother along strokes; joins (m, a) have no gap or lump |
+| Phase 5 | **Small letters without underlay** | A name at 5 mm | Thinner and more legible than with underlay; nothing unravels |
+| Phase 5 | **Stitched font** | A name typed in a font made from bought letter files | Letters on one line, evenly spaced; sews like the originals |
+| Phase 5 | **One letter moved and recolored** | A name with one letter raised, turned and in a second color | The color change is clean; no long thread between letters |
+| Phase 5 | **Monogram in a scallop frame** | Three letters, Classic, scallop circle | Frame round and evenly scalloped; letters centered |
+| Phase 5 | **Shadow and outline** | "WOW" 25 mm with a 0.8 mm shadow; the same with a 1.5 mm satin outline | Shadow shows only at the edge, no lump under letters; outline evenly spaced round the word |
 
 ## Log
 

@@ -40,7 +40,7 @@ import {
   undo,
   type History,
 } from "./layout";
-import { Kind, type Design, type Doc, type FileItem, type LayoutItem, type ObjectItem, type SatinColumn } from "./types";
+import { Kind, type Design, type Doc, type FileItem, type Layout, type LayoutItem, type ObjectItem, type SatinColumn, type TextItem } from "./types";
 
 const navy = { color: "#000080", name: "Navy", catalog: "9", brand: "X" };
 
@@ -188,6 +188,26 @@ function rendered(kinds: number[], item: number[], src: number[], items: Design[
     items,
   };
 }
+
+describe("lettering", () => {
+  const text = (patch: Partial<TextItem>) => ({ id: "t", kind: "text", text: "Happy\nBirthday", threads: [], ...patch }) as unknown as TextItem;
+  const layout = (t: TextItem) => ({ items: [t] }) as unknown as Layout;
+
+  it("names two lines on one", () => {
+    expect(itemLabel(text({}), 0)).toBe("“Happy Birthday”");
+  });
+
+  it("puts back the original colors of single letters too", () => {
+    const red = { color: "#ff0000", name: "Red", brand: "", catalog: "" };
+    const l = layout(text({ letter_edits: { "1": { thread: red, dx_mm: 2 }, "2": { thread: red } } }));
+    expect(hasRecolors(l)).toBe(true);
+    const back = clearRecolors(l);
+    expect(hasRecolors(back)).toBe(false);
+    // The move stays; a letter left with nothing changed has no entry.
+    expect((back.items[0] as TextItem).letter_edits).toEqual({ "1": { dx_mm: 2 } });
+    expect((clearRecolors(layout(text({ letter_edits: { "2": { thread: red } } }))).items[0] as TextItem).letter_edits).toBeUndefined();
+  });
+});
 
 describe("insertAt", () => {
   it("inserts after the source stitch at the player position, skipping added records", () => {

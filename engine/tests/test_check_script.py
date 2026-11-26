@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import math
 import shutil
 import subprocess
 import sys
@@ -855,3 +856,22 @@ def test_digest_pattern_is_what_test_layout_snapshots_records(name):
     rendered = layout.render(test_layout_snapshots.CASES[name](None))  # these two need no font
     stored = json.loads((SNAPSHOTS / "layout.json").read_text())
     assert snapshot_util.digest_pattern(rendered.pattern) == test_layout_snapshots._digest(rendered) == stored[name]
+
+
+def test_steady_digest_ignores_the_last_digit_on_a_rounding_step():
+    """341.245 units is a rounding step for the 0.01 the digests round to. Of the three numbers a
+    computer can hold nearest to it, some round down and some up, so the plain digest depends on a
+    last digit; the steady one gives one answer for all three, and still sees a change of two steps."""
+
+    class Pattern:
+        threadlist: list = []
+
+        def __init__(self, x):
+            self.stitches = [(x, 0.0, snapshot_util.pe.STITCH)]
+
+    step = 341.245
+    near = [math.nextafter(step, -math.inf), step, math.nextafter(step, math.inf)]
+    plain = {snapshot_util.digest_pattern(Pattern(x))["sha1"] for x in near}
+    steady = {snapshot_util.digest_pattern_steady(Pattern(x))["sha1"] for x in near}
+    assert len(plain) == 2 and len(steady) == 1
+    assert snapshot_util.digest_pattern_steady(Pattern(step + 0.02))["sha1"] not in steady

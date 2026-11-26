@@ -407,7 +407,8 @@ dialog.threads-dialog { width: min(680px, calc(100vw - 32px)); }
 
 /* M6: lettering */
 .text-field { display: flex; flex-direction: column; gap: 0.2rem; font-size: 12px; color: var(--muted); margin-bottom: 0.5rem; }
-.text-field input { font-size: 16px; padding: 0.35rem 0.5rem; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--fg); }
+.text-field input, .text-field textarea { font-size: 16px; padding: 0.35rem 0.5rem; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--fg); }
+.text-field textarea { font-family: inherit; resize: vertical; }
 .font-picker { position: relative; margin-bottom: 0.5rem; }
 .font-current { width: 100%; display: flex; justify-content: space-between; align-items: baseline; text-align: left; }
 .font-current small { color: var(--muted); }

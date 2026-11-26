@@ -57,9 +57,31 @@ export type LayoutItemInfo = {
   bounds_mm: [number, number, number, number] | null;
   source_size_mm: [number, number] | null;
   /** Lettering: each letter part, how it's stitched ("satin" look or "fill"), its outline and
-   *  where it starts and ends (mm, as shown). */
-  letters?: { index: number; kind: string; look: string; start: [number, number]; end: [number, number]; ring: [number, number][] }[];
+   *  where it starts and ends (mm, as shown), and which letter, line and color run it is. */
+  letters?: LetterPart[];
+  /** Lettering: its color runs in sewing order (the item's color blocks, by number). */
+  runs?: TextRun[];
 };
+
+export type LetterPart = {
+  index: number;
+  kind: string;
+  look: string;
+  start: [number, number];
+  end: [number, number];
+  ring: [number, number][];
+  /** Which letter it is, from 0 for the first character that draws something. */
+  letter: number;
+  /** Which line of the text, from 0. */
+  line: number;
+  /** Which color run of the item sews it. */
+  run: number;
+};
+
+/** A run of a text's parts sewn in one thread: its letters, or its shadow, outline or frame.
+ *  `slots`: the text's color slots an Order & colors change of the whole run goes to (`threads`
+ *  on the item); none when the change has to go to its letters one by one. */
+export type TextRun = { run: number; what: "letters" | "shadow" | "outline" | "frame"; letters: number[]; slots: number[] };
 
 export type Transform = {
   x: number;
@@ -134,7 +156,7 @@ export type SatinRibbon = { nodes: PathNode[]; width_mm: number; closed?: boolea
 export type SatinGeometry = SatinColumn | SatinRibbon;
 export type FillGeometry = { outline: PathNode[]; holes?: PathNode[][] };
 
-export type Motif = "wave" | "zigzag" | "scallop" | "blanket";
+export type Motif = "wave" | "zigzag" | "scallop" | "blanket" | "leaf";
 export type RunParams = {
   style?: "single" | "triple" | "bean" | "motif";
   stitch_mm?: number;
@@ -204,8 +226,9 @@ export type ObjectItem =
   | (ObjectBase & { kind: "fill"; geometry: FillGeometry; params: FillParams })
   | (ObjectBase & { kind: "applique"; geometry: FillGeometry; params: AppliqueParams });
 
-export type FontRef = { path: string; index: number; family: string; style: string };
-export type FontInfo = { family: string; style: string; path: string; index: number; kind: "outline" | "stitch" };
+/** `made_of: "stitches"`: a stitch font whose letters are stitches (made from letter files). */
+export type FontRef = { path: string; index: number; family: string; style: string; made_of?: "stitches" };
+export type FontInfo = { family: string; style: string; path: string; index: number; kind: "outline" | "stitch"; made_of?: "stitches" };
 
 export type TextShape = {
   type: "line" | "arc_up" | "arc_down" | "circle" | "path";
@@ -215,21 +238,50 @@ export type TextShape = {
   closed?: boolean;
 };
 
+export type Envelope = "bulge" | "pinch" | "pennant_right" | "pennant_left" | "wave" | "arch_top" | "arch_bottom";
+export type OrnamentId = "circle" | "double_circle" | "diamond" | "square" | "scallop_circle" | "laurel";
+export type MonogramStyle = "classic" | "block" | "stacked";
+
+/** A change to one letter: moved, turned, resized (1 = as it is), recolored or sewn at another angle. */
+export type LetterEdit = { dx_mm?: number; dy_mm?: number; rotate?: number; scale?: number; thread?: Thread; angle_deg?: number };
+
 /** Lettering: stitched from a font each time, so it stays editable and keeps its density at any size. */
 export type TextItem = {
   id: string;
   kind: "text";
   name?: string;
+  /** May hold line breaks ("\n"). */
   text: string;
   font: FontRef;
   /** Height of capital letters, mm. */
   size_mm: number;
   spacing_mm: number;
-  style: "satin" | "fill";
+  /** "columns" is True satin: each stroke its own satin column. */
+  style: "satin" | "columns" | "fill";
   shape: TextShape;
   monogram: boolean;
   /** Where letters start and end, chosen with their dots (by letter part, in the text's own frame). */
   letters?: Record<string, { start_mm?: [number, number]; end_mm?: [number, number] }>;
+  /** Several lines: how they line up (default "center") and how far apart (x letter height, 1.3). */
+  align?: "left" | "center" | "right";
+  line_spacing?: number;
+  /** -30 to 30 degrees; positive leans right. */
+  slant_deg?: number;
+  envelope?: { type: Envelope; amount: number };
+  /** Letters stacked top to bottom. */
+  vertical?: boolean;
+  /** Changes to single letters, by letter number (0 = the first character that draws something). */
+  letter_edits?: Record<string, LetterEdit>;
+  monogram_style?: MonogramStyle;
+  /** A frame round a monogram; no thread: the text's. */
+  ornament?: { id: OrnamentId; margin_mm?: number; thread?: Thread };
+  shadow?: { dx_mm: number; dy_mm: number; thread: Thread };
+  outline?: { gap_mm: number; width_mm: number; style: "satin" | "run"; thread: Thread };
+  /** Name templates: this text is filled from a list; `bind` is the column it takes ("name"). */
+  placeholder?: boolean;
+  bind?: string;
+  /** A placeholder's long names shrink to this width. */
+  fit_width_mm?: number;
   locked?: boolean;
   group?: string;
   thread: Thread;

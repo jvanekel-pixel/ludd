@@ -102,6 +102,7 @@ export function Toolbar() {
           { id: "file.picture" },
           { id: "threads.charts", label: "My threads & charts…" },
           { id: "file.print" },
+          { id: "text.placement" },
           { id: "file.browse" },
           { id: "file.batch" },
           { id: "autotrace.all" },

@@ -2,6 +2,22 @@
 
 ## Next (unreleased)
 
+### Phase 5: lettering and personalization (2026-11-25)
+- **Several lines of text**: Enter starts a new line (Ctrl+Enter or clicking away finishes). Align them left, center or right and set the line spacing. On an arch the lines curve together; a circle or a drawn line takes the first line only. The lettering panel's **Advanced** fold is now **More options**.
+- **Slant** letters up to 30° either way.
+- **Envelopes** for straight text (bulge, pinch, pennant right or left, wave, arch top, arch bottom, with an Amount slider) and **Stack the letters** top to bottom.
+- **Adjust single letters** (Alt+Shift+A): click a letter's dot, drag it or use the arrow keys, and set its size, turn, thread and stitch angle. **Put the letters back** (Alt+Shift+Z). A text in several colors now lists each one in Order & colors.
+- **True satin**, a third look beside Satin look and Fill: each stroke is its own satin column. A letter that doesn't work out is sewn in Satin look, and a note says how many; that happens more on large letters.
+- **Small letters**: letters that sew under 6 mm tall have no underlay, so they stay thin (this changes how small text already in your designs sews). Resizing with the handles and a single letter's own size count. LUDD also warns when a font's strokes are too thin to sew.
+- **Make a stitch font from letter files** (Ctrl+Alt+F, or in the font list): one design file per letter. LUDD guesses each letter from the file name, lines them up on one baseline (you can nudge any) and saves a stitched font. Past 20% bigger or smaller it rebuilds the stitches at the new size; resizing with the handles only stretches them, and LUDD says so. Only use designs you're allowed to use this way.
+- **One file per name** now loads a list (CSV or text, up to 2,000 rows), fills more than one piece of lettering (a name and a number), takes thread colors and file names from columns, shrinks long names to fit, and previews each name on the design. If a name can't be saved, the others still are, and LUDD says which and why. File names are made safe for every computer (very long ones are cut). **Name templates**: save a layout (Ctrl+Alt+P) and start from it later.
+- **Monograms** take one to three letters in three styles (Classic, Block, Stacked), with six frames (circle, double circle, diamond, square, scallop circle, laurel). Lines get a new **Leaves** motif.
+- **Shadow** and **outline** under More options; both follow the text as you change it.
+- **Placement guides** (Alt+Shift+G, or ⋯): where designs usually go on towels, pillowcases, shirts, bags, napkins and caps, with a printed placement sheet.
+- **Put back the original colors** also clears single letters' own colors. A text on two lines is named on one line.
+- Projects that use any of these say so, and an older LUDD asks you to update instead of sewing them wrong.
+- Not built: importing BX fonts (use the letter files that came with the font).
+
 ### Phase 4: repair bought designs (2026-11-25)
 - **Repair this design** (Ctrl+Alt+D, a stitch file's Repair section, or **Fix it** on a check): tick the repairs, compare before and after numbers, **Show on the design** marks in red what would change, and nothing changes until **Accept**. Your stitch file is never changed, and each repair can be taken off again.
 - **Rebuild stitches at a new size** (Alt+Shift+R): a resized bought design's fills, satins and lines are sewn again with their original spacing, so it's neither too dense nor too sparse. The resize warning suggests it.

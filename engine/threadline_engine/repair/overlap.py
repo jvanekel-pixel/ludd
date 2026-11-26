@@ -27,7 +27,7 @@ from ..digitize.patterns import polygons
 from ..layout import passes
 from ..layout.model import LayoutError, Transform
 from ..layout.objects import OBJECT_LABEL
-from ..layout.text import text_letters
+from ..layout.text import text_letters, text_title
 
 KEEP_MM = 1.0  # "Keep under the edge": how far under a cover's edge the fill below keeps sewing
 KEEP_RANGE_MM = (0.5, 3.0)
@@ -49,8 +49,8 @@ HIDDEN_NOTE = "{} is completely hidden under {}. Delete it, or move it up in the
 _areas_cache: dict[tuple[str, str], BaseGeometry | None] = {}
 _cuts_cache: dict[tuple, tuple | None] = {}
 _CACHE_MAX = 4096  # as layout/objects.py keeps stitches: a traced picture can be a thousand shapes
-_SHAPE_KEYS = ("kind", "geometry", "params", "transform", "text", "font", "size_mm", "spacing_mm", "style", "shape",
-               "monogram", "letters")  # what an item's areas depend on
+_SHAPE_KEYS = ("kind", "geometry", "params", "transform", *lettering.TEXT_SPEC_KEYS,
+               "letters")  # what an item's areas depend on
 
 # What a damaged shape can raise here. The pass leaves such a shape out; render() then meets it
 # and says what's wrong with it, in the same words as with the switch off.
@@ -116,7 +116,7 @@ def _keep_mm(value: Any) -> float:
 def _name(item: dict, index: int) -> str:
     """An item's name as render() gives it (layout/render.py)."""
     if item.get("kind") == "text":
-        return item.get("name") or f"“{str(item.get('text', '')).strip()[:24]}”"
+        return item.get("name") or f"“{text_title(item)}”"
     return item.get("name") or f"{OBJECT_LABEL[item['kind']]} {index + 1}"
 
 

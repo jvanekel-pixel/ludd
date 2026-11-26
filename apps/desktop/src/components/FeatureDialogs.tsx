@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { addDesign, openDesign } from "../actions";
-import { defaultFormat } from "../design/machine";
 import { MM_PER_IN } from "../design/grid";
-import { addOffset, exportNames, pickFolder, type OffsetSpec } from "../features";
+import { addOffset, pickFolder, type OffsetSpec } from "../features";
 import { engine as engineCall } from "../actions";
 import { loadPrefs, savePrefs } from "../prefs";
-import { selectMachine, useStore } from "../store";
+import { useStore } from "../store";
 import { useModal } from "./ThreadDialogs";
 
 /** Outlines & offsets: a ring around the selection, a set distance out. */
@@ -215,58 +214,6 @@ export function BrowseDialog() {
       {designs && !shown.length && <p className="hint">No designs here{query ? " with that name" : ""}.</p>}
       <div className="actions">
         <button onClick={close}>Close</button>
-      </div>
-    </dialog>
-  );
-}
-
-/** One machine file per name: the selected lettering with each name in turn. */
-export function NamesDialog() {
-  const open = useStore((s) => s.dialog === "names");
-  const setDialog = useStore((s) => s.setDialog);
-  const machine = useStore(selectMachine);
-  const formats = useStore((s) => s.formats);
-  const ref = useModal(open);
-  const [names, setNames] = useState("");
-  const [ext, setExt] = useState(() => defaultFormat(machine));
-  // Your machine's format each time it opens (the machine may have changed since).
-  useEffect(() => {
-    if (open) setExt(defaultFormat(machine));
-  }, [open, machine]);
-  const close = () => setDialog(null);
-  const list = names.split("\n").map((n) => n.trim()).filter(Boolean);
-  return (
-    <dialog ref={ref} className="modal" onClose={close} aria-labelledby="names-title">
-      <h2 id="names-title">One file per name</h2>
-      <p className="hint">The selected lettering is changed to each name in turn, and each is saved as its own machine file (Emma.pes, Jack.pes…), with the rest of the design as it is.</p>
-      <label className="field">
-        Names, one per line
-        <textarea rows={8} value={names} onChange={(e) => setNames(e.target.value)} placeholder={"Emma\nJack\nOlivia"} />
-      </label>
-      <label className="field">
-        File type
-        <select value={ext} onChange={(e) => setExt(e.target.value)}>
-          {(formats?.write ?? [{ ext: "pes", description: "Brother" }]).map((f) => (
-            <option key={f.ext} value={f.ext}>
-              {f.ext.toUpperCase()} {f.description ? `– ${f.description}` : ""}
-            </option>
-          ))}
-        </select>
-      </label>
-      <div className="actions">
-        <button onClick={close}>Cancel</button>
-        <button
-          className="primary"
-          disabled={!list.length}
-          onClick={async () => {
-            const folder = await pickFolder("Save the files in…");
-            if (!folder) return;
-            close();
-            await exportNames(list, folder, ext);
-          }}
-        >
-          Save {list.length || ""} files…
-        </button>
       </div>
     </dialog>
   );

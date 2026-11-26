@@ -1,5 +1,7 @@
-/** Print a 1:1 template (with centre lines for hooping) and a thread list for the open design. */
+/** Print a 1:1 template (with centre lines for hooping) and a thread list for the open design,
+ *  or a placement sheet. */
 
+import { diagramSvg, formatMeasure, PLACEMENT_NOTE, type Placement } from "./design/placements";
 import { Kind, type Design, type Hoop } from "./design/types";
 import { selectHoop, selectMachine, useStore } from "./store";
 
@@ -141,6 +143,57 @@ export function printDesign() {
   if (!s.design) return;
   const fabric = s.checks?.fabric;
   const html = printHtml(s.design, s.showHoop ? selectHoop(s) : null, selectMachine(s)?.name ?? null, fabric ? `${fabric.name}. ${fabric.advice}` : null);
+  printPage(html);
+}
+
+/** A bare crosshair, for a placement sheet with no design open. */
+function crosshairSvg(): string {
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="100mm" viewBox="0 0 100 100">` +
+    `<g stroke="#d33" fill="none" stroke-width=".25"><line class="cross" x1="0" y1="50" x2="100" y2="50"/>` +
+    `<line class="cross" x1="50" y1="0" x2="50" y2="100"/><circle cx="50" cy="50" r="6"/></g></svg>`
+  );
+}
+
+/** A placement sheet: where the thing's design goes (placement guides), with the 1:1 template of
+ *  the open design (or a crosshair on its own), and the bars to check the print size. */
+export function placementSheetHtml(p: Placement, d: Design | null, hoop: Hoop | null, machineName: string | null): string {
+  const inch = (mm: number) => (mm / 25.4).toFixed(2);
+  const measures = p.measures.map((m) => `<li>${esc(m.label)}: <b>${esc(formatMeasure(m))}</b></li>`).join("");
+  const size = d
+    ? `This design is ${d.info.width_mm.toFixed(1)} × ${d.info.height_mm.toFixed(1)} mm (${inch(d.info.width_mm)} × ${inch(d.info.height_mm)} in)` +
+      `${hoop ? ` · ${esc(hoop.name)} hoop` : ""}${machineName ? ` · ${esc(machineName)}` : ""}`
+    : "";
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(p.name)} placement</title><style>
+    @page { margin: 12mm; }
+    body { font: 11pt system-ui, sans-serif; color: #111; margin: 0; }
+    h1 { font-size: 15pt; margin: 0 0 2mm; }
+    p { margin: 2mm 0; }
+    .meta { color: #555; }
+    .note { font-size: 9pt; color: #555; margin: 3mm 0; }
+    .guide { display: flex; gap: 8mm; align-items: flex-start; }
+    .guide > svg { width: 45mm; height: auto; flex: none; }
+    ul { margin: 0 0 2mm; padding-left: 5mm; }
+    svg { display: block; }
+  </style></head><body>
+    <h1>${esc(p.name)}: placement sheet</h1>
+    <p>${esc(p.where)}</p>
+    <div class="guide">${diagramSvg(p)}<div><ul>${measures}</ul>${p.tip ? `<p class="meta">${esc(p.tip)}</p>` : ""}<p><b>${esc(PLACEMENT_NOTE)}</b></p></div></div>
+    ${size ? `<p class="meta">${size}</p>` : ""}
+    ${d ? templateSvg(d, hoop) : crosshairSvg()}
+    <p class="note">Mark where the middle of the design goes on your item, using the measurements above, and line the red lines up with that mark. Print at 100% (“Actual size”). Check the bars below measure correctly:</p>
+    ${checkBars()}
+  </body></html>`;
+}
+
+/** Print a placement sheet, with the open design at real size if there is one. */
+export function printPlacement(p: Placement) {
+  const s = useStore.getState();
+  printPage(placementSheetHtml(p, s.design, s.showHoop ? selectHoop(s) : null, selectMachine(s)?.name ?? null));
+}
+
+/** Open the system print dialog for a page of HTML. */
+function printPage(html: string) {
   const frame = document.createElement("iframe");
   frame.setAttribute("aria-hidden", "true");
   frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";

@@ -53,4 +53,26 @@ describe("One file per name: file names", () => {
     expect(nameFileStem("...")).toBe("_");
     expect(nameFileStem("Zoë")).toBe("Zoë");
   });
+
+  it("marks a device name with anything after a dot, which older Windows refuses too", () => {
+    expect(nameFileStem("Con.Smith")).toBe("_Con.Smith");
+    expect(nameFileStem("aux.1")).toBe("_aux.1");
+    expect(nameFileStem("NUL.old.pes")).toBe("_NUL.old.pes");
+    expect(nameFileStem("lpt9 .a")).toBe("_lpt9 .a"); // LUDD's own export refuses this one too
+    // Names that only start like one are left alone.
+    expect(nameFileStem("Conrad")).toBe("Conrad");
+    expect(nameFileStem("Con Smith")).toBe("Con Smith");
+    expect(nameFileStem("Console.1")).toBe("Console.1");
+    expect(nameFileStem("Mr. Con")).toBe("Mr. Con");
+  });
+
+  it("cuts a very long name to 100 characters, and 200 bytes, without cutting a character in two", () => {
+    expect(nameFileStem("a".repeat(300))).toBe("a".repeat(100));
+    expect(nameFileStem("a".repeat(100))).toBe("a".repeat(100));
+    expect(nameFileStem("é".repeat(300))).toBe("é".repeat(100)); // 2 bytes each: both limits met
+    expect(nameFileStem("好".repeat(300))).toBe("好".repeat(66)); // 3 bytes each: 198 bytes
+    expect(nameFileStem("🧵".repeat(300))).toBe("🧵".repeat(50)); // 4 bytes, two UTF-16 units each
+    expect(nameFileStem(`${"a".repeat(98)}. tail`)).toBe("a".repeat(98)); // no dot or space left at the cut
+    expect(nameFileStem(`con.${"x".repeat(300)}`)).toBe(`_con.${"x".repeat(96)}`);
+  });
 });

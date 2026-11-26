@@ -1,0 +1,52 @@
+{
+ "IOT_columns": {
+  "jumps": 3,
+  "records": 373,
+  "sha1": "4fd8a6fecdafa904fcf2e09abee2b4a03e567ccb",
+  "stitches": 366,
+  "threads": [
+   "#cc2222"
+  ],
+  "trims": 3
+ },
+ "I_12": {
+  "jumps": 0,
+  "records": 67,
+  "sha1": "a1e088a352c23f2114c8e898146fbc5e6176f8f8",
+  "stitches": 66,
+  "threads": [
+   "#cc2222"
+  ],
+  "trims": 0
+ },
+ "O_12": {
+  "jumps": 0,
+  "records": 186,
+  "sha1": "68f8e2e49237ad6740ae4118f010b7fa5aa727a4",
+  "stitches": 185,
+  "threads": [
+   "#cc2222"
+  ],
+  "trims": 0
+ },
+ "T_12": {
+  "jumps": 1,
+  "records": 118,
+  "sha1": "d12f59a9edbf42401ad775739bd54752762634eb",
+  "stitches": 115,
+  "threads": [
+   "#cc2222"
+  ],
+  "trims": 1
+ },
+ "small_5mm": {
+  "jumps": 3,
+  "records": 150,
+  "sha1": "8f3075edc4ca204c5941e8a41c6d4f07a11c5488",
+  "stitches": 144,
+  "threads": [
+   "#cc2222"
+  ],
+  "trims": 2
+ }
+}

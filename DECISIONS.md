@@ -112,3 +112,9 @@ Durable log so future sessions do not re-litigate these. Newest decisions go bel
 - Why: the owner's five rules for keeping token use low and results right the first time.
 - Alternatives rejected: planning inside build sessions; one long session across phases; reviewing by re-reading code.
 - Revisit if: specs keep failing their preflight (they are going stale faster than they are built).
+
+### D-021: Phase 5 lettering decisions (2026-11-25)
+- Decision: no look inside BX fonts (L-036: use the letter files that came with the font); True satin is a choice beside Satin look, not the default; installed-font letters under 6 mm sew without underlay (this changes how small text in existing designs sews); six built-in monogram frames (circle, double circle, diamond, square, scallop circle, laurel).
+- Why: the owner confirmed the Phase 5 spec's recommended answers.
+- Alternatives rejected: examining a BX font; True satin as the default before it has been sewn; keeping underlay on tiny letters.
+- Revisit if: the Phase 15 stitch-outs show True satin sews better than Satin look, or small letters unravel without underlay.

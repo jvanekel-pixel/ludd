@@ -54,7 +54,7 @@ change, in the same commit as docs/CHANGELOG.md. Never edited by the help agent.
 | Saves for machines (9 formats) | **PES** (Brother, primary), **JEF** (Janome), DST, EXP, PEC, TBF, U01, VP3, XXX. |
 | Can't open | Embrilliance working files (`.be`, `.bt`): they're a closed format. Open the PES/JEF Embrilliance saved, or recreate. See L-012. |
 | Project file | `.ludd`: everything embedded (shapes, lettering, placed designs, traced pictures, the lettering's fonts). Old `.thl` projects and `.tlfont` stitch fonts still open. |
-| Data folder (Windows) | `%APPDATA%\Ludd` (older installs: the old `Threadline` folder still works). Holds threads, settings, `fonts` (stitch fonts), `recovery`, `project-files` (private copies of added pictures/designs; unused 90 days → deleted), `machines` (extra machine profiles). |
+| Data folder (Windows) | `%APPDATA%\Ludd` (older installs: the old `Threadline` folder still works). Holds threads, settings, `fonts` (stitch fonts, including fonts made from letter files), `templates` (name templates), `recovery`, `project-files` (private copies of added pictures/designs; unused 90 days → deleted), `machines` (extra machine profiles). |
 | Installer location (developer builds) | `C:\Users\Copper Felix\HTML Stuffs\threadline\apps\desktop\src-tauri\target\release\bundle\nsis\LUDD_<version>_x64-setup.exe` |
 | Releases | GitHub `jvanekel-pixel/ludd` → Releases. Installers aren't code-signed yet (Windows SmartScreen / macOS Gatekeeper warning; see T-001). |
 | Shortcuts | Embrilliance's keys wherever Embrilliance has one. Every menu item and button tooltip shows its key. |
@@ -93,13 +93,23 @@ One line per common question. Status, then where to read more.
 | add a satin border to a fill? | YES (Shift+B) | F-1206 |
 | applique (placement, tack-down, satin; cut file)? | YES | F-1501 |
 | lettering with installed fonts? | YES | F-1401 |
-| multi-line text in one text object? | NO (one line per text) | L-003 |
+| multi-line text in one text object? | YES (Enter in the text box) | F-1410 |
 | text on an arch / circle / my own line? | YES | F-1403 |
-| monograms? | YES | F-1404 |
-| one machine file per name from a list? | YES | F-1406 |
+| monograms? | YES (1 to 3 letters, 3 styles, 6 frames) | F-1404, F-1417 |
+| one machine file per name from a list? | YES (typed, or loaded from a CSV) | F-1406, F-1416 |
 | turn lettering into ordinary shapes? | YES (Break into shapes) | F-1407 |
-| change a letter's stitch angle without breaking it apart? | NO | L-005 |
+| change a letter's stitch angle without breaking it apart? | YES (Adjust single letters; not True satin or stitched letters) | F-1413 |
 | reset all letters' starts and ends? | YES (`Ctrl+Alt+R`) | F-1405 |
+| slant lettering? | YES (up to 30° each way) | F-1411 |
+| bend lettering into a shape (envelope), or stack it top to bottom? | YES (straight text) | F-1412 |
+| move, turn, resize or recolor one letter? | YES (`Alt+Shift+A`) | F-1413 |
+| satin lettering whose stitches follow each stroke (true satin)? | PARTIAL (letters that don't work out sew in Satin look) | F-1414, L-014 |
+| make a font from bought letter files (one design per letter)? | YES | F-1415 |
+| use a BX font (Embrilliance's package)? | NO (use the letter files that came with it) | L-036 |
+| fill a name and a number from a spreadsheet list, one file each? | YES (CSV) | F-1416 |
+| save a name layout as a template and reuse it? | YES (`Ctrl+Alt+P`) | F-1416 |
+| shadow or outline lettering? | YES (not stitched fonts) | F-1418 |
+| tell me where a design goes on a towel, shirt or bag? | YES (starting points, `Alt+Shift+G`) | F-1419 |
 | put a recolored color back to the original? | YES (Back to …, or Put back the original colors) | F-1601, F-1607 |
 | trace a picture automatically? | YES (Auto-trace) | F-901 |
 | turn a whole picture into a design in one go? | YES (Auto-digitize) | F-1001 |
@@ -173,7 +183,7 @@ One line per common question. Status, then where to read more.
   all), turn, mirror, duplicate, ⋯.
 - Then the selection's own section (**Fill / Satin / Line / Applique / Lettering / Stitch file /
   Picture**) with everyday settings in view and small folds inside (Underlay, Advanced stitch
-  settings, lettering Shape and Advanced, a stitch file's Repair and Rotation and position).
+  settings, lettering Shape and More options, a stitch file's Repair and Rotation and position).
 - Then **Size and points**, **Design** (size, stitches, hoop fit, fabric, File details),
   **Order & colors**, **Check before stitching**, **Pictures**.
 - Nothing selected: Design and Order & colors open. Open/closed is remembered per kind of
@@ -629,51 +639,182 @@ stitches. Shapes with holes stay fills (L-013).
 ## 12. Lettering (section 7 of the manual)
 
 ### F-1401 Text — YES
-`Shift+T`, click where it goes, type in the panel (one line; a line break becomes a space). Any
+`Shift+T`, click where it goes, type in the panel: several lines are fine (Enter starts a new one;
+`Ctrl+Enter` or clicking away finishes; a monogram takes up to 3 initials on one line). Any
 installed font (search; 200 shown at a time) or a `.luddfont` stitch font. Letter height = capital
-H, 2–200 mm. Thread. **Satin look** or **Fill**. Letters under ~6 mm warn. Fonts are embedded in
-the project; a missing font shows as Arial with a warning.
+H, 2–200 mm. Thread. **Satin look**, **True satin** (F-1414) or **Fill**. Letters that sew under
+6 mm tall warn and have no underlay (F-1420). Fonts are embedded in the project; a missing font shows as Arial
+with a warning. The lettering panel's **More options** fold (called Advanced before 2026-11-25)
+holds layout, shadow and outline, letter spacing, One file per name and Save this font as a stitch
+font.
 
 ### F-1402 How letters are stitched — YES (stated in the panel since 2026-10-13)
 - **Satin look**: each letter is a fill of long, smooth satin-like stitches across its strokes, at
   the single angle that crosses them best. They are **not** true satin columns.
+- **True satin** (installed fonts): each stroke is its own satin column (F-1414).
 - **Fill**: each letter is an ordinary woven (tatami) fill.
-- **Stitch fonts**: each letter sews the stitches the font was made with.
+- **Stitch fonts**: each letter sews the stitches the font was made with (a font made from letter
+  files sews the files' own stitches, F-1415).
 
 ### F-1403 Shapes and text on a line — YES
 Shape: Straight, Arch, Smile, Circle (with curve size). **Text on your own line**: draw a Line,
 select it and the text, ⋯ → Put the text on the line (`Ctrl+Alt+L`); the line is used up.
 
 ### F-1404 Monogram — YES
-`Ctrl+Alt+M` or the Monogram tick box: three initials, bigger middle one.
+`Ctrl+Alt+M` or the Monogram tick box: one to three initials (four are refused). Classic has a
+bigger middle one; other styles and frames: F-1417. A monogram can't be stacked or follow a line
+or curve; it can be slanted and bent with an envelope.
 
 ### F-1405 Each letter's start and end — YES (added 2026-10-13)
 With lettering selected, every letter shows small green (start) and red (end) dots. By default each
 letter starts by where the one before ended and ends towards the next (short jumps; on a test word
 the trims between letters went from 2 to 0). Drag a dot along the letter's edge to move it.
 **Reset starts and ends** (Lettering panel, right-click, `Ctrl+Alt+R`) puts them back. Changing the
-words, font, size, spacing, look or shape resets them (clicking the look/shape already chosen
-doesn't); so do Put the text on a line and One file per name. Hand-overs apply to filled letters
-(Satin look and Fill); stitch-font satin strokes are left to sew end to end.
+words, font, size, spacing, look, shape, a layout setting (lines, alignment, slant, envelope,
+stacking) or the monogram style resets them (clicking the choice already made doesn't); so do Put
+the text on a line and One file per name. A letter moved on its own (F-1413) keeps its chosen dots;
+turning or resizing it resets that letter's. Hand-overs apply to filled letters (Satin look and
+Fill); True satin and stitch-font satin strokes are left to sew end to end (their dots pick which
+end). Letters from a stitched font have no dots.
 
 ### F-1406 One file per name — YES
-`Ctrl+Alt+N`: a list of names → one machine file each (Emma.pes…), prepared like Save for machine;
-never overwrites; warns about names too wide for the hoop.
+`Ctrl+Alt+N`: names typed or loaded from a list → one machine file per row (Emma.pes…), prepared
+like Save for machine; never overwrites; warns about names too wide for the hoop. Lists, filling
+more than one piece of lettering, previews and templates: F-1416.
 
 ### F-1407 Break into shapes — YES (added 2026-10-13)
 `Ctrl+Alt+X`, Lettering panel → Break into shapes…, or right-click: the letters become ordinary
 grouped shapes in place (in the lettering's own group if it had one; pinned if it was), keeping
 their starts and ends. Then each letter has every shape tool (points, stitch type, density,
-direction dots). Stops/trims added to the lettering are left out (a message says so). The words
-can't be retyped afterwards (Ctrl+Z undoes).
+direction dots). True satin letters become satin columns; a shadow, outline or frame comes too
+(a frame as editable lines). Stops/trims added to the lettering are left out (a message says so).
+The words can't be retyped afterwards (Ctrl+Z undoes). Letters from a stitched font can't be
+broken apart (L-038).
 
 ### F-1408 Stitch fonts — YES
-Lettering → Advanced → **Save this font as a stitch font**: a `.luddfont` in the data folder's
+Lettering → More options → **Save this font as a stitch font**: a `.luddfont` in the data folder's
 `fonts` folder (shows in the font list as "stitch font"); edit it in a text editor to fine-tune.
-Missing letters fall back to the other case or the unaccented letter.
+Missing letters fall back to the other case or the unaccented letter. Fonts made from single-letter
+stitch files are stitch fonts too (F-1415).
 
 ### F-1409 Change the words — YES
 `Ctrl+Alt+W` puts the cursor in the selected lettering's text box.
+
+### F-1410 Lines and alignment — YES (since 2026-11-25)
+Press Enter in the text box for a new line. With more than one line, **More options** shows
+**Align** (Left, Center, Right; Center to start; lined up with the widest line by the letters you
+see) and **Line spacing** (0.8 to 3 letter heights, 1.3 to start). Straight text keeps the middle of
+the lines where one line would be. On an arch the lines follow concentric curves; an arch too small
+for all its lines is drawn bigger, with a warning. A circle or a line you drew takes only the first
+line, with a warning (L-037).
+
+### F-1411 Slant — YES (since 2026-11-25)
+More options → **Slant**, −30° to 30° (more than 0 leans right). Each letter leans about its own
+baseline. Satin-look letters get the angle they'd have upright, leaned with them, so the stitches
+still cross the strokes.
+
+### F-1412 Envelopes and vertical text — YES, straight text (since 2026-11-25)
+More options → **Envelope**: Bulge, Pinch, Pennant right, Pennant left, Wave, Arch top, Arch
+bottom, with an **Amount** slider (50% to start). Straight text only (one line or several); on an
+arch, circle or drawn line it's greyed out and says why. Satin-look letters choose their stitch angle
+again on the bent shape; a stitched font's stitches move with it (none are added). **Stack the
+letters (vertical)**: letters one under another, centered; a space leaves a gap; several lines become
+columns left to right, spaced by Line spacing. Not with a curve or an envelope; a monogram can't be
+stacked.
+
+### F-1413 Adjust single letters — YES (since 2026-11-25)
+With lettering selected: **Adjust single letters** (panel button, right-click / ⋯, or
+`Alt+Shift+A`). Each letter gets a dot: click it (or the letter) to pick it, then drag it, or use
+the arrow keys (1 mm; Shift 1 cm; Ctrl 0.1 mm). The panel shows that letter's **Size** (50–200%),
+**Turn** (−180° to 180°), **Thread** (or the text's color again), **Stitch angle** (letters sewn as
+fills; not True satin or stitched letters) and **Put this letter back**. **Put the letters back**
+(`Alt+Shift+Z`) undoes every letter change; **Done** or Esc leaves. Changes are kept by letter number:
+if you shorten the words, changes to letters that are gone are dropped. In **Order & colors** a text
+with several colors lists each run; recoloring one colors those letters. **Put back the original
+colors** (`Ctrl+Shift+R`) also clears letters' own colors. Color sets don't include them (L-035).
+
+### F-1414 True satin letters — PARTIAL (since 2026-11-25)
+Lettering → **True satin** (installed fonts; stitch fonts sew their own stitches). Each stroke is
+sewn as its own satin column that follows it; where strokes meet, the longest pair that lines up
+runs straight through and the others stop just inside it. What isn't a stroke (a part wider than
+about 7 mm or thinner than 0.8 mm, a dot, a sliver) is sewn first in Satin look. A letter whose
+columns wouldn't cover it well is sewn whole in Satin look (never half and half), and a note says how
+many. **Break into shapes** gives editable satin columns. Works best on small and medium letters: of
+Arial's A–Z, a–z and 0–9, none fall back at 12 mm and one at 25 mm; at 60 mm 27 of 62 do (strokes
+near 7 mm fold at curves). The fabric preset sets spacing, pull compensation and underlay; letters
+sewn under 6 mm tall have no underlay (F-1420). Not yet checked on fabric (L-016).
+
+### F-1415 Make a stitch font from letter files — YES (since 2026-11-25)
+`Ctrl+Alt+F`, or the font list's **Make a stitch font from letter files…**. Choose a folder (or
+files) with one design per letter, in any format LUDD opens (up to 500). Each shows as a picture with
+the character LUDD guessed from its file name, after taking off what every name shares (upper_a /
+a_lower style names, words like zero, ampersand or period, single characters and character codes all
+work). Check the boxes: a file with no character is left out; one character on two files blocks Save.
+Name the font and set the **Letter gap** (% of the capital height, 8 to start; below 0 overlaps, for
+scripts). A preview ("Hamburg 123" from what you have) shows the baseline: letters stand on their
+bottoms, except g j p q y (they hang), comma and semicolon (hang a little), quotes (at the top) and
+- + = ~ (middle). Click a letter to nudge it up or down. The font goes into the data folder's `fonts`
+and is marked as a stitched font. One color per file makes a one-color font (sews in the text's
+thread); files with several colors sew color by color across the whole text, and Order & colors
+recolors each of the font's colors. Resizing by letter height: within 20% of the font's own height
+the stitches stretch like a stitch file; past that LUDD rebuilds the fills, satins and lines at the
+new size (as Rebuild stitches does; the rest stretch) and says so. The corner handles only stretch,
+and LUDD says so: change the letter height instead. Single-letter changes, slant, envelopes and
+stacking work; shadows, outlines, Break into shapes and start/end dots don't (frames do) (L-038).
+Only make fonts from designs you're allowed to use this way. Projects carry the font inside.
+
+### F-1416 Names from a list; templates — YES (since 2026-11-25)
+In One file per name (`Ctrl+Alt+N`): type names, or **Load a list…** (CSV or text; commas,
+semicolons or tabs; quoted fields; Excel's CSV or "Unicode Text"; up to 2,000 rows; a first row of
+words like name, number, color, file is the header, else the first column is "name"). Under
+**Lettering to fill**, tick each piece the list fills and pick its **Column** (two pieces make a
+name and a number). An empty cell leaves that lettering out of that row's file (LUDD never sews the
+sample words for someone else); a row with nothing to fill makes no file. A row that can't be saved
+doesn't stop the others: LUDD names it and says why, in a message that stays until you close it.
+**Shrink long names to fit** with **Widest**: a longer name gets smaller letters and spacing. A
+`color` column takes a hex color or a thread number from the chart you choose; a `file` column
+names the file. In file names, characters Windows or Mac refuse become `_`, a name longer than
+100 characters (or 200 bytes) is cut, and a Windows device name (Con, Aux, Nul, COM1…), even with
+a dot and more after it, gets a `_` in front. A name already taken, cut or not, gets "(1)", "(2)".
+**Preview on the design** (◀ ▶) shows each row without changing the design. **Name
+templates**: **Save this layout as a name template…** (in that window, or `Ctrl+Alt+P`) saves the
+whole design into the data folder's `templates`; **Start from a template** opens one as a new
+design (Save asks for a name, so the template stays as it was).
+
+### F-1417 Monogram styles and frames — YES (since 2026-11-25)
+With Monogram ticked: **Classic** (small, big, small; two letters: small, then big; one: big),
+**Block** (all the same size) or **Stacked** (two small letters one above the other, then a big one).
+**Frame**: None, Circle, Double circle, Diamond, Square, Scallop circle or Laurel (two leafy
+branches). **Frame gap** 2 to 15 mm (4 to start). The frame sews after the letters, in their thread
+or its own. Break into shapes turns it into ordinary lines. The laurel's **Leaves** motif is also a
+Motif line style (F-1306).
+
+### F-1418 Shadow and outline — YES, not stitched fonts (since 2026-11-25)
+More options → **Shadow**: the letters moved right and down (−3 to 3 mm each, 0.8 to start); only
+the part that shows past the letters is sewn, first, in its own thread (gray to start).
+**Outline**: a **Satin** (1 to 4 mm wide, 1.5 to start) or **Triple run** line round the letters,
+**Outline gap** 0 to 5 mm (1 to start) away, sewn last in its own thread (black to start). Both
+follow the text, single-letter changes included (Outline / offset makes a separate shape that
+doesn't). The outline goes round the outside, not inside holes. The first drawing of a word with
+both can take a few seconds.
+
+### F-1419 Placement guides — YES (since 2026-11-25)
+⋯ → **Placement guides…** or `Alt+Shift+G`: bath towel, hand towel, pillowcase, sheet hem, adult
+left chest, child left chest, tote bag, napkin corner and cap front. Each says where the design goes,
+with measurements in inches and centimeters and a small drawing, and **Print a placement sheet**
+(the measurements, a crosshair, and your design at real size). They're starting points from common
+practice: check on your item. Nothing in the design changes.
+
+### F-1420 Small letters — YES (since 2026-11-25)
+Installed-font letters that sew under 6 mm tall have no underlay, so they stay thin, with a note
+naming the smallest height (this changes how small text already in your designs sews). The height
+counted is the one sewn: the letter height, stretched up or down by the resize handles (making
+text only wider or narrower doesn't count), times a single letter's own size (F-1413). So 5 mm
+text enlarged to 20 mm gets its underlay, and 15 mm text shrunk to 4 mm loses it. The squeeze or
+swell of an envelope isn't counted. A stitched font's letters keep the underlay the font was made
+with; under 6 mm letter height they get the same note, but their stitches aren't changed.
+A font whose strokes are under 0.8 mm at your letter height (the handles aren't counted there)
+sews them as a single line, and LUDD says so: use a bolder font or bigger letters.
 
 ---
 
@@ -908,9 +1049,9 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | --- | --- | --- | --- | --- |
 | L-001 | **Two-color gradient / color blend** (one color fading into another by interleaved rows) | NO | Gradient pattern fades one color to sparse; layer two Gradient fills at opposite angles by hand. | Yes: a "Blend" fill was offered and not yet requested. |
 | L-002 | **Fill with holes may show a travel line on top**: when holes split a tatami fill into regions, the needle can travel across rows already sewn. With **Don't sew what's hidden** on (F-1207) a lower fill can get such a line too (in the tests: about 19 mm across a square under a square, 35 mm under lettering). | Known weakness | Cut the fill into hole-free bands with cuts parallel to the rows (Knife), or use Contour/Stipple. | Yes (engine route planning). |
-| L-003 | **Multi-line text** in one lettering object | NO | One text per line; group them. | Yes. |
+| L-003 | **Multi-line text** in one lettering object | YES since 2026-11-25 (limit lifted; F-1410). A circle or a drawn line still takes one line (L-037) | — | Done. |
 | L-004 | **Open running line starting mid-line** | NO (ends only) | Split it with the Knife, or close it into a loop. | Possibly. |
-| L-005 | **Per-letter stitch angle / direction** in lettering | NO | Break into shapes (F-1407), then use each letter's purple dots. | Yes. |
+| L-005 | **Per-letter stitch angle / direction** in lettering | YES since 2026-11-25 (limit lifted; F-1413), except True satin and stitched-font letters | For those, Break into shapes (True satin) and use each shape's purple dots. | Done. |
 | L-006 | **Direction dots on satin ribbons** | NO (stitches always straight across) | Convert to a satin fill (close the line and Stitch as → Satin) or draw a column. | Partly. |
 | L-007 | **Change stitch types of a bought stitch file** | NO | Edit stitches (F-1901), or re-digitize by tracing a picture of it. | Unlikely (no shapes inside a stitch file). |
 | L-008 | **Photo stitch** (photo → stitched portrait) | NO | Auto-digitize a simplified picture; satin-fill shapes by hand. | Yes, large. |
@@ -919,7 +1060,7 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | L-011 | **Freehand drawing / brush** | NO (point-by-point drawing only) | Click points; use Auto-trace on a sketch. | Yes. |
 | L-012 | **Opening Embrilliance `.be` / `.bt`** | NO (closed format) | Open the PES/JEF exported from Embrilliance; it opens as a stitch file. | No. |
 | L-013 | **Satin fill with holes** | NO | Stays a fill; add a satin border, or split into hole-free pieces. | Hard. |
-| L-014 | **Satin stitch font look in TrueType lettering** (true satin columns per stroke) | NO (satin-look fills) | Break into shapes and set strokes to Satin; or make a stitch font by hand. | Yes, large. |
+| L-014 | **True satin columns in installed-font lettering** | PARTIAL since 2026-11-25 (F-1414): a letter whose strokes can't be covered well sews whole in Satin look, more often on large letters | Satin look; or Break into shapes and adjust the columns. | Partly (better joins). |
 | L-015 | **Code-signed installers** | NO | Windows: More info → Run anyway (T-001). | Needs a certificate. |
 | L-016 | **Real machine verification** | Pending | Stitch-out tests queued in `docs/stitchout-log.md`; the owner tests at ~95% done. | — |
 | L-017 | **Optimize jumps on lettering, appliques, stitch files** | NO (left as they are) | Lettering already hands over letter to letter (F-1405). | Yes. |
@@ -936,6 +1077,10 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | L-031 | **Rebuild doesn't recognize motif fills, cross-stitch or programmed fill patterns** (nor satins with stitches over 0.6 mm apart) | By design for now | Those parts are resized as they are; check them on the density map. | Yes. |
 | L-032 | **Thick spots made by layers inside one stitch file aren't thinned** | NO | Limit density re-spaces dense fills and satins only; delete hidden layers by color, or in Edit stitches. | Possibly. |
 | L-033 | **Stitches remade by Rebuild or Limit density can't be edited one by one** | By design | Take the repair off (✕ in the panel's Repair section), edit, then turn it on again. | No. |
+| L-035 | **A single letter's own thread isn't part of Color sets** | By design for now | Recolor the letter again after switching color sets. | Yes. |
+| L-036 | **BX fonts** (Embrilliance's package format) | BX: no; use the letter files that came with the font | Most sellers include PES or JEF letter files: Make a stitch font from letter files (F-1415). | Not planned (a closed format). |
+| L-037 | **Several lines on a circle or a drawn line** | NO: the first line only, with a warning | One text per line. | Possibly. |
+| L-038 | **Stitched fonts** (made from letter files): resize well only within 20% of their own size (past it LUDD rebuilds what it can, and the corner handles never rebuild), can't be broken into shapes, and take no shadow or outline | By design | Change the letter height rather than using the handles; check the preview. | Partly. |
 
 ---
 
@@ -967,6 +1112,10 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | T-024 | "Two designs overlap and the needle breaks" (a hard lump) | Thread piled up where they overlap | Check the density map. Shapes drawn in LUDD: turn on **Don't sew what's hidden** (`Alt+Shift+O`, F-1207). For stitch files: Repair this design → **Thin out dense spots** and **Limit density** (F-1902); stitches hidden under another file aren't removed yet (L-030), so move them apart or delete what's underneath. |
 | T-025 | A gap shows at the edge where one shape covers another | Don't sew what's hidden (F-1207) keeps too little under the edge for this fabric | In the Design section, raise **More options → Keep under the edge**, or turn the switch off. |
 | T-026 | In Edit stitches only a few stitches show handles | Rebuild or Limit density made the others (L-033) | Take those repairs off (✕ in the panel's Repair section), edit, turn them on again. |
+| T-027 | "A letter looks wrong in True satin" (a gap, a lump, odd stitches) | True satin is new and some shapes are hard (L-014) | Switch to **Satin look**, or **Break into shapes** and adjust the columns. |
+| T-028 | "My letter files came in with the wrong letters" (or none) | LUDD couldn't tell from the file names | Type the right character in each box. If each letter comes in several formats (flagged as used twice), choose a folder with one format, or clear the extra boxes. A stray non-letter design in the folder can stop LUDD from spotting what the names share: take it out and choose the folder again. |
+| T-029 | "Letters don't sit on one line in my new font" (often the j) | The baseline is worked out from each letter's shape; a dotted j's dot makes it sit too low | In the dialog, click the letter and nudge it up or down before saving. For a saved font, make it again. |
+| T-030 | "Long names run off the design" | Some names are longer than the sample | In One file per name, tick **Shrink long names to fit** and set **Widest**. |
 
 ---
 
@@ -1005,6 +1154,7 @@ Use this to answer "did that change?" or "why is it different?". Full detail: `d
 
 | Date | Change |
 | --- | --- |
+| 2026-11-25 | **Lettering and personalization**: several lines with alignment (F-1410), slant (F-1411), envelopes and stacked letters (F-1412), single letters (F-1413, `Alt+Shift+A`), True satin (F-1414), stitch fonts from letter files (F-1415, `Ctrl+Alt+F`), name lists and templates (F-1416, `Ctrl+Alt+P`), monogram styles and frames (F-1417), shadow and outline (F-1418), placement guides (F-1419, `Alt+Shift+G`). Installed-font letters that sew under 6 mm tall (resizing counts) now sew without underlay (F-1420). The lettering panel's Advanced fold is now **More options**. Lifts L-003 and L-005; L-014 is now PARTIAL. |
 | 2026-11-25 | **Repair bought designs** (a stitch file with no repair sews as before): **Repair this design** (F-1902, `Ctrl+Alt+D`, with before and after numbers and Show on the design); **Remove tiny stitches** and **Thin out dense spots** (F-1903); **Limit density for this fabric** (F-1904); **Rebuild stitches at this size** (F-1905); **Fix it** on three checks; insert stitches and jumps and lock a jump (F-1906); needle path view (F-407); **Don't sew what's hidden under shapes on top** for drawn shapes (F-1207). Removing hidden stitches under another stitch file is not built (L-030). |
 | 2026-11-24 | **Spiral fill and more shapes** (nothing already sewn changes): a new **Spiral** fill pattern (F-1305; the thread joining its pieces follows the edge, L-026); the Shapes menu adds a rounded rectangle, oval, triangle, polygon and heart (`Ctrl+Alt+4`–`8`, F-501). Behind the scenes, the stitch engine and panel were split into smaller parts, and `python scripts/check.py` runs every check. Also corrected: Stipple and Cross-stitch don't move their start with the green dot (F-701). |
 | 2026-11-24 | **Sewing time and thread estimate** (F-406): the Design section shows about how long the design sews on your machine, how many thread changes, and about how much top and bobbin thread it uses, per color under **Thread used**. Machine profiles can set `speed_spm`. |
@@ -1253,6 +1403,11 @@ drawing a satin).
 | Show whole design | `End` | `player.end` |
 | Faster playback | `]` | `player.fasterAlt` |
 | Slower playback | `[` | `player.slowerAlt` |
+| Adjust single letters | `Alt+Shift+A` | `text.letters` |
+| Put the letters back | `Alt+Shift+Z` | `text.resetLetters` |
+| Make a stitch font from letter files… | `Mod+Alt+F` | `text.fontFromFiles` |
+| Save this layout as a name template… | `Mod+Alt+P` | `text.saveTemplate` |
+| Placement guides… | `Alt+Shift+G` | `text.placement` |
 | Repair this design… | `Mod+Alt+D` | `stitch.repair` |
 | Remove stitches hidden under what's on top | `Alt+Shift+H` | `stitch.removeHidden` |
 | Thin out dense spots | `Alt+Shift+D` | `stitch.declump` |

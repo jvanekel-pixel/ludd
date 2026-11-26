@@ -64,3 +64,21 @@ def digest_pattern(pattern) -> dict:
         "threads": [t.hex_color() for t in pattern.threadlist],
         "sha1": hashlib.sha1(json.dumps(rounded).encode()).hexdigest(),
     }
+
+
+class _Steadied:
+    """A pattern's stitches with each coordinate rounded to a millionth of a unit."""
+
+    def __init__(self, pattern):
+        self.stitches = [(round(x, 6), round(y, 6), c) for x, y, c in pattern.stitches]
+        self.threadlist = pattern.threadlist
+
+
+def digest_pattern_steady(pattern) -> dict:
+    """digest_pattern for suites where a stitch can land exactly on a rounding step, such as the
+    middle of a row between two points that are whole thousandths of a mm. There the last digit of
+    a sine, which is not the same on every computer, would decide which way the 0.001 mm rounds
+    (the "bulge" case did that on both Macs). So each coordinate is first rounded to a millionth of
+    a unit: every computer then rounds the same number. A stitch that really moves (by more than a
+    rounding step) still changes the hash."""
+    return digest_pattern(_Steadied(pattern))

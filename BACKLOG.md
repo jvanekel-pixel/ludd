@@ -75,3 +75,27 @@ Planned on 2026-11-24: every item in this section, and the nice-to-haves above t
 - [ ] If P4-A1 is built, give `remove_hidden` its own project feature flag
 - [ ] Planner: reword Phase 4 done-when 2 to "no cell over the limit past the keep margin" (what is built and tested); add an L- entry for the margin band over the limit, which today is only in F-1207 (Phase 4 audit, finding 1)
 - [ ] `test_lower_fill_stops_under_the_cover` allows keep + 0.4 mm; the fill reaches keep + 0.16 to 0.20 mm: tighten to + 0.25 so a regression shows (Phase 4 audit, finding 3)
+
+## From Phase 5 (2026-11-25)
+- [ ] `RepairDialog.dom.test.tsx` "shows before and after ... after a 300 ms pause" uses real time: on a busy computer two clicks and a 100 ms wait can pass 300 ms and fail it (seen once in Phase 5's merge). Use fake timers
+- [ ] Stitch fonts from letter files: the file-name guesser could also read uppercase/lowercase/caps/capital words, trailing uc/lc, U/L prefixes, doubled letters ("aa"), "capa", words such as exclamation_point, question_mark, full_stop, amp, plus, equals, star, dollar, percent, parentheses, "num1", size suffixes that differ per file, order numbers in front and "(1)"/"copy"; letters sold in several formats show as used twice; and one stray design in the folder stops the shared prefix from being removed (these are expected patterns; no bought font was available)
+- [ ] Stitch fonts from letter files: a dotted j sits too low (the g j p q y rule puts its dot at small-letter height); treat j by its stem, not its box
+- [ ] Stitch fonts: the preview in the dialog repeats the engine's baseline rules in TypeScript; have the engine return each letter's drop instead
+- [ ] Stitched letters resized with the corner handles only stretch (LUDD says so): fold a handle resize into the letter height so they're rebuilt
+- [ ] True satin: many large letters fall back (Arial at 60 mm: 27 of 62), mostly columns whose sides cross near the 7 mm limit; split wide strokes or relax the fold test
+- [ ] True satin on letters whose strokes are all over 7 mm (Arial at 150 mm) sews as Satin-look fills, as designed (edges within 0.05 mm of Satin look's), but with no note: say so
+- [ ] Shadow plus outline adds 2 to 3 s to the first drawing of a two-word text (mostly choosing the shadow fills' angles)
+- [ ] Order & colors has no "Back to ..." for a single letter's own color (the letter panel can undo it)
+- [ ] Color sets don't include single letters' own colors (L-035)
+- [ ] True satin shows a start and end dot on every column (74 on "Happy Birthday"): consider showing them only for the letter under the mouse, or only on fills
+
+## From the Phase 5 audit (2026-11-25)
+- [ ] A stitched font typed under 6 mm says "underlay is left out so they stay thin", but its stitches aren't changed (the knowledge base says so; the app's note doesn't). Give stitched fonts their own wording, such as "Letters 5 mm tall are hard to stitch clearly. 6 mm or more is safer."
+- [ ] The thin-stroke warning measures strokes at the letter height typed in; the resize handles and a single letter's own size don't count (the under-6 mm rule now does)
+- [ ] An envelope's squeeze or swell isn't counted in the under-6 mm rule (the knowledge base says so): a pinched 7 mm text's middle letters can sew under 6 mm with underlay. The manual's "goes by the height each letter sews at" could add "(an envelope isn't counted)"
+- [ ] True satin's pass or fall-back checks (`lettering/satin.py`: a letter's 97% cover, a join's cover, a column outside the letter) compare GEOS areas with their limits exactly; a letter right at a limit could fall back on one computer and not another. Low risk; a small margin or rounding before the compare would settle it
+- [ ] Older than Phase 5: the text layout cache and the overlap areas cache key on the font path saved in the project; when that font is missing and a stand-in is used, installing the real font elsewhere doesn't redraw until the text is edited or LUDD restarts. Key on the font actually used
+
+## From the Phase 5 pull request checks (2026-11-26)
+- [ ] The older snapshot suites (`digitize`, `layout`, `fills_spiral`, `repair_*`) still use the plain digests, which depend on the last digit of a sine wherever a stitch lies exactly on a rounding step (Phase 5's `bulge` case failed on both Macs that way). If one fails on one kind of computer only, move it to `snapshot_util.digest_pattern_steady` and re-record
+- [ ] The same last digit can move an exported stitch by one 0.1 mm step from one computer to another: harmless in thread, but rounding stitch coordinates to a millionth of a mm before the export rounds them would make the files the same everywhere

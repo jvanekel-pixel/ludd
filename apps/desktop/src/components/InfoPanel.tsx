@@ -360,7 +360,7 @@ function OrderSection({ sel }: { sel: SelKind }) {
           const i = layout.items.indexOf(it);
           const stops = stopsOf(i);
           const t = itemThread(it, i);
-          const several = !isObject(it) && !isText(it) && stops.length > 1;
+          const several = !isObject(it) && stops.length > 1; // a stitch file, or lettering in several colors
           const isSel = selected.has(it.id);
           const sewingHere = stops.some((c) => c.block === currentBlock);
           const name = design?.items?.[i]?.name ?? itemLabel(it, i);
@@ -433,7 +433,8 @@ function OrderSection({ sel }: { sel: SelKind }) {
                           [
                             { label: "Change this color…", run: () => setPicking({ kind: "stops", stops: [c], title: name }), enabled: !!engine },
                             ...(c.was ? [{ label: `Back to ${c.was.name || c.was.color}`, run: () => recolorSources(c.sources, null), enabled: !!engine }] : []),
-                            { label: "Remove this color's stitches", run: () => deleteColorBlock(c.block), enabled: !!engine && onlyMine && (design?.blocks.length ?? 0) > 1, hint: "Ctrl+Z undoes it" },
+                            // Lettering is one thing: removing a color would remove the whole text.
+                            ...(isText(it) ? [] : [{ label: "Remove this color's stitches", run: () => deleteColorBlock(c.block), enabled: !!engine && onlyMine && (design?.blocks.length ?? 0) > 1, hint: "Ctrl+Z undoes it" }]),
                             "separator",
                             { label: hasMine ? "Match all to my threads…" : "Match all threads…", run: () => setMatching(true), enabled: !!engine },
                             ...colorOptions,
@@ -452,15 +453,17 @@ function OrderSection({ sel }: { sel: SelKind }) {
                       <button className="rename-btn" disabled={!engine} aria-label={`Change color ${c.block + 1}`} title="Change thread" onClick={() => setPicking({ kind: "stops", stops: [c], title: name })}>
                         ✎
                       </button>
-                      <button
-                        className="rename-btn"
-                        onClick={() => deleteColorBlock(c.block)}
-                        disabled={!engine || !onlyMine || (design?.blocks.length ?? 0) < 2}
-                        aria-label={`Remove color ${c.block + 1}`}
-                        title="Remove this color's stitches (Ctrl+Z to undo)"
-                      >
-                        🗑
-                      </button>
+                      {!isText(it) && (
+                        <button
+                          className="rename-btn"
+                          onClick={() => deleteColorBlock(c.block)}
+                          disabled={!engine || !onlyMine || (design?.blocks.length ?? 0) < 2}
+                          aria-label={`Remove color ${c.block + 1}`}
+                          title="Remove this color's stitches (Ctrl+Z to undo)"
+                        >
+                          🗑
+                        </button>
+                      )}
                     </li>
                   );
                 })}

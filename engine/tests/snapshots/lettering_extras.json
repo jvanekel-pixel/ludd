@@ -1,0 +1,45 @@
+{
+ "monogram_block": {
+  "jumps": 2,
+  "records": 799,
+  "sha1": "6b73fe5d5278b6b499b09cf99e0a8a70e0e2f520",
+  "stitches": 794,
+  "threads": [
+   "#cc2222"
+  ],
+  "trims": 2
+ },
+ "monogram_scallop_frame": {
+  "jumps": 2,
+  "records": 1114,
+  "sha1": "b21bae8589fcc978756b1e02a934f3f5f70ebf2a",
+  "stitches": 1108,
+  "threads": [
+   "#cc2222",
+   "#2222cc"
+  ],
+  "trims": 2
+ },
+ "outline_satin": {
+  "jumps": 2,
+  "records": 978,
+  "sha1": "23e7d50a2a9539a9e7e98150a6f21525b9f26368",
+  "stitches": 974,
+  "threads": [
+   "#cc2222",
+   "#2222cc"
+  ],
+  "trims": 0
+ },
+ "shadow": {
+  "jumps": 7,
+  "records": 745,
+  "sha1": "af5860578dbd0a4cd8c5984572b8e14c127e5884",
+  "stitches": 731,
+  "threads": [
+   "#888888",
+   "#cc2222"
+  ],
+  "trims": 5
+ }
+}

@@ -83,7 +83,7 @@ checks), so you rarely need to open one just to look.
 - **What you selected** comes first and opens by itself: **Fill**, **Satin**, **Line**,
   **Applique**, **Lettering**, **Stitch file** or **Picture**. The everyday settings are in view;
   the rest sit in smaller folds inside it (**Underlay**, **Advanced stitch settings**, lettering
-  **Shape** and **Advanced**, a stitch file's **Rotation and position**).
+  **Shape** and **More options**, a stitch file's **Rotation and position**).
 - Then **Size and points** (for drawn shapes), **Design** (size, stitches, sewing time, thread,
   hoop fit, the fabric; **Thread used** and **File details** inside), **Order & colors**, **Check before stitching** and
   **Pictures**.
@@ -682,23 +682,26 @@ both sides; they still sew and edit as before.
 ## 7. Lettering
 **Text** (Shift+T), then click where it goes. In its panel:
 - The **text** (stitches update after a short pause; typing is never undone by an update, and
-  Esc brings back the text from before you started typing). Lettering is one line: a line break
-  becomes a space, so make one text per line.
+  Esc brings back the text from before you started typing). It can have several lines: **Enter**
+  starts a new one, and **Ctrl+Enter** or clicking elsewhere finishes (a monogram's initials stay on
+  one line).
 - **Font**: any font installed on your computer (type to search; the list shows 200 at a time and
   says so). Stitch fonts (`.luddfont`) too. Letters a font doesn't have are left out, and LUDD
   names them.
 - **Letter height** (the real height of a capital H, 2 to 200 mm), **thread**, **Satin look**
-  (smooth, shiny; best for names) or **Fill** (for big letters). Stitch fonts sew the stitches
-  they were made with, so they don't offer Satin look or Fill.
-- **How the letters are stitched** is written under Satin look / Fill: with **Satin look** each
+  (smooth, shiny; best for names), **True satin** or **Fill** (for big letters). Stitch fonts sew
+  the stitches they were made with, so they don't offer these.
+- **How the letters are stitched** is written under those buttons: with **Satin look** each
   letter is filled with long, smooth satin stitches across its strokes, at the angle that crosses
-  them best; with **Fill** each letter is a woven (tatami) fill.
+  them best; with **True satin** each stroke is its own satin column (see below); with **Fill**
+  each letter is a woven (tatami) fill.
 - **Each letter's start and end**: with the lettering selected, every letter shows a small green
   (start) and red (end) dot. Each letter starts by where the one before ended and ends towards the
   next, so the jumps between letters are short. **Drag a dot** and it slides along that letter's
   edge, staying where you let go. **Reset starts and ends** (Ctrl+Alt+R) puts them all back.
-  (Changing the words, font, size, spacing, look or shape makes new letters, so the starts and
-  ends chosen go back too; so do Put the text on a line and One file per name.)
+  (Changing the words, font, size, spacing, look, shape or a layout setting makes new letters, so
+  the starts and ends chosen go back too; so do Put the text on a line and One file per name.
+  Letters from a stitched font have no dots.)
 - **Break into shapes…** (Ctrl+Alt+X, also on the right-click menu) turns the letters into
   ordinary shapes, grouped (in the lettering's own group, if it had one), in the same place and
   sewing order, pinned if it was, keeping their starts and ends: then each can have its own
@@ -706,11 +709,16 @@ both sides; they still sew and edit as before.
   left out (LUDD says so). The words can't be retyped after that (Ctrl+Z undoes it).
 - **Shape**: Straight, Arch, Smile (under a curve) or Circle (the letters spread evenly all the
   way round; use Arch for a short curve), with the curve's size.
-- **Monogram**: three initials with a bigger middle one.
-- **Advanced** (inside the Lettering section): extra letter spacing; **One file per name…**;
-  **Save this font as a stitch font**.
-Letters under about 6 mm tall are hard to sew (dots and thin parts start to drop out); LUDD warns
-you (for a monogram, by its smaller side letters). Projects carry their fonts inside them, so
+- **Adjust single letters** (below) and **Monogram** (below).
+- **More options** (inside the Lettering section; it was called Advanced): lines, slant, envelope
+  and stacked letters; shadow and outline; extra letter spacing; **One file per name…**; **Save
+  this font as a stitch font**.
+Letters under 6 mm tall are hard to sew (dots and thin parts start to drop out), so LUDD leaves
+their underlay out to keep them thin, and warns you, naming the smallest height (for a monogram,
+its smallest letters). It goes by the height each letter sews at: resizing with the handles and a
+single letter's own size count (making text only wider doesn't). A stitched font's letters keep
+the underlay they were made with. It also warns when a font's strokes are so thin at your size that they sew as a single line: use a
+bolder font or bigger letters. Projects carry their fonts inside them, so
 lettering looks the same on another PC. If an older project uses a font that isn't installed on
 this computer, its lettering is shown in a standard font (Arial) with a warning in Checks, so the
 design still opens; install the font or pick another.
@@ -732,14 +740,85 @@ Arch and so on to put it back. If the text is longer than the line, the extra le
 its ends (or overlap, on a closed line) and Checks warns you: draw a longer line or make the
 letters smaller. A monogram can't follow a line.
 
-**One file per name** (Ctrl+Alt+N, or in Advanced): type a list of names, one per line, choose a
-file type and a folder, and LUDD saves one machine file per name (Emma.pes, Jack.pes…), each the
+### Lines, slant, envelopes and stacked letters
+These are under **More options**. With more than one line, **Align** puts the lines left, center
+or right, and **Line spacing** sets the distance from line to line (0.8 to 3 letter heights, 1.3 to
+start). On an arch the lines curve together; a circle or a line you drew takes only the first line.
+**Slant** leans the letters up to 30° either way. **Envelope** bends straight text into a shape:
+Bulge, Pinch, Pennant right or left, Wave, Arch top or Arch bottom, with an **Amount** slider. **Stack
+the letters** puts them one under another (several lines become columns). Envelopes and stacking work
+on straight text only, and not together; where they're off, the control says why.
+
+### Adjust single letters
+Press **Adjust single letters** (or Alt+Shift+A, or right-click the text). A dot appears on each
+letter: click one, then drag it, or use the arrow keys (1 mm, with Shift 1 cm, with Ctrl 0.1 mm).
+The panel shows that letter's **Size**, **Turn**, **Thread** and **Stitch angle** (not for True
+satin or stitched-font letters), and **Put this letter back**. **Put the letters back**
+(Alt+Shift+Z) undoes all of them. **Done** or Esc leaves. Letters in other colors are listed
+separately in Order & colors; **Put back the original colors** clears them. Color sets don't save a
+single letter's color.
+
+### True satin
+Each stroke of a letter is sewn as a satin column that follows it, the way hand-made embroidery
+fonts are. Check the preview: if a letter looks wrong, use **Satin look**, or **Break into shapes**
+and adjust its columns. When LUDD can't make good columns for a letter, it sews the whole letter in
+Satin look and tells you how many. It works best on small and medium letters; very large letters
+more often fall back.
+
+### A stitch font from letter files
+If you bought a font as one stitch file per letter, press **Make a stitch font from letter
+files…** in the font list (or Ctrl+Alt+F). Choose the folder (or the files). LUDD shows every file
+with the letter it guessed from the file's name: fix any that are wrong (files without a letter are
+left out; one letter can't be used twice). Name the font and set the **Letter gap**. The preview
+stands the letters on a line; click one that sits too high or low and nudge it (a lowercase j often
+needs it). Save, and the font is in your font list. If the files have several colors, the text sews
+color by color, and you can change each color in Order & colors. Choose its size with **Letter
+height**: past 20% bigger or smaller than the font's own size, LUDD rebuilds the stitches at the new
+size where it can (check the preview). The corner handles only stretch the stitches, and LUDD warns
+you. These letters can't be broken into shapes, or have a shadow or outline. Only make fonts from
+designs you're allowed to use this way.
+
+### Monograms
+Tick **Monogram** (or Ctrl+Alt+M) and type one to three initials. Choose **Classic** (small, big,
+small), **Block** (all the same size) or **Stacked** (two small ones on top of each other, then a big
+one). Add a **Frame**: circle, double circle, diamond, square, scallop circle or laurel, with the
+**Frame gap** from the letters and its own thread if you like. The frame sews after the letters.
+
+### Shadow and outline
+Under **More options**, tick **Shadow** for a copy of the letters peeking out behind them (set how
+far right and down, and its thread; only the part that shows is sewn). Tick **Outline** for a satin
+or triple-run line around the letters (gap, width and thread). Both follow the text when you change
+it. Not for stitched fonts.
+
+### One file per name, and name templates
+**One file per name** (Ctrl+Alt+N, or under More options): type a list of names, one per line, or
+**Load a list…** (a CSV or text file, such as a spreadsheet saved as CSV; up to 2,000 rows). Choose
+a file type and a folder, and LUDD saves one machine file per name (Emma.pes, Jack.pes…), each the
 whole design with the selected lettering changed to that name. Each file is prepared just as **Save
 for machine** would (your machine and hoop; for the PE550D, a stop wherever the thread needs
 cutting). Files already in the folder are never replaced: a repeated name is saved as "Emma (1).pes",
-and LUDD tells you which files got a number. It also tells you if any name is too wide for your
-hoop, and if one name can't be saved, the others still are and the message lists it. It's offered
-when lettering is selected. For team shirts, party favors and gifts.
+and LUDD tells you which files got a number. Very long names are cut to 100 characters in the file
+name, and the few names Windows keeps for itself (such as Con or Aux, even before a dot) get a _ in
+front. It also tells you if any name is too wide for your
+hoop, and if one name can't be saved, the others still are and a message names it, says why and
+stays until you close it. It's offered when lettering is selected. For team shirts, party favors
+and gifts.
+
+To fill more than one piece (say a name and a number), tick each under **Lettering to fill** and
+pick its column. If a cell is empty, that piece is left out of that file. **Shrink long names to
+fit** keeps long names within the width you set. A column called **color** (a hex color or a thread
+number) sets each file's thread, and a column called **file** names the file. **Preview on the
+design** (◀ ▶) shows each name in place without changing your design.
+
+**Name templates**: **Save this layout as a name template…** (Ctrl+Alt+P, also in that window)
+keeps the whole design. Later, choose it under **Start from a template**: it opens as a new design,
+so the template stays as it was.
+
+### Placement guides
+**⋯ → Placement guides…** (Alt+Shift+G) shows where designs usually go on a bath towel, hand
+towel, pillowcase, sheet hem, left chest (adult or child), tote bag, napkin corner or cap, with the
+measurements and a small drawing. **Print a placement sheet** prints them with a crosshair and your
+design at real size. They're starting points: check on your own item.
 
 ---
 
@@ -988,6 +1067,10 @@ Shortcuts are also shown in every menu and on every button's tooltip.
 | Break lettering into shapes | Ctrl+Alt+X |
 | Reset the letters' starts and ends | Ctrl+Alt+R |
 | One file per name | Ctrl+Alt+N |
+| Adjust single letters / put the letters back | Alt+Shift+A / Alt+Shift+Z |
+| Make a stitch font from letter files… | Ctrl+Alt+F |
+| Save this layout as a name template… | Ctrl+Alt+P |
+| Placement guides… | Alt+Shift+G |
 | Rename | F2 |
 | Change thread of the selected shape or text | Alt+T |
 | Sew earlier / later | Ctrl+[ / Ctrl+] |
