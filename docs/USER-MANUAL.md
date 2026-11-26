@@ -666,11 +666,10 @@ shape), **Add a color** (up to three; choose its color), **Swap the colors** to 
 way, and **Balance** for which color takes more of the shape. The fade runs across the rows, so
 turn the **Angle** (or drag the purple dots) to point it. Each color sews in turn, with a thread
 change between them; Order & colors lists each one. Turning or mirroring the shape keeps every
-color on the same side of it. If a blend looks stripy, make it denser or set Weave to Smooth. A
-Every color is sewn whenever there are at least two rows per color; a small shape or a wide
-Spacing may have fewer rows than that: the blend then sews the
-colors it can and a warning says which color is left out (make the shape bigger or the Spacing
-smaller).
+color on the same side of it. If a blend looks stripy, make it denser or set Weave to Smooth.
+Every color is sewn whenever there are at least two rows per color. A small shape or a wide
+Spacing may have fewer rows than that: the blend then sews the colors it can, and a warning says
+which color is left out (make the shape bigger or the Spacing smaller).
 
 ### Motif fill and My motifs
 **Pattern → Motif** covers the shape with rows of a little pattern: Wave, Zigzag, Scallop,

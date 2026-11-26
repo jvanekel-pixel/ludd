@@ -682,7 +682,8 @@ coverage. Where a color thins out it sews at least two rows side by side, never 
   warns "This shape has too few rows to blend all its colors, so the second color is not sewn.
   Make the shape bigger or lower the spacing (a smaller number) to fit more rows." (naming the
   colors left out).
-- Underlay on **Auto**: none. **Edge** can be chosen; there's no Cross-hatch (it would show).
+- Underlay on **Auto**: none. **Edge** can be chosen; there's no Cross-hatch (it would show), and
+  one set before the fill became a Blend, or suggested by the Stitch Advisor, is dropped.
 - Turning or mirroring the fill keeps each color on the same side of the shape.
 - Looks stripy: T-032.
 
