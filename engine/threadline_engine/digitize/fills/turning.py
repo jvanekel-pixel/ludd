@@ -16,7 +16,8 @@ line where it lies. Tatami hands over here (stitches._fill_part).
    groups inside the shape.
 7. Where the guide turns tighter than a row is far from it, the row would loop back across its
    neighbors. Only the parts still that far from the whole guide are kept (the rows then meet in a
-   crease), and where a cut part folded back more than FOLD_WARN_MM the fill says so.
+   crease), and where a cut part folded back deeply (FOLD_WARN_MM, FOLD_WARN_ROWS) the fill
+   says so.
 
 Written for LUDD from the Phase 6 spec (no code ported from other projects).
 """
@@ -36,13 +37,16 @@ SAG_MM = 0.04  # a stitch strays at most this far from its curved row
 LOOP_TOL_MM = 0.05  # a row point this much nearer the guide than its row is part of a loop
 EDGE_STEP_MM = 0.5  # how far apart the outline is sampled to find its furthest point from the guide
 SAME_MIDDLE_MM = 1.0  # lines with middles nearer than this leave no room to turn between them
-# Warn when a row cut away as a loop would have folded back more than this towards the guide
-# (about four rows deep). A 30-degree fan over 20 mm folds 1.0 mm in a 50 x 30 mm shape; a
-# 90-degree turn in 16 mm near the top of a 40 mm square, 2.5 mm. The length of row cut away
-# can't tell those apart: the gentle fan's crease is the longer of the two (28 mm of row to 19).
+# Warn when a row cut away as a loop would have folded back more than this towards the guide:
+# FOLD_WARN_MM, or FOLD_WARN_ROWS rows where rows are further apart (a fold shallower than a row
+# is no crease anyone would see). At 0.4 mm rows, a 0 and 30 degree fan over 20 mm folds 1.1 mm
+# in a 50 x 30 mm shape (no warning); the same fan in a 50 mm tall shape 3.5 mm (a real crease:
+# it warns); a 90-degree turn in 16 mm near the top of a 40 mm square, 2.9 mm. The length of row
+# cut away can't tell these apart: the gentle fan cuts more row (28 mm) than that square (20 mm).
 FOLD_WARN_MM = 1.5
-TOO_SHARP = ("The stitch direction turns too sharply for this shape here. Move the angle lines further apart or "
-             "make the turn gentler.")
+FOLD_WARN_ROWS = 1.5
+TOO_SHARP = ("The stitch direction turns too sharply for this shape here: on the inside of the turn, rows are cut "
+             "short where they would overlap. Move the angle lines further apart or make the turn gentler.")
 SAME_MIDDLE = ("Two angle lines have their middles in the same place, so the stitches follow the line drawn first "
                "and leave the other out. Move one of them at least 1 mm away to use both.")
 
@@ -258,7 +262,8 @@ def rows(poly, params, start, travel_within=None, end_near=None) -> tuple[list, 
 
     found: dict[int, list] = {}
     row_s: dict[int, np.ndarray] = {}
-    too_sharp = False  # a loop cut away folds back more than FOLD_WARN_MM towards the guide
+    too_sharp = False  # a loop cut away folds back more than `crease` towards the guide
+    crease = max(FOLD_WARN_MM, FOLD_WARN_ROWS * spacing)
     for side in (1, -1):
         k = 0 if side > 0 else -1
         while True:
@@ -273,9 +278,9 @@ def rows(poly, params, start, travel_within=None, end_near=None) -> tuple[list, 
                 short = shapely.dwithin(guide_line, shapely.points(q[at]), abs(offset) - LOOP_TOL_MM)
                 if short.any():
                     cut = at[short]
-                    if not too_sharp and abs(offset) > FOLD_WARN_MM:
+                    if not too_sharp and abs(offset) > crease:
                         too_sharp = bool(shapely.dwithin(guide_line, shapely.points(q[cut]),
-                                                         _r(abs(offset) - FOLD_WARN_MM)).any())
+                                                         _r(abs(offset) - crease)).any())
                     inside = inside.copy()
                     inside[cut] = False
                 if inside.any():

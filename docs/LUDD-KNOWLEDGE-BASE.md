@@ -758,10 +758,11 @@ points move as Random 50% does (a higher Random stays).
 - The rows reach every edge and corner of the shape: in LUDD's tests (fans, a leaf, a ribbon,
   sharp turns) no spot is more than 0.5 mm from thread (rows are 0.4 mm apart).
 - Where the turn is too sharp for the shape, the rows would loop over each other; LUDD cuts them
-  where they would, so they meet in a crease without bare fabric. A small crease in a gentle turn
-  is cut without a word; where the rows would have folded back more than 1.5 mm (about four rows)
-  it warns "The stitch direction turns too sharply for this shape here. Move the angle lines
-  further apart or make the turn gentler." (L-042).
+  short where they would, on the inside of the turn, so they meet in a crease without bare fabric.
+  A shallow crease is cut without a word. Where the rows would have folded back more than 1.5 mm
+  (or one and a half rows, if the rows are further apart), it warns "The stitch direction turns
+  too sharply for this shape here: on the inside of the turn, rows are cut short where they would
+  overlap. Move the angle lines further apart or make the turn gentler." (L-042).
 - Two lines whose middles are in the same place (under 1 mm apart) leave no room to turn: the rows
   follow the line drawn first and LUDD says "Two angle lines have their middles in the same place,
   so the stitches follow the line drawn first and leave the other out. Move one of them at least

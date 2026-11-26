@@ -19,8 +19,8 @@ from threadline_engine.digitize.stitches import STITCH, FillParams, fill_parts, 
 from threadline_engine.layout import Transform
 
 SPACING = 0.4
-TOO_SHARP = ("The stitch direction turns too sharply for this shape here. Move the angle lines further apart or "
-             "make the turn gentler.")
+TOO_SHARP = ("The stitch direction turns too sharply for this shape here: on the inside of the turn, rows are cut "
+             "short where they would overlap. Move the angle lines further apart or make the turn gentler.")
 
 
 def _nodes(points):
@@ -223,11 +223,25 @@ def test_two_lines_with_the_same_middle_follow_the_first():
 
 def test_a_gentle_turn_does_not_warn():
     # 30 degrees over 20 mm: a few row points fold back in the top right corner and are cut (up to
-    # 1.0 mm deep), which is no reason to tell anyone to move the lines.
+    # 1.1 mm deep), which is no reason to tell anyone to move the lines.
     obj = _fill(PANEL, [_line(15, 15, 0), _line(35, 15, 30)])
     recs, warnings = generate(obj)
     assert TOO_SHARP not in warnings
     assert invariants.largest_bare_spot(recs, _area(obj), 0.5) <= 0.01
+
+
+def test_a_real_crease_warns_even_for_a_gentle_turn():
+    # Intended: the same 0 and 30 degree fan in a 50 mm tall shape. Its rows would fold back 3.5 mm
+    # (more room above for them to overlap), a real crease.
+    tall = _fill(_nodes([(0, 0), (50, 0), (50, 50), (0, 50)]), [_line(15, 25, 0), _line(35, 25, 30)])
+    assert TOO_SHARP in generate(tall)[1]
+
+
+def test_wide_rows_warn_only_when_a_fold_is_deeper_than_a_row():
+    # At 2 mm rows, a 0 and 34 degree fan's rows would fold back 1.7 mm, less than one row.
+    assert TOO_SHARP not in generate(_fill(PANEL, [_line(15, 15, 0), _line(35, 15, 34)], spacing_mm=2.0))[1]
+    # A deep crease still warns at 2 mm rows (0 and 60 degrees: more than 11 mm).
+    assert TOO_SHARP in generate(_fill(PANEL, [_line(15, 15, 0), _line(35, 15, 60)], spacing_mm=2.0))[1]
 
 
 def test_lines_move_and_turn_with_the_shape(monkeypatch):
