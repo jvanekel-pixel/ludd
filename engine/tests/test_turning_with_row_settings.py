@@ -64,6 +64,29 @@ def test_a_hand_sewn_turning_fill_makes_no_extra_jumps(outline, lines):
     invariants.assert_sane(by_hand, inside=_area(obj), tolerance_mm=0.6 + 0.1 + 0.05)
 
 
+# The app's own steps on its 60 x 42 mm rectangle: keep the fill's 45-degree line and draw a
+# nearly level one (Shift+I) in the upper right. The rows must bend back on themselves.
+RECTANGLE = [[-30, -21, "c"], [30, -21, "c"], [30, 21, "c"], [-30, 21, "c"]]
+BENT_BACK = [[[-21, -21], [21, 21]], [[10.9, -13.0], [27.6, -14.3]]]
+
+
+def test_a_line_that_bends_the_rows_back_on_themselves_still_fills_the_shape():
+    obj = _fill(RECTANGLE, BENT_BACK, underlay=[])
+    recs, warnings = generate(obj)
+    assert turning.TOO_SHARP in warnings
+    assert invariants.coverage(recs, _area(obj), 0.4) >= 0.97
+    invariants.assert_sane(recs, inside=_area(obj), tolerance_mm=0.3)
+
+
+def test_a_sharp_turn_never_lays_rows_on_top_of_each_other():
+    # Rows that would loop back across their neighbors are cut where they loop, so no spot gets
+    # much more thread than a plain fill gives it.
+    obj = _fill(RECTANGLE, BENT_BACK, underlay=[])
+    plain = {**obj, "params": {k: v for k, v in obj["params"].items() if k != "angle_lines"}}
+    dense = invariants.thread_per_mm2(generate(obj)[0], _area(obj))
+    assert dense <= invariants.thread_per_mm2(generate(plain)[0], _area(obj)) * 1.15
+
+
 def _ragged_side(recs) -> str:
     """Which side of the 50 mm panel has the thinner edge: a feathered one has fewer needle
     points within 1.5 mm of it."""
@@ -89,6 +112,7 @@ def test_a_turning_fills_underlay_and_rows_do_not_hang_on_the_last_digit_of_a_si
     cases = {
         "leaf": _fill(LEAF, LEAF_LINES, underlay=["edge", "tatami"], tie_in=True, tie_off=True),
         "panel_by_hand": _fill(PANEL, [_line(12, 15, -30), _line(38, 15, 30)], hand_pct=60, underlay=["tatami"]),
+        "bent_back": _fill(RECTANGLE, BENT_BACK, underlay="auto"),  # rows cut where they loop
     }
     forget_stitches()
     plain = {name: digest_recs_steady(generate(obj)[0]) for name, obj in cases.items()}

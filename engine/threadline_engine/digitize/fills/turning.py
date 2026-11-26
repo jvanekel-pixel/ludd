@@ -12,8 +12,9 @@ line where it lies. Tatami hands over here (stitches._fill_part).
    brick weave holds as the rows curve).
 6. Rows are sewn in turn, alternating direction, grouped as tatami groups them; travel joins the
    groups inside the shape.
-7. Where a row would fold over itself (the guide turns tighter than the shape is wide there), no
-   more rows are added on that side, and the fill says so.
+7. Where the guide turns tighter than a row is far from it, the row would loop back across its
+   neighbors. Only the parts still that far from the whole guide are kept (the rows then meet in a
+   crease, and the shape stays covered), and the fill says so.
 
 Written for LUDD from the Phase 6 spec (no code ported from other projects).
 """
@@ -30,7 +31,7 @@ from shapely.geometry import LineString, Point as ShapelyPoint
 
 SAMPLE_MM = 0.25  # the guide is worked out at points about this far apart
 SAG_MM = 0.04  # a stitch strays at most this far from its curved row
-SQUEEZE = 0.2  # a row shorter than this share of the guide beside it folds over itself
+LOOP_TOL_MM = 0.05  # a row point this much nearer the guide than its row is part of a loop
 TOO_SHARP = ("The stitch direction turns too sharply for this shape here. Move the angle lines further apart or "
              "make the turn gentler.")
 
@@ -197,9 +198,9 @@ def rows(poly, params, start, travel_within=None, end_near=None) -> tuple[list, 
     shapely.prepare(zone)
     edge = zone.boundary
     p, normals, s, ref = _guide_points(params, zone)
-    seg = p[1:] - p[:-1]
-    seg_len2 = np.maximum((seg * seg).sum(axis=1), 1e-18)
-    far = max(LineString(p).distance(ShapelyPoint(c)) for c in zone.exterior.coords) + spacing
+    guide_line = LineString(p)
+    far = max(guide_line.distance(ShapelyPoint(c)) for c in zone.exterior.coords) + spacing
+    shapely.prepare(guide_line)  # the loop check below asks "within this distance?" of many points
 
     found: dict[int, list] = {}
     too_sharp = False
@@ -212,14 +213,17 @@ def rows(poly, params, start, travel_within=None, end_near=None) -> tuple[list, 
             q = p + normals * offset
             inside = shapely.contains_xy(zone, q[:, 0], q[:, 1])
             if inside.any():
-                dq = q[1:] - q[:-1]
-                squeeze = (dq * seg).sum(axis=1) / seg_len2
-                near = inside[:-1] | inside[1:]
-                if bool(((squeeze < SQUEEZE) & near).any()):
+                # Cut away the loops: points nearer another part of the guide than this row is.
+                at = np.flatnonzero(inside)
+                short = shapely.dwithin(guide_line, shapely.points(q[at]), abs(offset) - LOOP_TOL_MM)
+                if short.any():
                     too_sharp = True
-                    break
-                along = np.concatenate([[0.0], np.cumsum(np.hypot(*dq.T))])
-                found[k] = _row_pieces(q, inside, edge, along - along[ref], st)
+                    inside = inside.copy()
+                    inside[at[short]] = False
+                if inside.any():
+                    dq = q[1:] - q[:-1]
+                    along = np.concatenate([[0.0], np.cumsum(np.hypot(*dq.T))])
+                    found[k] = _row_pieces(q, inside, edge, along - along[ref], st)
             k += side
     if too_sharp:
         said.append(TOO_SHARP)
@@ -245,12 +249,13 @@ def rows(poly, params, start, travel_within=None, end_near=None) -> tuple[list, 
         line_along = [path_start]
         for u, v in zip(path, path[1:]):
             line_along.append(line_along[-1] + dist(u, v))
-        px, py = [u[0] for u in path], [u[1] for u in path]
+        at_along = np.array(line_along)
+        px, py = np.array([u[0] for u in path], dtype=float), np.array([u[1] for u in path], dtype=float)
 
         def at(x: float) -> tuple[float, float]:
             """The point `x` along the row; past an end (a feathered edge) the row runs straight on."""
             if line_along[0] <= x <= line_along[-1] or len(path) < 2:
-                return float(np.interp(x, line_along, px)), float(np.interp(x, line_along, py))
+                return float(np.interp(x, at_along, px)), float(np.interp(x, at_along, py))
             u, v, base = (path[0], path[1], line_along[0]) if x < line_along[0] else (path[-2], path[-1], line_along[-1])
             d = _unit((v[0] - u[0], v[1] - u[1]))
             end_pt = path[0] if x < line_along[0] else path[-1]
