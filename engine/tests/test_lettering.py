@@ -313,7 +313,7 @@ def test_qa_missing_characters_are_named_and_nothing_drawable_is_refused(font_pa
 
 def test_qa_text_is_cleaned_before_layout():
     assert lettering._clean_text("é") == "é"
-    assert lettering._clean_text("A\nB\tC​") == "A B C"
+    assert lettering._clean_text("A\nB\tC​") == "A\nB C"
 
 
 def test_qa_straight_text_keeps_its_baseline(font2_path):

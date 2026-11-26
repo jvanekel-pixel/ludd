@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { command, info, loadFonts, saveStitchFont, setText, takeTextToEdit } from "../actions";
+import { formatShortcut } from "../commands";
 import { heldCount, holdEscape } from "../escape";
 import { MM_PER_IN } from "../design/grid";
 import type { FontInfo, LayoutItemInfo, TextItem, TextShape, Thread } from "../design/types";
@@ -19,6 +20,8 @@ const SHAPES: { type: TextShape["type"]; label: string; title: string }[] = [
 ];
 
 const TYPE_DELAY_MS = 450;
+/** The text box's look, as the one-line box it replaces. */
+const TEXT_AREA: React.CSSProperties = { font: "inherit", fontSize: 16, padding: "0.35rem 0.5rem", border: "1px solid var(--line)", borderRadius: 6, background: "var(--panel)", color: "var(--fg)", resize: "vertical" };
 const FONT_LIST_MAX = 200;
 const MIN_SIZE_MM = 2;
 const MAX_SIZE_MM = 200;
@@ -103,7 +106,7 @@ export function SelectedText({ item, info: itemInfo, sel }: { item: TextItem; in
   const units = useStore((s) => s.units);
   const [draft, setDraft] = useState(item.text);
   const [picking, setPicking] = useState(false);
-  const input = useRef<HTMLInputElement>(null);
+  const input = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const reverting = useRef(false);
   const before = useRef(item.text); // the text when the box was clicked into: Esc brings it back
@@ -133,6 +136,50 @@ export function SelectedText({ item, info: itemInfo, sel }: { item: TextItem; in
     clearTimeout(timer.current);
     if (t.trim() && t !== item.text) setText(item.id, { text: t });
   };
+  /** The words: several lines, but a monogram's three initials on one. */
+  const textField = {
+    ref: (el: HTMLInputElement | HTMLTextAreaElement | null) => {
+      input.current = el;
+    },
+    value: draft,
+    maxLength: item.monogram ? 3 : 200,
+    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      setDraft(e.target.value);
+      clearTimeout(timer.current);
+      const v = e.target.value;
+      // Typing updates the stitches after a short pause, not on every key.
+      timer.current = setTimeout(() => commitText(v), TYPE_DELAY_MS);
+    },
+    onFocus: () => {
+      before.current = item.text;
+    },
+    onBlur: () => {
+      if (reverting.current) reverting.current = false;
+      else if (!draft.trim()) {
+        // An empty box can't be stitched: the text it had comes back.
+        clearTimeout(timer.current);
+        setDraft(item.text);
+      } else commitText(draft);
+    },
+    onKeyDown: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      // Several lines: Enter starts a new one and Ctrl+Enter (Cmd+Enter on a Mac) is done.
+      // Initials: Enter is done. (Not while an input method is still composing a character.)
+      if (e.key === "Enter" && (item.monogram || e.ctrlKey || e.metaKey) && !e.nativeEvent.isComposing) {
+        e.preventDefault();
+        e.currentTarget.blur();
+      }
+      // (While something is held, such as a drag, Esc lets go of that first.)
+      if (e.key === "Escape" && !heldCount()) {
+        // Esc lets go of the edit: the text goes back to what it was before you typed,
+        // even if a pause in typing already updated the design.
+        clearTimeout(timer.current);
+        reverting.current = true;
+        setDraft(before.current);
+        if (before.current !== item.text) setText(item.id, { text: before.current });
+        e.currentTarget.blur();
+      }
+    },
+  };
   const toUnits = (mm: number) => (units === "in" ? mm / MM_PER_IN : mm);
   const fromUnits = (v: number) => (units === "in" ? v * MM_PER_IN : v);
   const curved = item.shape.type !== "line" && item.shape.type !== "path";
@@ -142,42 +189,11 @@ export function SelectedText({ item, info: itemInfo, sel }: { item: TextItem; in
     <Section id="lettering" sel={sel} defaultOpen title="Lettering" summary={`${item.font.family} · ${styleLabel(item)}`}>
       <label className="text-field">
         <span>{item.monogram ? "Three initials" : "Text"}</span>
-        <input
-          ref={input}
-          value={draft}
-          maxLength={item.monogram ? 3 : 200}
-          onChange={(e) => {
-            setDraft(e.target.value);
-            clearTimeout(timer.current);
-            const v = e.target.value;
-            // Typing updates the stitches after a short pause, not on every key.
-            timer.current = setTimeout(() => commitText(v), TYPE_DELAY_MS);
-          }}
-          onFocus={() => {
-            before.current = item.text;
-          }}
-          onBlur={() => {
-            if (reverting.current) reverting.current = false;
-            else if (!draft.trim()) {
-              // An empty box can't be stitched: the text it had comes back.
-              clearTimeout(timer.current);
-              setDraft(item.text);
-            } else commitText(draft);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-            // (While something is held, such as a drag, Esc lets go of that first.)
-            if (e.key === "Escape" && !heldCount()) {
-              // Esc lets go of the edit: the text goes back to what it was before you typed,
-              // even if a pause in typing already updated the design.
-              clearTimeout(timer.current);
-              reverting.current = true;
-              setDraft(before.current);
-              if (before.current !== item.text) setText(item.id, { text: before.current });
-              (e.target as HTMLInputElement).blur();
-            }
-          }}
-        />
+        {item.monogram ? (
+          <input {...textField} />
+        ) : (
+          <textarea {...textField} rows={3} title={`Enter starts a new line; ${formatShortcut("Mod+Enter")} is done`} style={TEXT_AREA} />
+        )}
       </label>
       <FontPicker value={item.font} onPick={(f) => setText(item.id, { font: { path: f.path, index: f.index, family: f.family, style: f.style, ...(f.made_of ? { made_of: f.made_of } : {}) } })} />
 
