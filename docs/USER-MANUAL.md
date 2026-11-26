@@ -768,7 +768,8 @@ or make the turn gentler. Other patterns don't use the lines, but they come back
 A line's **Style → Motif** repeats a little pattern along it: **Wave**, **Zigzag**, **Scallop**,
 **Blanket stitch** (the applique edge stitch), **Leaves** or one of **My motifs** (above), with
 its **Repeat** length and **Width**. Use it for decorative borders, or round an applique with
-blanket stitch.
+blanket stitch. A motif line that would take more than about 60,000 stitches (a whole design is
+usually 5,000 to 30,000) is refused: make the motif longer (Repeat) or simpler.
 
 ### Size and points
 Size (W, H), **Add points (K)** and **Add a hole (O)** for fills. Turn, mirror, duplicate,

@@ -644,7 +644,9 @@ Spiral fill needs this version of LUDD or newer to open.
 ### F-1306 Line styles and motifs — YES
 Single, Triple (three passes), Bean (each stitch three times), **Motif**: Wave, Zigzag, Scallop,
 Blanket stitch, Leaves, or one of **your own** (My motifs, F-1311), with Repeat length and Width.
-The same motifs fill shapes with the Motif fill pattern.
+The same motifs fill shapes with the Motif fill pattern. A motif line that would take more than
+about 60,000 stitches (a whole design is usually 5,000 to 30,000) is refused with a message: make
+the motif longer (Repeat) or simpler.
 
 ### F-1307 Satin ribbons — YES
 Draw like a line along the middle; width 1–12 mm (new ones start at the last width); Ctrl+right-click

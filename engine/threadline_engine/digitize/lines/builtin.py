@@ -63,7 +63,7 @@ def _refuse_too_many(nodes, params, closed, unit, stitch: float) -> None:
     stitches = motif_stitches(shape, repeats, total / repeats, params.motif_width_mm, stitch)
     if stitches > MAX_LINE_STITCHES:
         raise DigitizeError(f"This line would need about {stitches:,.0f} stitches, far more than any design. "
-                            "Make it smaller or less dense.")
+                            "Make the motif longer or simpler.")
 
 
 def _motif(nodes, params, closed=False, start=None):

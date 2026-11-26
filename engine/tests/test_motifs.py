@@ -611,6 +611,10 @@ def test_shape_carries_its_motif(tmp_path):
 # ---------------------------------------------------------------- too many stitches (audit finding 3)
 
 
+TOO_MANY = (r"^This line would need about [\d,]+ stitches, far more than any design\. "
+            r"Make the motif longer or simpler\.$")
+
+
 def _motif_line(unit, nodes, **params):
     return {"id": "l", "kind": "run", "thread": THREAD, "geometry": {"nodes": nodes},
             "params": {"style": "motif", "motif": "user:busy", "motif_unit": unit, **params}}
@@ -627,7 +631,7 @@ def test_a_saved_motif_too_busy_for_a_line_is_refused(stitch):
     # What the app sets when this motif is chosen: its drawn proportions, within the allowed sizes.
     line = _motif_line(_tall_zigzag(), _c((0, 0), (150, 0)), motif_mm=1.5, motif_width_mm=10, stitch_mm=stitch)
     began = time.monotonic()
-    with pytest.raises(DigitizeError, match=r"^This line would need about [\d,]+ stitches, far more than any design"):
+    with pytest.raises(DigitizeError, match=TOO_MANY):
         generate(line)
     assert time.monotonic() - began < 5
 
@@ -635,13 +639,13 @@ def test_a_saved_motif_too_busy_for_a_line_is_refused(stitch):
 def test_a_hand_made_motif_that_runs_far_along_the_line_is_refused():
     unit = [[0, 0]] + [[1000 if i % 2 else -1000, 0.5 if i % 2 else -0.5] for i in range(198)] + [[1, 0]]
     began = time.monotonic()
-    with pytest.raises(DigitizeError, match="far more than any design"):
+    with pytest.raises(DigitizeError, match=TOO_MANY):
         generate(_motif_line(unit, _c((0, 0), (150, 0)), motif_mm=1.5, motif_width_mm=10, stitch_mm=1.0))
     assert time.monotonic() - began < 5
 
 
-def test_an_ordinary_long_motif_border_is_not_refused():
-    square = _c((0, 0), (150, 0), (150, 150), (0, 150))
-    border = {"id": "b", "kind": "run", "thread": THREAD, "geometry": {"nodes": square, "closed": True},
-              "params": {"style": "motif", "motif": "blanket", "motif_mm": 1.5, "motif_width_mm": 10}}
-    assert generate(border)[0]
+def test_a_dense_but_honest_border_still_sews():
+    # 1,000 mm of a 4 mm motif of 30 stitches a repeat: about 7,500 stitches, far under the limit.
+    fine = [[i / 30, 0 if i in (0, 30) else 0.5 if i % 2 else -0.5] for i in range(31)]
+    recs, _ = generate(_motif_line(fine, _c((0, 0), (1000, 0)), motif_mm=4, motif_width_mm=2, stitch_mm=2.5))
+    assert 7000 <= invariants.count(recs, STITCH) <= 8000
