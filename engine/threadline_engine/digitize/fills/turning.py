@@ -395,4 +395,4 @@ def rows(poly, params, start, travel_within=None, end_near=None) -> tuple[list, 
     return out, said
 
 
-__all__: Sequence[str] = ("SAME_MIDDLE", "TOO_SHARP","guide", "mean_angle", "rows", "takes_over")
+__all__: Sequence[str] = ("SAME_MIDDLE", "TOO_SHARP", "guide", "mean_angle", "rows", "takes_over")

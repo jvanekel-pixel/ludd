@@ -749,8 +749,9 @@ points move as Random 50% does (a higher Random stays).
   where it lies (a leaf whose stitches fan, a ribbon that bends). The fill's current direction
   becomes the first line.
 - Each line has two purple dots: drag one to move it; **right-click a line** to remove it. `I`
-  redraws the first line. The Angle box says **Follows N lines**, with **Back to one angle** (it
-  keeps the first line's angle); the folded heading says "follows N lines".
+  redraws the first line. The Angle box says **Follows N lines** ("1 of 2 lines" when two share a
+  middle), with **Back to one angle** (it keeps the first line's angle); the folded heading says
+  "follows N lines".
 - Weave, Random, Edge pad, Feather, the Hand-sewn look, carved lines and underlay work on them
   (the cross-hatch runs across the lines' average direction). The rows finish at the row end
   nearest the red dot. The lines move, turn, mirror and resize with the shape.
@@ -1191,7 +1192,7 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | ID | What | Status | Workaround | Could it be built? |
 | --- | --- | --- | --- | --- |
 | L-001 | **Two-color gradient / color blend** (one color fading into another by interleaved rows) | YES since 2026-11-26 (limit lifted; F-1310, up to three colors). The fade runs across the rows only (L-040) | — | Done. |
-| L-002 | **Fill with holes may show a travel line on top**: when holes split a tatami fill into regions, the needle can travel across rows already sewn. With **Don't sew what's hidden** on (F-1207) a lower fill can get such a line too (in the tests: about 19 mm across a square under a square, 35 mm under lettering). | Known weakness | Cut the fill into hole-free bands with cuts parallel to the rows (Knife), or use Contour/Stipple. | Yes (engine route planning). |
+| L-002 | **Fill with holes may show a travel line on top**: when holes split a tatami fill into regions, the needle can travel across rows already sewn. With **Don't sew what's hidden** on (F-1207) a lower fill can get such a line too (in the tests: about 19 mm across a square under a square, 35 mm under lettering). A turning fill (F-1315) can show one too, even without holes, where its rows are sewn in separate groups (up to about 50 mm on the test shapes). | Known weakness | Cut the fill into hole-free bands with cuts parallel to the rows (Knife), or use Contour/Stipple. | Yes (engine route planning). |
 | L-003 | **Multi-line text** in one lettering object | YES since 2026-11-25 (limit lifted; F-1410). A circle or a drawn line still takes one line (L-037) | — | Done. |
 | L-004 | **Open running line starting mid-line** | NO (ends only) | Split it with the Knife, or close it into a loop. | Possibly. |
 | L-005 | **Per-letter stitch angle / direction** in lettering | YES since 2026-11-25 (limit lifted; F-1413), except True satin and stitched-font letters | For those, Break into shapes (True satin) and use each shape's purple dots. | Done. |

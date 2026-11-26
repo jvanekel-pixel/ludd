@@ -34,6 +34,23 @@ export function angleLines(o: ObjectItem | undefined | null): AngleLine[] {
   return turnsRows(p) ? p.angle_lines! : [];
 }
 
+/** Middles nearer than this leave no room to turn between two lines (turning.SAME_MIDDLE_MM). */
+const SAME_MIDDLE_MM = 1;
+
+/** "2 lines", or "1 of 2 lines" when some can't be followed: as in the engine, a line whose middle
+ *  is under 1 mm from an earlier followed one's is left out (and the fill says so). */
+export function followedText(o: ObjectItem): string {
+  const lines = angleLines(o);
+  const sx = Math.abs(o.transform?.scale_x ?? 1);
+  const sy = Math.abs(o.transform?.scale_y ?? 1);
+  const kept: Pt[] = [];
+  for (const [a, b] of lines) {
+    const m: Pt = [((a[0] + b[0]) / 2) * sx, ((a[1] + b[1]) / 2) * sy];
+    if (kept.every((k) => Math.round(Math.hypot(m[0] - k[0], m[1] - k[1]) * 1e6) / 1e6 >= SAME_MIDDLE_MM)) kept.push(m);
+  }
+  return kept.length < lines.length ? `${kept.length} of ${lines.length} lines` : `${lines.length} lines`;
+}
+
 /** Whether a fill's rows can turn to follow several lines: Tatami's can. */
 export const canTurn = (o: ObjectItem): boolean =>
   o.kind === "fill" && ((o.params as { pattern?: string }).pattern ?? "tatami") === "tatami";

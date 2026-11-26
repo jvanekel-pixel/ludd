@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { command, convertObject, hasOwnDefaults, resetDefaults, saveAppliqueSvg, setObjectParams, setObjectThread, setSatinWidth } from "../actions";
 import { FILL_PATTERN_DEFS, fillPatternDef, type Field } from "../design/fillPatterns";
 import { LINE_STYLE_DEFS, MOTIF_FIELDS } from "../design/lineStyles";
-import { angleLines } from "../feat/angleLines";
+import { angleLines, followedText } from "../feat/angleLines";
 import { isRibbon, type LayoutItemInfo, type ObjectItem, type Thread } from "../design/types";
 import { useStore } from "../store";
 import { Row, Section, Sub, type SelKind } from "./Accordion";
@@ -205,8 +205,7 @@ export function objectSummary(item: ObjectItem): string {
   if (item.kind === "fill") {
     const { summary, label } = fillPatternDef(p.pattern as string | undefined);
     if (summary) return summary === "label+density" ? `${label} · ${dens}` : label;
-    const lines = angleLines(item).length;
-    return `${dens} · ${lines ? `follows ${lines} lines` : `${Math.round((p.angle_deg as number | undefined) ?? 45)}°`}`;
+    return `${dens} · ${angleLines(item).length ? `follows ${followedText(item)}` : `${Math.round((p.angle_deg as number | undefined) ?? 45)}°`}`;
   }
   if (item.kind === "applique") return `${(p.cover_width_mm as number | undefined) ?? 3} mm border`;
   if (isRibbon(item)) return `${item.geometry.width_mm} mm wide · ${dens}`;

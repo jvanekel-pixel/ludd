@@ -66,6 +66,22 @@ describe("the Angle box", () => {
     expect(back.angle_deg).toBe(0);
   });
 
+  it("says how many lines are followed when two share a middle, which the engine leaves out", () => {
+    // The engine's rule (turning.SAME_MIDDLE_MM): a middle under 1 mm from an earlier line's is left out.
+    const crossed: FillParams["angle_lines"] = [
+      [[18, 20], [22, 20]],
+      [[20.6, 18], [20.6, 22]],
+    ];
+    expect(show(fill({ angle_lines: crossed })).textContent).toContain("Follows 1 of 2 lines");
+    act(() => root?.unmount());
+    const apart: FillParams["angle_lines"] = [crossed[0], [[21, 18], [21, 22]]];
+    expect(show(fill({ angle_lines: apart })).textContent).toContain("Follows 2 lines");
+    act(() => root?.unmount());
+    // The third is near the first, though far from the second: left out too.
+    const three: FillParams["angle_lines"] = [crossed[0], [[30, 18], [30, 22]], [[20, 19], [20.2, 22]]];
+    expect(show(fill({ angle_lines: three })).textContent).toContain("Follows 2 of 3 lines");
+  });
+
   it("with one angle offers another line on Tatami only", () => {
     expect(buttons(show(fill({ angle_deg: 30 })))).toContain("Add another line (Shift+I)");
     act(() => root?.unmount());

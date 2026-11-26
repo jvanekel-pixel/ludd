@@ -1,6 +1,6 @@
 /** A fill's stitch direction: its angle, or the lines its rows turn to follow. */
 import type { ObjectItem } from "../design/types";
-import { angleLines, canTurn, oneAngleAgain, startAddAngle } from "../feat/angleLines";
+import { angleLines, canTurn, followedText, oneAngleAgain, startAddAngle } from "../feat/angleLines";
 import { Row } from "./Accordion";
 import { Cmd, Stepper } from "./controls";
 
@@ -21,7 +21,7 @@ export function AngleBox({ item, set }: { item: ObjectItem; set: (patch: Record<
     return (
       <>
         <Row label="Angle" hint="The rows turn to follow each line where it lies. Drag a line's purple dots to move it; right-click a line to remove it.">
-          <span className="angle-lines">Follows {lines.length} lines</span>
+          <span className="angle-lines">Follows {followedText(item)}</span>
         </Row>
         <Row label="">
           <button onClick={() => oneAngleAgain(item.id)} title="Keep the first line's angle and remove the others">

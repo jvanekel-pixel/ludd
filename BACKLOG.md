@@ -106,3 +106,4 @@ Planned on 2026-11-24: every item in this section, and the nice-to-haves above t
 - [ ] The line's Style row clips its Motif button at the panel's width (it shows "Mot" and the panel scrolls sideways): let the row wrap
 - [ ] A ripple's middle can't be set in the app (the engine takes `ripple_center`): add a draggable middle dot
 - [ ] A new third blend color can start as the first color again (navy, white, navy): start it unlike both
+- [ ] Turning fills move between row groups straight across finished rows, with nothing sewn over the move, so a thin line shows (also in the build the first audit saw: up to 49 mm uncovered on a test shape; over 60 random rectangles 1,385 mm in all now, 1,594 mm then). Plan the groups so moves run under rows sewn later or along the edge, as tatami does (L-002)

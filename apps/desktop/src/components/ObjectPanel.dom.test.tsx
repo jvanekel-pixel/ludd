@@ -138,6 +138,7 @@ describe("shape settings after the panel split", () => {
   it("a turning fill's heading says it follows its lines; another pattern keeps its angle", () => {
     const lines = [[[0, 0], [10, 0]], [[0, 5], [10, 9]]];
     expect(objectSummary(fill({ angle_lines: lines }))).toBe("Normal · follows 2 lines");
+    expect(objectSummary(fill({ angle_lines: [[[0, 2], [10, 2]], [[5, 0], [5, 4]]] }))).toBe("Normal · follows 1 of 2 lines");
     expect(objectSummary(fill({ pattern: "gradient", angle_lines: lines }))).toBe("Normal · 45°");
   });
 });
