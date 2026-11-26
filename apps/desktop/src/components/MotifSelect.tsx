@@ -7,6 +7,7 @@ import type { ObjectItem } from "../design/types";
 import { loadMotifs, motifPatch, sameUnit, useMotifs, type MotifEntry } from "../feat/motifs";
 import { useStore } from "../store";
 import { Row } from "./Accordion";
+import { Cmd } from "./controls";
 
 /** The option standing for the shape's own motif, when it isn't one of those listed. */
 const OWN = "own";
@@ -40,24 +41,29 @@ export function MotifSelect({ item }: { item: ObjectItem }) {
   };
 
   return (
-    <Row label="Motif">
-      <select value={own ? OWN : motif} onChange={(e) => choose(e.target.value)} aria-label="Motif">
-        {own && <option value={OWN}>{ownLabel(motif, listed, !!p.motif_unit, list !== null)}</option>}
-        {MOTIF_DEFS.map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.label}
-          </option>
-        ))}
-        {mine.length > 0 && (
-          <optgroup label="My motifs">
-            {mine.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </optgroup>
-        )}
-      </select>
-    </Row>
+    <>
+      <Row label="Motif">
+        <select value={own ? OWN : motif} onChange={(e) => choose(e.target.value)} aria-label="Motif">
+          {own && <option value={OWN}>{ownLabel(motif, listed, !!p.motif_unit, list !== null)}</option>}
+          {MOTIF_DEFS.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.label}
+            </option>
+          ))}
+          {mine.length > 0 && (
+            <optgroup label="My motifs">
+              {mine.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+        </select>
+      </Row>
+      <Row label="">
+        <Cmd id="motif.library" label="My motifs…" />
+      </Row>
+    </>
   );
 }

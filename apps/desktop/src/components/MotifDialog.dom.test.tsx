@@ -19,6 +19,7 @@ import { drawnSize, motifSpan, useMotifs, type MotifEntry } from "../feat/motifs
 import { onKeyDown } from "../keys";
 import { useStore } from "../store";
 import { MotifSelect } from "./MotifSelect";
+import { Toolbar } from "./Toolbar";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -193,6 +194,20 @@ async function choose(value: string) {
 }
 
 describe("the Motifs window", () => {
+  it("opens from the Motif list's My motifs button and from the ⋯ menu", async () => {
+    mount();
+    await click([...host!.querySelectorAll<HTMLButtonElement>("#panel button")].find((b) => b.textContent === "My motifs…")!);
+    expect(dialog()?.open).toBe(true);
+    await click(button("Close"));
+    expect(dialog()).toBeNull();
+
+    await act(async () => root!.render(<Toolbar />));
+    await click(host!.querySelector<HTMLButtonElement>('button[aria-label="More"]')!);
+    const item = [...host!.querySelectorAll<HTMLButtonElement>('[role="menu"] button')].find((b) => b.querySelector(".label")?.textContent === "Motifs…")!;
+    await click(item);
+    expect(useStore.getState().dialog).toBe("motifs");
+  });
+
   it("opens with Alt+Shift+M and shows the built-in motifs and your own, each as two repeats", async () => {
     mine = [{ id: "user:mine", name: "Mine", builtin: false, unit: HILL }];
     mount();
