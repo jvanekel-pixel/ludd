@@ -19,7 +19,7 @@ from ..storage import data_dir, read_json
 FONT_EXTS = {".ttf", ".otf", ".ttc"}
 STITCH_FONT_EXTS = {".luddfont", ".tlfont"}  # .tlfont: before the rename
 STITCH_FONT_FORMATS = {"ludd-font", "threadline-font"}
-INDEX_VERSION = 3  # 3: symbol fonts (no Latin letters) are marked and listed last
+INDEX_VERSION = 4  # 4: stitch fonts whose letters are stitches say so; 3: symbol fonts are marked and listed last
 
 
 class LetteringError(Exception):
@@ -82,7 +82,11 @@ def list_fonts() -> list[dict[str, Any]]:
                 if ext in STITCH_FONT_EXTS:
                     meta = json.loads(f.read_text(encoding="utf-8"))
                     if isinstance(meta, dict) and meta.get("format") in STITCH_FONT_FORMATS:
-                        entries.append({"family": str(meta.get("name") or f.stem), "style": "Stitch font", "index": 0, "kind": "stitch"})
+                        entry = {"family": str(meta.get("name") or f.stem), "style": "Stitch font", "index": 0, "kind": "stitch"}
+                        glyphs = meta.get("glyphs")
+                        if isinstance(glyphs, dict) and any(isinstance(g, dict) and "stitches" in g for g in glyphs.values()):
+                            entry["made_of"] = "stitches"  # letters made of stitches, from letter files
+                        entries.append(entry)
                 elif ext == ".ttc":
                     for i, font in enumerate(TTCollection(str(f), lazy=True).fonts):
                         fam, sub = _names(font)
