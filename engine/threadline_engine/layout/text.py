@@ -43,11 +43,60 @@ def _letter_ring(o: dict[str, Any]) -> list[list[float]]:
     return [[round(x, 2), round(y, 2)] for x, y in pts]
 
 
+def _number(value: Any) -> float | None:
+    """A letter change's number, or None if it isn't one (a hand-edited project)."""
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return None
+    return v if math.isfinite(v) else None
+
+
+def _edited_letter(parts: list[dict[str, Any]], edit: dict[str, Any]) -> list[dict[str, Any]]:
+    """One letter's parts changed: resized and turned about the middle of their box, then moved
+    (its stitch angles turn with it); then its own stitch angle and thread, if given."""
+    dx, dy = _number(edit.get("dx_mm")) or 0.0, _number(edit.get("dy_mm")) or 0.0
+    turn = _number(edit.get("rotate")) or 0.0
+    grow = _number(edit.get("scale"))
+    grow = min(max(grow, 0.1), 10.0) if grow and grow > 0 else 1.0
+    points = [p for o in parts for p in lettering.envelope.part_points(o)]
+    if points and (dx or dy or turn or grow != 1.0):
+        x0, y0, x1, y1 = dz.bounds(points)
+        change = Transform(x=dx, y=dy, rotate=turn, scale_x=grow, scale_y=grow)
+        middle = ((x0 + x1) / 2, (y0 + y1) / 2)
+        parts = [lettering._move(dz.transform_geometry(o, change, middle), lambda a, b: (round(a, 4), round(b, 4)))
+                 for o in parts]
+        if turn:
+            parts = [lettering.turn_with(o, change) for o in parts]
+    angle = _number(edit.get("angle_deg"))
+    if angle is not None:
+        parts = [{**o, "params": {**(o.get("params") or {}), "angle_deg": angle % 180}} if o.get("kind") == "fill" else o
+                 for o in parts]
+    thread = edit.get("thread")
+    if isinstance(thread, dict) and thread.get("color"):
+        own = {k: str(thread.get(k) or "") for k in ("color", "name", "catalog", "brand")}
+        parts = [{**o, "own_thread": own} for o in parts]
+    return parts
+
+
 def _apply_letter_edits(objects: list[dict[str, Any]], spec: dict[str, Any]) -> list[dict[str, Any]]:
     """The letters with single letters moved, turned, resized, recolored or sewn at another angle
-    (P5-A4), in the text's own unturned frame; until then, as laid out. A letter given its own
-    thread carries it as "own_thread". The cached letters passed in are never changed."""
-    return objects
+    (P5-A4), in the text's own unturned frame, after their layout and envelope. Changes are kept
+    by letter number; ones for letters the text doesn't have are left alone. A letter given its
+    own thread carries it as "own_thread". The cached letters passed in are never changed."""
+    edits = spec.get("letter_edits")
+    if not isinstance(edits, dict) or not edits:
+        return objects
+    members: dict[Any, list[int]] = {}
+    for n, o in enumerate(objects):
+        members.setdefault(o.get("letter"), []).append(n)
+    out = list(objects)
+    for letter, at in members.items():
+        edit = edits.get(str(letter))
+        if isinstance(edit, dict):
+            for n, part in zip(at, _edited_letter([objects[n] for n in at], edit)):
+                out[n] = part
+    return out
 
 
 def _text_parts(it: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[str]]:
@@ -59,12 +108,14 @@ def _text_parts(it: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str
     the text's own unturned frame), or else starting at the edge nearest where the letter before
     ended and ending towards the next letter, so the jumps between letters are short."""
     spec = {k: it.get(k) for k in lettering.TEXT_SPEC_KEYS}
+    # Single letters are changed after the layout, so changing one doesn't lay the text out again.
+    laid_out_from = {**spec, "letter_edits": None}
     # The font file's date and size are part of the key: an edited stitch font shows at once.
-    key = json.dumps({**spec, "font_file": lettering.font_stamp(spec.get("font") or {})}, sort_keys=True)
+    key = json.dumps({**laid_out_from, "font_file": lettering.font_stamp(spec.get("font") or {})}, sort_keys=True)
     try:
         hit = _text_cache.get(key)
         if hit is None:
-            hit = lettering.layout_text(spec)
+            hit = lettering.layout_text(laid_out_from)
             if len(_text_cache) > 64:
                 _text_cache.pop(next(iter(_text_cache)))
             _text_cache[key] = hit
@@ -262,7 +313,7 @@ def text_to_shapes(it: dict[str, Any]) -> dict[str, Any]:
     t = Transform.from_dict(it.get("transform"))
     whole = (it.get("threads") or [None])[0] or it.get("thread") or DEFAULT_THREAD
     chosen = it.get("letters") or {}
-    label = it.get("name") or str(it.get("text") or "Text").strip()[:24]
+    label = it.get("name") or " ".join(str(it.get("text") or "Text").strip().splitlines())[:24]
     out = []
     for group, parts in (("before", before), ("letters", letters), ("after", after)):
         prev_end = None

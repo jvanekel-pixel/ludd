@@ -1,5 +1,5 @@
-"""Putting the letters together: in a straight line, on an arch, a circle or a drawn line, or as
-a monogram."""
+"""Putting the letters together: lines of straight text (or stacked letters), arches, a circle, a
+drawn line or a monogram, with a slant and an envelope."""
 
 from __future__ import annotations
 
@@ -11,9 +11,13 @@ from pathlib import Path
 from typing import Any
 
 from ..digitize import stitches as dz
-from . import stitchglyphs
+from . import envelope, stitchglyphs
 from .fonts import STITCH_FONT_EXTS, LetteringError, _signed_area, resolve_font, substitute_font
 from .glyphs import SMALL_TEXT_MM, Glyph, _Missing, _outline_glyphs, _stitch_font_glyphs, small_text_warning
+
+LINE_SPACING = 1.3  # x the letter height, from one line to the next
+LINE_SPACING_LIMITS = (0.8, 3.0)
+STACK_STEP = 1.15  # x the letter height (plus the letter spacing), from one stacked letter to the next
 
 
 def _move(obj: dict[str, Any], fn) -> dict[str, Any]:
@@ -51,10 +55,33 @@ class _Turn:
 
 
 def _clean_text(text: str) -> str:
-    """Composed accents (e + combining acute -> é), line breaks and tabs as spaces, invisible marks out."""
+    """Composed accents (e + combining acute -> é); line breaks kept as "\\n" (Windows and old Mac
+    ones too); tabs and other breaks as spaces; invisible marks out."""
     text = unicodedata.normalize("NFC", text)
-    text = re.sub(r"[\t\n\r\v\f  ]", " ", text)
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"[\t\v\f  ]", " ", text)
     return "".join(c for c in text if unicodedata.category(c) != "Cf")
+
+
+def _number(value: Any, default: float, lo: float, hi: float) -> float:
+    """A setting from a project: a number kept within [lo, hi], else the default."""
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return default
+    return min(max(v, lo), hi) if math.isfinite(v) else default
+
+
+def _envelope_choice(spec: dict[str, Any], warnings: list[str]) -> tuple[str, float] | None:
+    """The text's envelope and how strong it is, or None for none."""
+    chosen = spec.get("envelope")
+    if not isinstance(chosen, dict) or not chosen.get("type"):
+        return None
+    if chosen["type"] not in envelope.ENVELOPES:
+        warnings.append("This envelope isn't one LUDD knows, so the letters are left straight.")
+        return None
+    amount = _number(chosen.get("amount"), envelope.DEFAULT_AMOUNT, 0.0, 1.0)
+    return (chosen["type"], amount) if amount > 0 else None
 
 
 def layout_text(spec: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
@@ -95,6 +122,7 @@ def layout_text(spec: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
     is_stitch_font = Path(str(font["path"])).suffix.lower() in STITCH_FONT_EXTS
     if is_stitch_font:
         warnings += stitchglyphs.size_notes(str(font["path"]), size)
+    slant = _number(spec.get("slant_deg"), 0.0, -envelope.SLANT_LIMIT_DEG, envelope.SLANT_LIMIT_DEG)
     missing = _Missing()
     drawn = 0  # letters that draw something, numbered from 0 in the order they're laid out
 
@@ -102,8 +130,15 @@ def layout_text(spec: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
         nonlocal drawn
         if is_stitch_font:
             got = _stitch_font_glyphs(t, font["path"], sz, spacing, missing)
+            if slant:
+                for g in got:
+                    g.objects = [envelope.slant_object(o, slant) for o in g.objects]
         else:
-            got = _outline_glyphs(t, font["path"], int(font.get("index", 0)), sz, spacing, style, missing)
+            shear = envelope.slant_shape(slant) if slant else None
+            got = _outline_glyphs(t, font["path"], int(font.get("index", 0)), sz, spacing, style, missing, shear)
+            if slant and style != "fill" and not bend:  # (an envelope chooses the angle again anyway)
+                for g in got:
+                    g.objects = [envelope.lean_satin_look(o, slant) for o in g.objects]
         for g in got:
             if g.objects:  # each object says which letter it's part of, and on which line (from 0)
                 g.objects = [{**o, "letter": drawn, "line": line} for o in g.objects]
@@ -117,42 +152,171 @@ def layout_text(spec: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
             raise LetteringError("Nothing to stitch: these letters are empty or too small in this font.")
         return objects, warnings + missing.warnings(is_stitch_font)
 
-    objects: list[dict[str, Any]] = []
-    if monogram:
-        letters = [c for c in text if not c.isspace()]
-        return done(monograms.layout(letters, size, spacing, glyphs_for, monogram_style))
+    bend = _envelope_choice(spec, warnings)
 
-    glyphs = glyphs_for(text, size)
-    total = sum(g.advance for g in glyphs) - spacing
+    def bent(objects: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        if not bend:
+            return objects
+        # Satin-look letters get their angle chosen again on the new shape; a stitch font's own
+        # rows bend with it; woven letters keep their angle.
+        angles = "carry" if is_stitch_font else "keep" if style == "fill" else "choose"
+        return envelope.bend(objects, bend[0], bend[1], angles)
+
+    if monogram:
+        letters = [c for c in text if not c.isspace()]  # line breaks count as spaces
+        return done(bent(monograms.layout(letters, size, spacing, glyphs_for, monogram_style)))
+
     kind = shape.get("type", "line")
+    vertical = bool(spec.get("vertical"))
+    if kind != "line":
+        if vertical:
+            warnings.append("Stacked letters only work on straight text, so stacking is left off here.")
+        if bend:
+            warnings.append("An envelope only works on straight text, so it's left off here.")
+        vertical, bend = False, None
+    elif vertical and bend:
+        warnings.append("Stacked letters can't be bent into an envelope, so the envelope is left off.")
+        bend = None
     radius = float(shape.get("radius_mm", 40))
-    if kind == "path":
-        closed = bool(shape.get("closed"))
-        objects, length = _along_path(glyphs, total, size, shape.get("nodes") or [], closed)
-        if total > length + 0.5:
-            warnings.append(f"The text is longer than its line ({total:.0f} mm of letters on {length:.0f} mm), so letters "
-                            f"{'overlap' if closed else 'past the ends pile up there'}. Make the line longer or the letters smaller.")
-        return done(objects)
-    if kind == "circle" and glyphs and total < 2 * math.pi * radius:
-        # Round the whole circle: share the spare room out between the letters.
-        extra = (2 * math.pi * radius - total - spacing) / len(glyphs)
-        glyphs = [Glyph(g.objects, g.advance + extra) for g in glyphs]
+    line_spacing = _number(spec.get("line_spacing"), LINE_SPACING, *LINE_SPACING_LIMITS)
+    align = spec.get("align")
+    rows = text.split("\n")
+
+    if kind in ("path", "circle"):
+        # One line only: the first with anything on it.
+        first = next(j for j, row in enumerate(rows) if row.strip())
+        if any(row.strip() for row in rows[first + 1:]):
+            warnings.append("Text on a circle or a drawn line uses the first line only.")
+        glyphs = glyphs_for(rows[first], size, first)
         total = sum(g.advance for g in glyphs) - spacing
+        if kind == "path":
+            closed = bool(shape.get("closed"))
+            objects, length = _along_path(glyphs, total, size, shape.get("nodes") or [], closed)
+            if total > length + 0.5:
+                warnings.append(f"The text is longer than its line ({total:.0f} mm of letters on {length:.0f} mm), so letters "
+                                f"{'overlap' if closed else 'past the ends pile up there'}. Make the line longer or the letters smaller.")
+            return done(objects)
+        if glyphs and total < 2 * math.pi * radius:
+            # Round the whole circle: share the spare room out between the letters.
+            extra = (2 * math.pi * radius - total - spacing) / len(glyphs)
+            glyphs = [Glyph(g.objects, g.advance + extra) for g in glyphs]
+        lines = {first: glyphs}
+    else:
+        lines = {j: glyphs_for(row, size, j) for j, row in enumerate(rows)}
+
+    if kind == "line":
+        if vertical:
+            return done(_stacked(lines, size, spacing, line_spacing))
+        return done(bent(_straight(lines, size, spacing, line_spacing, align)))
+    objects = _arched(lines, kind, radius, size, spacing, line_spacing, align, warnings)
+    return done(_centre(objects))
+
+
+def _inked(lines: dict[int, list[Glyph]]) -> list[int]:
+    """The numbers of the lines that draw something: blank lines before the first and after the
+    last take no room."""
+    return [j for j, glyphs in lines.items() if any(g.objects for g in glyphs)]
+
+
+def _points(objects: list[dict[str, Any]]) -> list[tuple[float, float]]:
+    return [p for o in objects for p in dz.geometry_points(o)]
+
+
+def _set_line(glyphs: list[Glyph], size: float, spacing: float) -> list[dict[str, Any]]:
+    """One line standing on a baseline at y = size / 2, centred by its letters' spacing."""
+    total = sum(g.advance for g in glyphs) - spacing
+    objects: list[dict[str, Any]] = []
     pos = 0.0
     for g in glyphs:
-        if kind == "line":
-            dx = pos - total / 2
-            objects += [_move(o, lambda a, b, dx=dx: (a + dx, b + size / 2)) for o in g.objects]
-        else:
-            centre = pos + g.advance / 2 - total / 2  # arc length to the letter's middle
+        dx = pos - total / 2
+        objects += [_move(o, lambda a, b, dx=dx: (a + dx, b + size / 2)) for o in g.objects]
+        pos += g.advance
+    return objects
+
+
+def _straight(lines: dict[int, list[Glyph]], size: float, spacing: float, line_spacing: float,
+              align: Any) -> list[dict[str, Any]]:
+    """Straight text. Lines are `line_spacing` letter heights apart (the middle of the block stays
+    where one line would be) and line up left, center or right against the widest, by the letters
+    you see, which are centred side to side."""
+    inked = _inked(lines)
+    if not inked:
+        return []
+    placed = {j: _set_line(lines[j], size, spacing) for j in inked}
+    if len(inked) == 1:
+        # Straight text keeps its baseline where it is (names with and without a y or g line up).
+        return _centre(placed[inked[0]], vertical=False)
+    boxes = {j: dz.bounds(_points(placed[j])) for j in inked}
+    widest = max(x1 - x0 for x0, _, x1, _ in boxes.values())
+    step = line_spacing * size
+    lift = (inked[-1] - inked[0]) * step / 2
+    objects: list[dict[str, Any]] = []
+    for j in inked:
+        x0, _, x1, _ = boxes[j]
+        across = -widest / 2 - x0 if align == "left" else widest / 2 - x1 if align == "right" else -(x0 + x1) / 2
+        down = (j - inked[0]) * step - lift
+        objects += [_move(o, lambda a, b, across=across, down=down: (a + across, b + down)) for o in placed[j]]
+    return objects
+
+
+def _stacked(lines: dict[int, list[Glyph]], size: float, spacing: float, line_spacing: float) -> list[dict[str, Any]]:
+    """Letters one under another, each centred on its column. Lines are columns, left to right,
+    `line_spacing` letter heights apart; they all start level. A space leaves a gap."""
+    inked = _inked(lines)
+    if not inked:
+        return []
+    drawn_at = [i for j in inked for i, g in enumerate(lines[j]) if g.objects]
+    step = size * STACK_STEP + spacing
+    first_baseline = size / 2 - (min(drawn_at) + max(drawn_at)) * step / 2  # the stack's middle stays put
+    middle = (inked[0] + inked[-1]) / 2
+    objects: list[dict[str, Any]] = []
+    for j in inked:
+        column = (j - middle) * line_spacing * size
+        for i, g in enumerate(lines[j]):
+            if not g.objects:
+                continue
+            x0, _, x1, _ = dz.bounds(_points(g.objects))
+            dx, dy = column - (x0 + x1) / 2, first_baseline + i * step
+            objects += [_move(o, lambda a, b, dx=dx, dy=dy: (a + dx, b + dy)) for o in g.objects]
+    return objects
+
+
+def _arched(lines: dict[int, list[Glyph]], kind: str, radius: float, size: float, spacing: float, line_spacing: float,
+            align: Any, warnings: list[str]) -> list[dict[str, Any]]:
+    """Text over the top of a circle ("arc_up", and round a whole "circle") or under the bottom
+    ("arc_down"). Further lines go on circles round the same middle, a line spacing further down:
+    inside over the top, outside under the bottom. Lines are centred, or start or end together."""
+    inked = _inked(lines)
+    if not inked:
+        return []
+    step = line_spacing * size
+    inward = kind != "arc_down"
+    last = inked[-1] - inked[0]
+    if inward and last and radius < last * step + size:
+        # The innermost line needs a circle at least a letter across.
+        radius = last * step + size
+        warnings.append("This curve is too small for this many lines, so it's drawn bigger. Make the curve size "
+                        "bigger, or the lines closer.")
+    radii = {j: radius + (inked[0] - j if inward else j - inked[0]) * step for j in inked}
+    totals = {j: sum(g.advance for g in lines[j]) - spacing for j in inked}
+    widest = max(totals[j] / radii[j] for j in inked)  # the angle the longest line covers
+    objects: list[dict[str, Any]] = []
+    wraps = False
+    for j in inked:
+        line_radius, total = radii[j], totals[j]
+        spare = (widest - total / line_radius) / 2 * line_radius  # from centred to lined up
+        shift = -spare if align == "left" else spare if align == "right" else 0.0
+        pos = 0.0
+        for g in lines[j]:
+            centre = pos + g.advance / 2 - total / 2 + shift  # arc length to the letter's middle
             if kind == "arc_down":
                 # Letters hang below the circle, reading left to right. Their tops are on the circle,
                 # so they're spaced along it there; spaced along the lower baseline, the tops collide.
-                r = radius + size
-                phi = math.pi / 2 - centre / radius
+                r = line_radius + size
+                phi = math.pi / 2 - centre / line_radius
                 rot = phi - math.pi / 2
             else:  # arc_up and circle: letters stand on the circle, reading clockwise from the top
-                r = radius
+                r = line_radius
                 phi = -math.pi / 2 + centre / r
                 rot = phi + math.pi / 2
             cx, cy = r * math.cos(phi), r * math.sin(phi)
@@ -165,11 +329,11 @@ def layout_text(spec: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
 
             turn = _Turn(math.degrees(rot))
             objects += [turn_with(_move(o, place), turn) for o in g.objects]
-        pos += g.advance
-    if kind != "line" and total > 2 * math.pi * radius + 0.5:
+            pos += g.advance
+        wraps = wraps or total > 2 * math.pi * line_radius + 0.5
+    if wraps:
         warnings.append("The text is longer than the circle; make the circle bigger or the letters smaller.")
-    # Straight text keeps its baseline where it is (names with and without a y or g line up).
-    return done(_centre(objects, vertical=kind != "line"))
+    return objects
 
 
 def _along_path(glyphs: list[Glyph], total: float, size: float, nodes: list, closed: bool) -> tuple[list[dict[str, Any]], float]:
