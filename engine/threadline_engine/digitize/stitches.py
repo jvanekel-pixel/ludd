@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 import pyembroidery as pe
 import shapely
@@ -840,7 +840,8 @@ def _row_stitches(x0: float, x1: float, y: float, step: float, offset: float, fo
 def tatami(poly: Polygon, angle: float, spacing: float, stitch: float, extend: float,
            start_near: Point | None = None, travel_within: Polygon | None = None, random: float = 0.0,
            sparse_to: float | None = None, wave: tuple[float, float] | None = None,
-           end_near: Point | None = None, row_ys: Sequence[float] | None = None) -> list[Rec]:
+           end_near: Point | None = None, row_ys: Sequence[float] | None = None,
+           offsets: Callable[[int], float] | None = None) -> list[Rec]:
     """Tatami fill of `poly`: serpentine rows grouped into regions, regions joined by travel.
     Travel runs inside `travel_within` (default `poly`), where later stitching covers it.
     `end_near`: finish as near this point as the rows allow (the region that can end nearest it
@@ -850,10 +851,12 @@ def tatami(poly: Polygon, angle: float, spacing: float, stitch: float, extend: f
 
     The row hooks, each optional; with none given, the stitches are what they always were:
     `row_ys`: the heights of the rows in the turned frame, lowest first (a blend gives each of its
-    colors its own rows). Rows too far apart to step between are joined by travel."""
+    colors its own rows). Rows too far apart to step between are joined by travel.
+    `offsets`: row number -> how far that row's needle grid is shifted, as a fraction of a stitch
+    (the weave); without it, a third of a stitch more on each row. Wave keeps its own rule."""
     # With a hook, equally good choices are settled to a millionth of a mm, so the last digit of a
     # sine (not the same on every computer) can't decide which region is sewn next.
-    steady = row_ys is not None
+    steady = row_ys is not None or offsets is not None
     rot = affinity.rotate(poly, -angle, origin=(0, 0))
     if not rot.is_valid:
         # A shape with a zero-width spike (an arm exactly twice the underlay inset) can turn
@@ -915,7 +918,8 @@ def tatami(poly: Polygon, angle: float, spacing: float, stitch: float, extend: f
 
                 row = [rippled(x, yy) for x, yy in row]
             else:
-                row = _row_stitches(x0, x1, y, stitch, (r % 3) * stitch / 3, fwd, random, r)
+                shift = (r % 3) * stitch / 3 if offsets is None else offsets(r) * stitch
+                row = _row_stitches(x0, x1, y, stitch, shift, fwd, random, r)
             pts += row
             fwd = not fwd
         return [to_world(p) for p in pts]

@@ -285,6 +285,23 @@ def test_rows_far_apart_are_joined_by_travel_not_one_long_stitch():
     assert {1.0, 1.4, 19.0, 19.4} <= set(_row_heights(recs))
 
 
+def _inner_points(recs, y: float, stitch: float = 3.5) -> list[float]:
+    """The needle points inside a row at height y, as fractions of a stitch past the grid's origin."""
+    xs = sorted(x for x, yy, k in recs if k == STITCH and abs(yy - y) < 1e-9)
+    return [round((x / stitch) % 1, 6) % 1 for x in xs[1:-1]]
+
+
+def test_offsets_shift_each_rows_needle_points():
+    shifts = [0.0, 0.5, 0.25]
+    recs = tatami(SQUARE_20, 0, 0.4, 3.5, 0.0, offsets=lambda r: shifts[r % 3])
+    for r in range(6):
+        assert set(_inner_points(recs, 0.2 + 0.4 * r)) == {shifts[r % 3]}, r
+    # The standard weave, written out, is what tatami does without the hook.
+    plain = tatami(SQUARE_20, 45, 0.4, 3.5, 0.1)
+    written = tatami(SQUARE_20, 45, 0.4, 3.5, 0.1, offsets=lambda r: (r % 3) / 3)
+    assert [(round(x, 6), round(y, 6), k) for x, y, k in written] == [(round(x, 6), round(y, 6), k) for x, y, k in plain]
+
+
 # ---------------------------------------------------------------- project features
 
 
