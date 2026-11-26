@@ -225,6 +225,8 @@ def _sample_params(tmp: Path) -> dict[str, dict]:
         "fonts.scan_letter_files": {"folder": str(tmp / "folder")},
         "fonts.build_from_files": {"letters": [{"path": str(pes), "char": "A"}], "name": "Mine"},
         "names.read_list": {"path": str(csv)},
+        "names.list_templates": {},
+        "names.save_template": {"name": "Mine", "project_data": proj},
         "fabrics.list": {},
         "image.load": {"path": str(png)},
         "project.save": {"path": saved, "project_data": proj},
