@@ -160,6 +160,12 @@ export const fillPatternDef = (id?: string): FillPatternDef => FILL_PATTERN_DEFS
 /** An open pattern ends where its own lines end: the red dot shows it but can't be moved. */
 export const fixedFillEnd = (id?: string): boolean => !!fillPatternDef(id).open;
 
+/** Whether a fill's rows turn to follow its angle lines: only Tatami's do, and only with two or
+ *  more (the engine's turning.takes_over). Lines left over from Tatami do nothing on another
+ *  pattern, and come back when Tatami is chosen again. */
+export const turnsRows = (p: { pattern?: string; angle_lines?: unknown }): boolean =>
+  (p.pattern ?? "tatami") === "tatami" && Array.isArray(p.angle_lines) && p.angle_lines.length >= 2;
+
 /** Whether a fill with this pattern shows the two purple dots that set its rows' direction. */
 export const hasDirectionDots = (id?: string): boolean => {
   const def = fillPatternDef(id);

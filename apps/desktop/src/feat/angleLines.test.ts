@@ -16,6 +16,7 @@ vi.mock("../actions", async (original) => ({
 }));
 
 import { runCanvasMenu, runCanvasTool, type CanvasCtx } from "../canvas/hooks";
+import { fillDirection } from "../design/direction";
 import type { FillParams, ObjectItem } from "../design/types";
 import { heldCount, letGoNewest } from "../escape";
 import { useStore } from "../store";
@@ -145,6 +146,20 @@ describe("the commands and the canvas", () => {
     startAddAngle();
     expect(useStore.getState().angleFor).toBeNull();
     expect(said.at(-1)).toContain("Tatami");
+  });
+
+  it("lines left from Tatami do nothing on another pattern, which keeps its one angle", () => {
+    // The engine turns Tatami only (turning.takes_over), so the app mustn't act as if others turn.
+    for (const pattern of ["gradient", "wave", "blend", "motif", "mesh"] as const) {
+      const o = fill({ pattern, angle_deg: 0, angle_lines: [A, B] });
+      select(o);
+      expect(angleLines(o), pattern).toEqual([]);
+      expect(fillDirection(o), pattern).toEqual([[0, 20], [40, 20]]); // its own purple dots
+      expect(finishAngleLine("f", C[0], C[1], false), pattern).toBe(false); // I sets its angle
+      expect(runCanvasTool("down", pointer(15.3, 10.2), ctx), pattern).toBe(false); // no dot there
+      expect(runCanvasMenu({ clientX: 10, clientY: 10.3 } as MouseEvent, ctx), pattern).toBe(false);
+    }
+    expect(edits).toHaveLength(0);
   });
 
   it("dragging a line's dot moves it; Esc puts it back", () => {

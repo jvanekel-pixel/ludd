@@ -134,6 +134,12 @@ describe("shape settings after the panel split", () => {
     expect(objectSummary(shape("run", { nodes: OUTLINE }))).toBe("Single · 2.5 mm");
     expect(objectSummary(shape("applique", { outline: OUTLINE }))).toBe("3 mm border");
   });
+
+  it("a turning fill's heading says it follows its lines; another pattern keeps its angle", () => {
+    const lines = [[[0, 0], [10, 0]], [[0, 5], [10, 9]]];
+    expect(objectSummary(fill({ angle_lines: lines }))).toBe("Normal · follows 2 lines");
+    expect(objectSummary(fill({ pattern: "gradient", angle_lines: lines }))).toBe("Normal · 45°");
+  });
 });
 
 describe("Phase 6: weave, feathered edges, the hand-sewn look and carved lines (Track A)", () => {

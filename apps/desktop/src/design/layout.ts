@@ -16,6 +16,7 @@ import {
 } from "./types";
 import { isObject, type PathNode } from "./types";
 import { nodeBounds } from "./paths";
+import { turnsRows } from "./fillPatterns";
 
 export const IDENTITY: Transform = { x: 0, y: 0, rotate: 0, scale_x: 1, scale_y: 1, flip_x: false, flip_y: false };
 
@@ -186,8 +187,7 @@ function withFillAngle(o: ObjectItem, f: (deg: number) => number, mirrored = fal
   const raw = f(o.params.angle_deg ?? 45);
   const params = { ...o.params, angle_deg: Math.round((((raw % 180) + 180) % 180) * 100) / 100 };
   const turned = Math.abs(Math.floor(raw / 180)) % 2 === 1;
-  const alongLines = (params.pattern ?? "tatami") === "tatami" && (params.angle_lines?.length ?? 0) >= 2;
-  if (turned && !alongLines && (params.feather === "left" || params.feather === "right")) params.feather = params.feather === "left" ? "right" : "left";
+  if (turned && !turnsRows(params) && (params.feather === "left" || params.feather === "right")) params.feather = params.feather === "left" ? "right" : "left";
   if (turned !== mirrored && params.pattern === "blend") params.blend_flip = !params.blend_flip;
   return { ...o, params };
 }

@@ -7,7 +7,7 @@
 import { currentLayout, editObject, info } from "../actions";
 import { registerCanvasTool, registerOverlay, type CanvasCtx } from "../canvas/hooks";
 import { angleOf, centroid, chord, fillDirection, fillRing } from "../design/direction";
-import { hasDirectionDots } from "../design/fillPatterns";
+import { hasDirectionDots, turnsRows } from "../design/fillPatterns";
 import type { ObjectItem } from "../design/types";
 import { holdEscape } from "../escape";
 import { endOtherModes } from "../features";
@@ -27,11 +27,11 @@ const round2 = (v: number) => Math.round(v * 100) / 100 + 0;
 const r2 = (p: Pt): Pt => [round2(p[0]), round2(p[1])];
 const long = (l: AngleLine) => Math.hypot(l[1][0] - l[0][0], l[1][1] - l[0][1]) >= MIN_LINE_MM;
 
-/** A fill's angle lines (none unless it has two or more: one line is just its angle). */
+/** The lines a fill's rows turn to follow: none unless they do (design/fillPatterns.ts). */
 export function angleLines(o: ObjectItem | undefined | null): AngleLine[] {
   if (!o || o.kind !== "fill") return [];
-  const lines = (o.params as { angle_lines?: AngleLine[] }).angle_lines;
-  return Array.isArray(lines) && lines.length >= 2 ? lines : [];
+  const p = o.params as { pattern?: string; angle_lines?: AngleLine[] };
+  return turnsRows(p) ? p.angle_lines! : [];
 }
 
 /** Whether a fill's rows can turn to follow several lines: Tatami's can. */

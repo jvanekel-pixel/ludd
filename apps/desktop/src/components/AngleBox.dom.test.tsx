@@ -71,4 +71,15 @@ describe("the Angle box", () => {
     act(() => root?.unmount());
     expect(buttons(show(fill({ pattern: "gradient" })))).not.toContain("Add another line (Shift+I)");
   });
+
+  it("another pattern shows its one angle, whatever lines Tatami left behind", () => {
+    const lines: FillParams["angle_lines"] = [
+      [[0, 0], [10, 0]],
+      [[20, 0], [30, 10]],
+    ];
+    const el = show(fill({ pattern: "gradient", angle_deg: 30, angle_lines: lines }));
+    expect(el.textContent).not.toContain("Follows");
+    expect(el.querySelector('button[aria-label="More angle"]')).not.toBeNull();
+    expect(buttons(el)).not.toContain("Back to one angle");
+  });
 });

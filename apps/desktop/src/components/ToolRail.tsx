@@ -193,14 +193,15 @@ export function DrawHint() {
       </div>
     );
   }
-  let next = HINTS[tool];
+  const next = pen?.carveFor ? "Click along the line to carve." : HINTS[tool];
   const placed = pen ? pen.a.length + pen.b.length : 0;
   const ready = penReady();
+  // Carving goes on line after line: Esc drops the line being drawn, then stops.
+  const esc = pen?.carveFor ? (placed ? "drops this line" : "stops carving") : pen ? "drops the shape" : "goes back to Select";
   return (
     <div className="draw-hint" role="status">
       {next} <span className="kinds">Click = <b>curve</b> · <kbd>Ctrl</kbd>+click = <b>straight</b> · <kbd>Shift</kbd>+click = <b>sharp corner</b> · <kbd>Alt</kbd> = 15° steps</span>{" "}
-      {ready ? <>Finish: <kbd>Enter</kbd> or right-click{tool === "run" ? <> (<kbd>Ctrl</kbd>+right-click closes it)</> : null}.</> : null} <kbd>Backspace</kbd> undoes a point, <kbd>Esc</kbd>{" "}
-      {pen ? "drops the shape" : "goes back to Select"}.
+      {ready ? <>Finish: <kbd>Enter</kbd> or right-click{tool === "run" ? <> (<kbd>Ctrl</kbd>+right-click closes it)</> : null}.</> : null} <kbd>Backspace</kbd> undoes a point, <kbd>Esc</kbd> {esc}.
       {placed > 0 && (
         <strong className="placed">
           {" "}
