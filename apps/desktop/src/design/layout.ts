@@ -178,13 +178,16 @@ function mapObjectPoints(o: ObjectItem, fn: (x: number, y: number) => [number, n
  *  `f` gives the rows' new direction before it is wrapped. When that comes out an odd number of half
  *  turns round, the rows' left and right ends have changed places; the end the rows stack towards
  *  does too, except in a mirror image, where it changes places only when they don't. A feathered
- *  side and a blend's two ends are changed over to match, so both stay where they were on the shape. */
+ *  side and a blend's two ends are changed over to match, so both stay where they were on the shape.
+ *  (A turning fill's rows run along its angle lines, which move with the shape: its feathered side
+ *  stays as it is.) */
 function withFillAngle(o: ObjectItem, f: (deg: number) => number, mirrored = false): ObjectItem {
   if (o.kind !== "fill") return o;
   const raw = f(o.params.angle_deg ?? 45);
   const params = { ...o.params, angle_deg: Math.round((((raw % 180) + 180) % 180) * 100) / 100 };
   const turned = Math.abs(Math.floor(raw / 180)) % 2 === 1;
-  if (turned && (params.feather === "left" || params.feather === "right")) params.feather = params.feather === "left" ? "right" : "left";
+  const alongLines = (params.pattern ?? "tatami") === "tatami" && (params.angle_lines?.length ?? 0) >= 2;
+  if (turned && !alongLines && (params.feather === "left" || params.feather === "right")) params.feather = params.feather === "left" ? "right" : "left";
   if (turned !== mirrored && params.pattern === "blend") params.blend_flip = !params.blend_flip;
   return { ...o, params };
 }

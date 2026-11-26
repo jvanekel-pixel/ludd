@@ -21,6 +21,7 @@ from threadline_engine.digitize.stitches import (JUMP, STITCH, TRIM, DigitizeErr
 
 PATTERNS = ("motif", "maze", "ripple", "mesh")
 BRANCHED = "This shape is too branched for one maze; Contour may suit it better."
+HOLED = "This shape has a hole, so its maze is sewn in parts; Contour may suit it better."
 THREAD = {"color": "#2a7f3f", "name": "Green", "catalog": "", "brand": ""}
 
 
@@ -451,7 +452,7 @@ def test_branched_shape_warns(neck):
 def test_a_shape_with_a_hole_is_branched():
     obj = _fill("maze", SQUARE, [HOLE], maze_mm=2, tie_in=False, tie_off=False)
     recs, warnings = generate(obj)
-    assert warnings == [BRANCHED]
+    assert warnings == [HOLED]  # a ring isn't "branched": it's told about its hole
     invariants.assert_sane(recs, inside=_shape_of(obj), tolerance_mm=0.3, max_jumps=0, max_trims=0)
     poly = fill_parts(SQUARE, [HOLE])[0]
     paths = fills.get("maze").paths(poly, FillParams.from_dict(obj["params"]), (0.0, 0.0))[0]
@@ -489,7 +490,7 @@ def test_the_branched_warning_is_said_once():
     holes = [_nodes([(29, -2), (31, -2), (31, 22), (29, 22)]), _nodes([(10, 6), (18, 6), (18, 14), (10, 14)]),
              _nodes([(42, 6), (50, 6), (50, 14), (42, 14)])]
     assert len(fill_parts(long_shape, holes)) == 2
-    assert generate(_fill("maze", long_shape, holes, maze_mm=2))[1] == [BRANCHED]
+    assert generate(_fill("maze", long_shape, holes, maze_mm=2))[1] == [HOLED]
 
 
 @pytest.mark.parametrize("dot", [(40, 20), (0, 33), (11, 40)])

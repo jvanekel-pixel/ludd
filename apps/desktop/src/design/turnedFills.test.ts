@@ -89,6 +89,14 @@ describe("a feathered side and a blend's colors stay where they were on the shap
           }
       });
 
+  it("a turning fill's feathered side goes round with its angle lines, so it isn't swapped", () => {
+    // Its rows run along the lines, which turn and mirror with the shape.
+    const angle_lines: FillParams["angle_lines"] = [[[2, 5], [6, 5]], [[14, 5], [18, 6]]];
+    for (const turn of turns)
+      for (const angle_deg of [0, 45, 135])
+        expect(first(turn.apply(layout(fill({ angle_deg, feather: "left", angle_lines })))).params.feather, turn.name).toBe("left");
+  });
+
   it("leaves other fills' settings alone", () => {
     const p = first(rotateBy(layout(fill({ angle_deg: 135, feather: "both", pattern: "tatami" })), "f", 90)).params;
     expect(p.feather).toBe("both");

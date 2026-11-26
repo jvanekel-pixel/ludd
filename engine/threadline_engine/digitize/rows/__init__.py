@@ -45,8 +45,12 @@ def in_use(params) -> bool:
     return bool(params.weave != "standard" or params.carve or params.feather != "none" or params.hand_pct)
 
 
-def notes(params, angle_deg: float) -> list[str]:
-    """Warnings about a fill's row settings, for rows at `angle_deg`."""
-    if params.carve and carve.along_the_rows(params.carve, angle_deg):
-        return [carve.ALONG_WARNING]
+def notes(params, angle_deg: float, curved: list | None = None) -> list[str]:
+    """Warnings about a fill's row settings, for rows at `angle_deg`, or for curved rows
+    (`curved`: a turning fill's rows, as lists of points in mm)."""
+    if params.carve:
+        along = (carve.along_the_rows(params.carve, angle_deg) if curved is None
+                 else carve.along_curved_rows(params.carve, curved))
+        if along:
+            return [carve.ALONG_WARNING]
     return []

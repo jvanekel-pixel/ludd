@@ -188,7 +188,7 @@ def rows(poly, params, start, travel_within=None, end_near=None) -> tuple[list, 
 
     angle = mean_angle(params)
     hooks = row_hooks.hooks(params, angle)
-    said = list(row_hooks.notes(params, angle))
+    said: list[str] = []
     offsets = hooks.get("offsets")
     random = hooks.get("random", params.random_pct / 100)
     end_shift = hooks.get("end_shift")
@@ -226,17 +226,22 @@ def rows(poly, params, start, travel_within=None, end_near=None) -> tuple[list, 
     keys = sorted(k for k, pieces in found.items() if pieces)
     if not keys:
         top = st.tatami(poly, angle, spacing, stitch, pad, start, travel_within=travel_within, end_near=end_near)
-        return top, said
+        return top, [*row_hooks.notes(params, angle), *said]
+    # The rows' own warnings, judged against the curved rows themselves.
+    said = [*row_hooks.notes(params, angle, [path for k in keys for *_, path in found[k]]), *said]
+    reach = 0.0  # how far a row end has been moved outwards (the hand-sewn look)
 
     def needle_points(k: int, a0: float, a1: float, path) -> list[tuple[float, float]]:
-        path_start = a0
+        nonlocal reach
+        path_start, path_end = a0, a1
         if end_shift is not None:
             a0, a1 = st._shifted_ends(end_shift, k, a0, a1)
+            reach = max(reach, path_start - a0, a1 - path_end)
         forced = ()
         if params.carve:
             forced = [path_start + d for d in row_hooks.carve.crossings_along(params.carve, path)]
         shift = (k % 3) * stitch / 3 if offsets is None else offsets(k) * stitch
-        xs = [x for x, _ in st._row_stitches(a0, a1, 0.0, stitch, shift, True, random, k, forced)]
+        xs = [x for x, _ in st._row_stitches(a0, a1, 0.0, stitch, shift, True, random, k, forced, steady=True)]
         line_along = [path_start]
         for u, v in zip(path, path[1:]):
             line_along.append(line_along[-1] + dist(u, v))
@@ -301,7 +306,7 @@ def rows(poly, params, start, travel_within=None, end_near=None) -> tuple[list, 
     for reg in regions:
         f, b = region_points(reg, True), region_points(reg, False)
         options.append([f, f[::-1], b, b[::-1]])
-    inside_zone = st.Zone((travel_within or poly).buffer(pad + 0.05))
+    inside_zone = st.Zone((travel_within or poly).buffer(pad + 0.05 + reach))  # as far as ends went
     min_step = st._min_step(spacing)
     remaining = list(range(len(options)))
     last = None

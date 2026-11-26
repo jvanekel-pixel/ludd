@@ -1078,7 +1078,8 @@ export async function penFinish(opts: { close?: boolean } = {}) {
     if (pen) info(`Keep clicking: this shape needs at least ${MIN_POINTS[pen.kind]} points.`);
     return;
   }
-  if (pen.carveFor) return finishCarve(pen); // a line carved into a fill (Shift+C)
+  // A line carved into a fill (Shift+C): Ctrl+right-click closes it, like any line.
+  if (pen.carveFor) return finishCarve(opts.close ? { ...pen, closed: true } : pen);
   if (!s.history.present) await replaceDoc(freshDoc(), null);
   const layout = currentLayout()!;
   const thread = s.drawThread;

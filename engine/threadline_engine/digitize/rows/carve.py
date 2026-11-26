@@ -12,6 +12,9 @@ from __future__ import annotations
 import math
 from typing import Callable, Sequence
 
+import shapely
+from shapely.geometry import LineString, Point as ShapelyPoint
+
 from ..paths import Point
 
 KEEP_FROM_END_MM = 0.4  # a crossing closer to a row's end than this is left to the end
@@ -120,6 +123,38 @@ def crossings_along(lines: Sequence[Sequence[Point]], path: Sequence[Point]) -> 
                 found.append(start + t * length)
         start += length
     return _steady(found, 0.0, start)
+
+
+ALONG_STEP_MM = 1.0  # a carved line is compared with curved rows in stretches about this long
+
+
+def along_curved_rows(lines: Sequence[Sequence[Point]], rows: Sequence[Sequence[Point]]) -> bool:
+    """along_the_rows for curved rows (a turning fill's, as lists of points in mm): each stretch
+    of a carved line is compared with the direction of the row nearest its middle."""
+    segs = [LineString([p, q]) for row in rows for p, q in zip(row, row[1:]) if tuple(p) != tuple(q)]
+    if not segs:
+        return False
+    tree = shapely.STRtree(segs)
+    limit = math.tan(math.radians(ALONG_DEG))
+    for line in lines:
+        total = along = 0.0
+        for (px, py), (qx, qy) in zip(line, line[1:]):
+            dx, dy = qx - px, qy - py
+            length = math.hypot(dx, dy)
+            if length <= 0:
+                continue
+            n = max(1, math.ceil(length / ALONG_STEP_MM))
+            for j in range(n):
+                t = (j + 0.5) / n
+                (ax, ay), (bx, by) = segs[int(tree.nearest(ShapelyPoint(px + dx * t, py + dy * t)))].coords
+                rx, ry = bx - ax, by - ay
+                total += length / n
+                # Lines have no front or back: how far apart their directions are, 0 to 90.
+                if abs(dx * ry - dy * rx) <= abs(dx * rx + dy * ry) * limit:
+                    along += length / n
+        if total > 0 and along > total * ALONG_SHARE:
+            return True
+    return False
 
 
 def along_the_rows(lines: Sequence[Sequence[Point]], angle_deg: float) -> bool:

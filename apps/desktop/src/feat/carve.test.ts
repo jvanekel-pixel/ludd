@@ -91,6 +91,15 @@ describe("carving lines into a fill", () => {
     expect(carved()).toEqual([[n(5, 5), n(15, 5), n(10, 15), n(5, 5)]]);
   });
 
+  it("Ctrl+right-click closes a carved line, as it closes any line", async () => {
+    setDoc(fill());
+    startCarve();
+    for (const p of [n(5, 5), n(15, 5), n(10, 15)]) penAdd(p);
+    await penFinish({ close: true }); // what the canvas calls on Ctrl+right-click
+    expect(carved()).toEqual([[n(5, 5), n(15, 5), n(10, 15), n(5, 5)]]);
+    expect(useStore.getState().pen).toMatchObject({ a: [], carveFor: "f" });
+  });
+
   it("needs two points, and Backspace keeps carving with an empty pen", async () => {
     setDoc(fill());
     startCarve();

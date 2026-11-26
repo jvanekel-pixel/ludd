@@ -37,6 +37,7 @@ from . import FillPattern, Param, register
 from .motif import kept_points, own_frame, place
 
 BRANCHED_WARNING = "This shape is too branched for one maze; Contour may suit it better."
+HOLE_WARNING = "This shape has a hole, so its maze is sewn in parts; Contour may suit it better."
 MOST_PIECES = 4
 SIMPLIFY_MM = 0.02  # a wobbly outline with thousands of points buffers very slowly
 GAP_SHARES = (1.0, 1.5, 0.75, 2.0)  # how wide a ring is left open, in Path spacings (tried in turn)
@@ -496,7 +497,8 @@ def _paths(poly, params, pos):
              for p in _pieces(part.buffer(-spacing / 2, join_style=1), spacing)]
     if not roots:
         return [], []
-    branched = bool(local.interiors) or sum(map(_count, roots)) > MOST_PIECES
+    # A hole is treated as a branched shape, and told so in its own words: a ring isn't branched.
+    warnings = [HOLE_WARNING] if local.interiors else [BRANCHED_WARNING] if sum(map(_count, roots)) > MOST_PIECES else []
     cover = local.buffer(0.05)
     shapely.prepare(cover)
     dot = (pos[0] - origin[0], pos[1] - origin[1]) if params.start_mm is not None else None
@@ -506,7 +508,7 @@ def _paths(poly, params, pos):
         if after is not None:
             path = path + _round_ring(ring, path[-1], after[0][0], longest)
         paths.append(_spaced(path, [None] * len(path))[0])
-    return [place(p, origin) for p in paths], [BRANCHED_WARNING] if branched else []
+    return [place(p, origin) for p in paths], warnings
 
 
 register(FillPattern("maze", "open", params={"maze_mm": Param(2.0, 0.8, 6.0, "Path spacing")}, paths=_paths,

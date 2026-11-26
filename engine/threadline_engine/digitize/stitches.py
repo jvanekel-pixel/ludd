@@ -1278,9 +1278,11 @@ def fill_underlay(poly: Polygon, params: FillParams, spec, start: Point, target:
             if under.area < MIN_PART_MM2:
                 continue
             pos = (out[-1][0], out[-1][1]) if out else start
-            # A fill with rows settings has its cross-hatch sewn steadily too (the standard
-            # weave, given as the hook, settles equally good choices to a millionth of a mm).
-            steady = {"offsets": row_hooks.weave.standard} if row_hooks.in_use(params) else {}
+            # A fill with rows settings, or a turning fill, has its cross-hatch sewn steadily
+            # too (the standard weave, given as the hook, settles equally good choices to a
+            # millionth of a mm).
+            new = row_hooks.in_use(params) or turning.takes_over(params)
+            steady = {"offsets": row_hooks.weave.standard} if new else {}
             cross = tatami(under, angle + 90, params.underlay_spacing_mm, 3.0, 0.0, pos, travel_within=poly, **steady)
             if out and cross:
                 # Walk from the edge run to where the cross-hatch starts (not one long stitch).
