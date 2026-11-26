@@ -12,7 +12,7 @@ Imports from `..stitches` go inside function bodies (stitches imports this packa
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Any, Callable
 
 from ..fills import Param
 
@@ -35,6 +35,16 @@ def register(s: LineStyle) -> None:
     REGISTRY[s.name] = s
 
 
+def carried_unit(value: Any) -> list[tuple[float, float]] | None:
+    """A motif of your own that a shape carries (params["motif_unit"]), checked; None when it
+    carries none (a built-in motif). Not built yet."""
+    if value is None:
+        return None
+    from ..stitches import DigitizeError
+
+    raise DigitizeError("Your own motifs aren't built yet")
+
+
 def register_motif(name: str, unit: list[tuple[float, float]]) -> None:
     """Add a motif. A name registered twice raises."""
     if name in MOTIF_UNITS:
@@ -42,7 +52,7 @@ def register_motif(name: str, unit: list[tuple[float, float]]) -> None:
     MOTIF_UNITS[name] = unit
 
 
-__all__ = ["LineStyle", "MOTIF_UNITS", "Param", "REGISTRY", "register", "register_motif"]
+__all__ = ["LineStyle", "MOTIF_UNITS", "Param", "REGISTRY", "carried_unit", "register", "register_motif"]
 
 from . import builtin  # noqa: E402,F401  (registers single, triple, bean, motif and the four motifs)
 from . import leaf  # noqa: E402,F401  (the leaf motif)

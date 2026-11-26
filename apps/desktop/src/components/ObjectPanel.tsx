@@ -3,10 +3,13 @@
 import { useState } from "react";
 import { command, convertObject, hasOwnDefaults, resetDefaults, saveAppliqueSvg, setObjectParams, setObjectThread, setSatinWidth } from "../actions";
 import { FILL_PATTERN_DEFS, fillPatternDef, type Field } from "../design/fillPatterns";
-import { LINE_STYLE_DEFS, MOTIF_DEFS, MOTIF_FIELDS } from "../design/lineStyles";
+import { LINE_STYLE_DEFS, MOTIF_FIELDS } from "../design/lineStyles";
 import { isRibbon, type LayoutItemInfo, type ObjectItem, type Thread } from "../design/types";
 import { useStore } from "../store";
 import { Row, Section, Sub, type SelKind } from "./Accordion";
+import { AngleBox } from "./AngleBox";
+import { BlendThreads } from "./BlendThreads";
+import { MotifSelect } from "./MotifSelect";
 import { Check, Cmd, DensitySlider, fmtLen, SizeFields, Stepper, UnderlayButtons } from "./controls";
 import { ThreadPicker } from "./ThreadDialogs";
 
@@ -43,13 +46,13 @@ function FieldSteppers({ fields, p, set }: { fields: Field[]; p: Record<string, 
 }
 
 /** A fill's pattern, and the one or two settings that pattern has. */
-function PatternRows({ p, set }: { p: Record<string, unknown>; set: (patch: Record<string, unknown>) => void }) {
+function PatternRows({ item, p, set }: { item: ObjectItem; p: Record<string, unknown>; set: (patch: Record<string, unknown>) => void }) {
   const pattern = (p.pattern as string | undefined) ?? "tatami";
   const def = fillPatternDef(pattern);
   return (
     <>
       <Row label="Pattern" hint={FILL_PATTERN_DEFS.find((x) => x.id === pattern)?.title}>
-        <select value={pattern} onChange={(e) => set({ pattern: e.target.value })} aria-label="Fill pattern">
+        <select value={pattern} onChange={(e) => set({ pattern: e.target.value, ...fillPatternDef(e.target.value).onChoose?.(item) })} aria-label="Fill pattern">
           {FILL_PATTERN_DEFS.map((x) => (
             <option key={x.id} value={x.id} title={x.title}>
               {x.label}
@@ -57,6 +60,8 @@ function PatternRows({ p, set }: { p: Record<string, unknown>; set: (patch: Reco
           ))}
         </select>
       </Row>
+      {pattern === "motif" && <MotifSelect item={item} />}
+      {!!def.threads && <BlendThreads item={item} />}
       <FieldSteppers fields={def.fields} p={p} set={set} />
       {def.hint && <p className="hint">{def.hint}</p>}
     </>
@@ -182,15 +187,7 @@ export function ObjectSections({ item, info, sel }: { item: ObjectItem; info: La
         )}
         {item.kind === "run" && p.style === "motif" && (
           <>
-            <Row label="Motif">
-              <select value={(p.motif as string | undefined) ?? "wave"} onChange={(e) => set({ motif: e.target.value })} aria-label="Motif">
-                {MOTIF_DEFS.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-            </Row>
+            <MotifSelect item={item} />
             <FieldSteppers fields={MOTIF_FIELDS} p={p} set={set} />
           </>
         )}
@@ -222,15 +219,8 @@ export function ObjectSections({ item, info, sel }: { item: ObjectItem; info: La
             <Stepper label="Spacing" value={spacing} step={0.05} min={0.2} max={item.kind === "fill" ? 2 : 1.5} suffix="mm" onCommit={(v) => set({ spacing_mm: v })} title="Distance between rows: smaller is denser" />
           </>
         )}
-        {item.kind === "fill" && <PatternRows p={p} set={set} />}
-        {item.kind === "fill" && !open && (
-          <>
-            <Stepper label="Angle" value={Math.round((p.angle_deg as number | undefined) ?? 45)} step={5} min={0} max={179} digits={0} suffix="°" onCommit={(v) => set({ angle_deg: v })} title="Direction of the rows" />
-            <Row label="">
-              <Cmd id="object.angle" label="Draw the angle (I)" />
-            </Row>
-          </>
-        )}
+        {item.kind === "fill" && <PatternRows item={item} p={p} set={set} />}
+        {item.kind === "fill" && (!open || fillDef?.angle) && <AngleBox item={item} set={set} />}
         {(item.kind === "fill" || item.kind === "applique" || (item.kind === "run" && item.geometry.closed)) && (
           <Row label="">
             <Cmd id="object.border" label="Add a satin border (Shift+B)" />

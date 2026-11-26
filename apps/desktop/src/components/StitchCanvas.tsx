@@ -43,7 +43,7 @@ import { markSpacePanned } from "../spacePan";
 import { cursorCss, type CursorName } from "../cursors";
 import { OPPOSITE, resizeCursorFor, sideAxis, sideMids, stretchFactor } from "../design/handles";
 import { columnRing, columnTips, fillDirection, fillRing, nearestOnLine, nearestOnRings } from "../design/direction";
-import { drawOverlays, runCanvasTool, snapToSources, type CanvasCtx } from "../canvas/hooks";
+import { drawOverlays, runCanvasMenu, runCanvasTool, snapToSources, type CanvasCtx } from "../canvas/hooks";
 import { useLetterMode } from "../feat/letters";
 import { useRepairHighlight } from "./RepairDialog";
 import { nearestStitch, pickable, stitchesInBox } from "../design/stitchPick";
@@ -2285,6 +2285,7 @@ export function StitchCanvas() {
         const edits = [{ id: "stitch.insert" }, { id: "stitch.insertJump" }, { id: "stitch.lockJump" }, "separator" as const, { id: "stitch.deleteSelected" }];
         return openContextMenu(e, [...edits, "separator", { label: "Done editing stitches", run: endStitchEdit }], "Stitches");
       }
+      if (runCanvasMenu(e, hookCtx(scene))) return;
       if (nodeAt(scene, sx, sy)) return;
       const p = toWorld(scene, sx, sy);
       const hit = pick(scene, p) ?? pinnedPictureAt(p);

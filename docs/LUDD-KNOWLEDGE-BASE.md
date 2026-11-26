@@ -1403,6 +1403,9 @@ drawing a satin).
 | Show whole design | `End` | `player.end` |
 | Faster playback | `]` | `player.fasterAlt` |
 | Slower playback | `[` | `player.slowerAlt` |
+| Add another angle line (a turning fill) | `Shift+I` | `object.addAngle` |
+| Carve lines into the fill (grooves) | `Shift+C` | `object.carve` |
+| Motifs… | `Alt+Shift+M` | `motif.library` |
 | Adjust single letters | `Alt+Shift+A` | `text.letters` |
 | Put the letters back | `Alt+Shift+Z` | `text.resetLetters` |
 | Make a stitch font from letter files… | `Mod+Alt+F` | `text.fontFromFiles` |

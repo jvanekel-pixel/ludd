@@ -2,6 +2,8 @@
  * What the panel shows for each fill pattern. A new pattern is one entry here (and its name in the
  * FillPattern union in types.ts): the panel and the folded heading are built from it.
  */
+import { blendDefaults } from "./blend";
+import type { ObjectItem } from "./types";
 
 /** A number setting a pattern or line style has: its key in the shape's params, and its stepper. */
 export type Field = { key: string; label: string; def: number; min: number; max: number; step: number; digits?: number; suffix?: string; title?: string };
@@ -25,6 +27,12 @@ export type FillPatternDef = {
   summary?: "label" | "label+density";
   /** The purple direction dots on the canvas. Left out: only patterns that aren't open show them. */
   directionDots?: boolean;
+  /** Show Angle although the pattern is open (it lays its lines at that angle). */
+  angle?: boolean;
+  /** How many more colors the pattern can take (a blend's): they get their own thread buttons. */
+  threads?: number;
+  /** Settings set along with the pattern when it's chosen. */
+  onChoose?: (o: ObjectItem) => Record<string, unknown>;
 };
 
 export const FILL_PATTERN_DEFS: FillPatternDef[] = [
@@ -82,6 +90,64 @@ export const FILL_PATTERN_DEFS: FillPatternDef[] = [
     noSpacing: true,
     maxStitch: 4,
     fields: [{ key: "spiral_mm", label: "Ring spacing", def: 1.5, min: 0.4, max: 6, step: 0.1, digits: 1, suffix: "mm", title: "How far apart the spiral's turns are" }],
+    summary: "label",
+  },
+  {
+    id: "blend",
+    label: "Blend",
+    title: "The shape's color fades into a second (or a third) across the rows",
+    fields: [],
+    threads: 2,
+    onChoose: blendDefaults,
+  },
+  {
+    id: "motif",
+    label: "Motif",
+    title: "Rows of a little pattern across the shape",
+    open: true,
+    noSpacing: true,
+    angle: true,
+    directionDots: true,
+    fields: [
+      { key: "motif_mm", label: "Repeat", def: 5, min: 1.5, max: 20, step: 0.5, digits: 1, suffix: "mm", title: "Length of one repeat" },
+      { key: "motif_width_mm", label: "Height", def: 4, min: 0.5, max: 10, step: 0.5, digits: 1, suffix: "mm", title: "How tall each row of the motif is" },
+      { key: "motif_gap_mm", label: "Row gap", def: 0.5, min: 0, max: 10, step: 0.5, digits: 1, suffix: "mm", title: "Space between the rows" },
+      { key: "motif_stagger", label: "Shift alternate rows", def: 0.5, min: 0, max: 1, step: 0.25, digits: 2, title: "Every other row moves along by this much of a repeat" },
+    ],
+    summary: "label",
+  },
+  {
+    id: "maze",
+    label: "Maze",
+    title: "One path that winds in to the middle and back out, never crossing itself",
+    open: true,
+    noSpacing: true,
+    maxStitch: 4,
+    fields: [{ key: "maze_mm", label: "Path spacing", def: 2, min: 0.8, max: 6, step: 0.2, digits: 1, suffix: "mm", title: "How far apart the path's turns are" }],
+    summary: "label",
+  },
+  {
+    id: "ripple",
+    label: "Ripple",
+    title: "Rings spreading from the middle, like a drop in water",
+    open: true,
+    noSpacing: true,
+    maxStitch: 4,
+    fields: [{ key: "ripple_mm", label: "Ring spacing", def: 2, min: 0.6, max: 8, step: 0.2, digits: 1, suffix: "mm", title: "How far apart the rings are" }],
+    summary: "label",
+  },
+  {
+    id: "mesh",
+    label: "Mesh",
+    title: "A net of two sets of lines",
+    open: true,
+    noSpacing: true,
+    angle: true,
+    directionDots: true,
+    fields: [
+      { key: "mesh_mm", label: "Cell size", def: 3, min: 1, max: 10, step: 0.5, digits: 1, suffix: "mm", title: "How far apart the lines are" },
+      { key: "mesh_cross_deg", label: "Crossing angle", def: 90, min: 45, max: 90, step: 5, digits: 0, suffix: "°", title: "The angle between the two sets of lines" },
+    ],
     summary: "label",
   },
 ];

@@ -193,6 +193,10 @@ LAYOUT_FEATURES: dict[str, Callable[[dict], bool]] = {
 }
 
 
+def _is_fill(item: dict) -> bool:
+    return item.get("kind") in ("fill", "applique")
+
+
 def _has_op(item: dict, names) -> bool:
     ops = item.get("ops")
     return isinstance(ops, list) and any(isinstance(o, dict) and isinstance(o.get("op"), str) and o["op"] in names for o in ops)
@@ -238,6 +242,22 @@ ITEM_FEATURES: dict[str, Callable[[dict, dict, dict], bool]] = {  # (item, param
                                             and it["font"].get("made_of") == "stitches"),
     # The laurel frame's leaf: a line with it, once "Break into shapes" has made the frame lines.
     "motif_leaf": lambda it, p, g: it.get("kind") == "run" and p.get("style") == "motif" and p.get("motif") == "leaf",
+    # Fills and stitch quality. (Push compensation has no flag: it isn't built, so a project from a
+    # LUDD that has it is refused here, rather than sewn without it.)
+    "fill_weave": lambda it, p, g: _is_fill(it) and p.get("weave") not in (None, "", "standard"),
+    "fill_carve": lambda it, p, g: _is_fill(it) and bool(g.get("carve")),
+    "fill_feather": lambda it, p, g: _is_fill(it) and p.get("feather") not in (None, "", "none"),
+    "hand_look": lambda it, p, g: _number(p.get("hand_pct")) and p["hand_pct"] > 0,
+    "fill_blend": lambda it, p, g: _is_fill(it) and p.get("pattern") == "blend",
+    "fill_turning": lambda it, p, g: (_is_fill(it) and p.get("pattern") in (None, "", "tatami")
+                                      and isinstance(p.get("angle_lines"), list) and len(p["angle_lines"]) >= 2),
+    "fill_motif": lambda it, p, g: _is_fill(it) and p.get("pattern") == "motif",
+    "fill_maze": lambda it, p, g: _is_fill(it) and p.get("pattern") == "maze",
+    "fill_ripple": lambda it, p, g: _is_fill(it) and p.get("pattern") == "ripple",
+    "fill_mesh": lambda it, p, g: _is_fill(it) and p.get("pattern") == "mesh",
+    # A motif of your own, carried with the line or fill that uses it.
+    "user_motifs": lambda it, p, g: bool(p.get("motif_unit")) and (
+        (it.get("kind") == "run" and p.get("style") == "motif") or (_is_fill(it) and p.get("pattern") == "motif")),
 }
 KNOWN_FEATURES = set(LAYOUT_FEATURES) | set(ITEM_FEATURES)
 

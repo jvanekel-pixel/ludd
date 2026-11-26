@@ -25,7 +25,6 @@ import {
   newDoc,
   newId,
   objectCenter,
-  objectNodeLists,
   reorder,
   pushHistory,
   shapeNodes,
@@ -36,6 +35,7 @@ import {
   renameItem,
   rotateBy,
   scaleBy,
+  shapeNodeLists,
   undo,
   updateImage,
   updateObject,
@@ -55,6 +55,7 @@ import type {
   ExportReport,
   Fabric,
   FileItem,
+  FillGeometry,
   FontInfo,
   FontRef,
   Layout,
@@ -82,6 +83,8 @@ import { cancelTraceQueue, queueAccept, queueAcceptMany, setStep, toggleLastPoin
 import { canFit, nextFit } from "./satinFit";
 import { acceptGuess, loadTraceModel, nextGuess, setSpacing, setSpread } from "./autoTrace";
 import * as feat from "./features";
+import { finishAngleLine } from "./feat/angleLines";
+import { cancelCarve, finishCarve } from "./feat/carve";
 import { nudgeLetter, pruneLetterEdits, recolorRuns } from "./feat/letters";
 import { loadPrefs, savePrefs } from "./prefs";
 import { isDirty, MACHINE_SPEED, PLAYER_SPEEDS, selectHoop, selectImages, selectLayout, selectMachine, useStore, type Tool } from "./store";
@@ -731,7 +734,7 @@ export function shapeStretchAnchor(ids: string[], side: "n" | "e" | "s" | "w"): 
 }
 
 function objectBox(o: ObjectItem): [number, number, number, number] | null {
-  const pts = objectNodeLists(o).flat();
+  const pts = shapeNodeLists(o).flat();
   if (!pts.length) return null;
   const xs = pts.map((n) => n[0]);
   const ys = pts.map((n) => n[1]);
@@ -988,7 +991,7 @@ export function defaultsFor(kind: ObjectKind): Record<string, unknown> {
 }
 
 /** Settings that belong to one shape, not to the next one you draw. */
-const NOT_REMEMBERED = new Set(["angle_deg", "reverse"]);
+const NOT_REMEMBERED = new Set(["angle_deg", "reverse", "angle_lines", "ripple_center", "blend_flip"]);
 
 function rememberDefaults(kind: ObjectKind, patch: Record<string, unknown>) {
   const all = { ...(loadPrefs().objectDefaults ?? {}) };
@@ -1049,12 +1052,13 @@ export function penUndoPoint() {
   const pen = s.pen;
   if (!pen) return;
   if (pen.a.length > 1) s.setPen({ ...pen, a: pen.a.slice(0, -1) });
-  else s.setPen(null);
+  else s.setPen(pen.carveFor ? { ...pen, a: [] } : null); // carving goes on until Esc
 }
 
 export function penCancel() {
   cancelTraceQueue();
   const pen = useStore.getState().pen;
+  if (pen?.carveFor) return cancelCarve(pen);
   useStore.getState().setPen(null);
   if (pen?.holeFor) {
     // A hole (O) dropped: back to the tool used before, with its fill still selected.
@@ -1074,6 +1078,7 @@ export async function penFinish(opts: { close?: boolean } = {}) {
     if (pen) info(`Keep clicking: this shape needs at least ${MIN_POINTS[pen.kind]} points.`);
     return;
   }
+  if (pen.carveFor) return finishCarve(pen); // a line carved into a fill (Shift+C)
   if (!s.history.present) await replaceDoc(freshDoc(), null);
   const layout = currentLayout()!;
   const thread = s.drawThread;
@@ -1392,11 +1397,17 @@ export async function addTraced(
 
 export function setObjectThread(id: string, thread: Thread) {
   useStore.getState().setDrawThread(thread);
-  editObject(id, (o) => ({ ...o, thread, threads: [] }));
+  editObject(id, (o) => ({ ...o, thread, threads: otherColors(o) }));
 }
 
-/** Which list of nodes in an object's geometry: a key, or a hole number for fills. */
-export type NodeList = "nodes" | "rail_a" | "rail_b" | "outline" | number;
+/** The colors given to an item's other parts (a blend's), kept when its own thread changes. */
+const otherColors = (it: LayoutItem): (Thread | null)[] => (isObject(it) && it.threads.length > 1 ? [null, ...it.threads.slice(1)] : []);
+
+/** Which list of nodes in an object's geometry: a key, a hole number for fills, or a carved line. */
+export type NodeList = "nodes" | "rail_a" | "rail_b" | "outline" | number | `carve:${number}`;
+
+/** A carved line's number in its list ("carve:2" is the third), or -1 for any other list. */
+const carveIndex = (key: NodeList) => (typeof key === "string" && key.startsWith("carve:") ? Number(key.slice(6)) : -1);
 
 export function nodeLists(o: ObjectItem): { key: NodeList; nodes: PathNode[]; closed: boolean }[] {
   if (o.kind === "run") return [{ key: "nodes", nodes: o.geometry.nodes, closed: !!o.geometry.closed }];
@@ -1411,11 +1422,18 @@ export function nodeLists(o: ObjectItem): { key: NodeList; nodes: PathNode[]; cl
   return [
     { key: "outline", nodes: o.geometry.outline, closed: true },
     ...(o.geometry.holes ?? []).map((h, i) => ({ key: i as NodeList, nodes: h, closed: true })),
+    ...(o.geometry.carve ?? []).map((c, i) => ({ key: `carve:${i}` as NodeList, nodes: c, closed: false })),
   ];
 }
 
 function withNodes(o: ObjectItem, key: NodeList, fn: (nodes: PathNode[]) => PathNode[]): ObjectItem {
   const g = o.geometry as unknown as Record<string, PathNode[] | PathNode[][]>;
+  const c = carveIndex(key);
+  if (c >= 0) {
+    const carve = [...((g.carve as PathNode[][]) ?? [])];
+    carve[c] = fn(carve[c]);
+    return { ...o, geometry: { ...o.geometry, carve } } as ObjectItem;
+  }
   if (typeof key === "number") {
     const holes = [...((g.holes as PathNode[][]) ?? [])];
     holes[key] = fn(holes[key]);
@@ -1505,7 +1523,18 @@ export function deleteNode(id: string, key: NodeList, index: number) {
     return;
   }
   const list = nodeLists(o).find((l) => l.key === key);
-  const min = o.kind === "run" || o.kind === "satin" ? 2 : 3;
+  const carved = carveIndex(key);
+  if (carved >= 0 && list && list.nodes.length <= 2) {
+    // A carved line with too few points left: delete the line.
+    useStore.getState().selectNode(null);
+    editObject(id, (x) => {
+      const carve = ((x.geometry as FillGeometry).carve ?? []).filter((_, i) => i !== carved);
+      return { ...x, geometry: { ...x.geometry, carve: carve.length ? carve : undefined } } as ObjectItem;
+    });
+    info("Carved line removed.");
+    return;
+  }
+  const min = o.kind === "run" || o.kind === "satin" || carved >= 0 ? 2 : 3;
   if (list && typeof key === "number" && list.nodes.length <= min) {
     // A hole with too few points left to be a hole: delete the hole (as in Embrilliance).
     useStore.getState().selectNode(null);
@@ -1693,7 +1722,7 @@ export function setItemsThread(ids: string[], thread: Thread): number {
     if (new Set(srcs.map((src) => src.block)).size === 1) fileSources.push(...srcs);
     else skipped++;
   });
-  l = { ...l, items: l.items.map((it) => (ids.includes(it.id) && (isObject(it) || isText(it)) ? ({ ...it, thread, threads: [] } as LayoutItem) : it)) };
+  l = { ...l, items: l.items.map((it) => (ids.includes(it.id) && (isObject(it) || isText(it)) ? ({ ...it, thread, threads: otherColors(it) } as LayoutItem) : it)) };
   if (fileSources.length) l = recolor(l, fileSources, thread);
   useStore.getState().setDrawThread(thread);
   void commit(l);
@@ -1784,7 +1813,10 @@ function startAngle() {
 
 /** Called by the canvas when the inclination line is done. */
 export function finishAngle(id: string, a: [number, number], b: [number, number]) {
+  const add = !!useStore.getState().angleFor?.add;
   useStore.getState().setAngleFor(null);
+  // A turning fill's lines (feat/angleLines.ts) take it: another line, or the first of several.
+  if (finishAngleLine(id, a, b, add)) return;
   const deg = (((Math.atan2(b[1] - a[1], b[0] - a[0]) * 180) / Math.PI) % 180 + 180) % 180;
   setObjectParams(id, { angle_deg: Math.round(deg) });
 }

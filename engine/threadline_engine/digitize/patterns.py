@@ -275,8 +275,10 @@ def _motif_unit(name: str) -> list[tuple[float, float]]:
     return list(MOTIF_UNITS[name])
 
 
-def motif_points(nodes: Sequence, name: str, repeat_mm: float, width_mm: float, closed: bool = False) -> list[Point]:
-    """A motif repeated along the line: each repeat `repeat_mm` long and `width_mm` wide."""
+def motif_points(nodes: Sequence, name: str, repeat_mm: float, width_mm: float, closed: bool = False,
+                 unit: Sequence[tuple[float, float]] | None = None) -> list[Point]:
+    """A motif repeated along the line: each repeat `repeat_mm` long and `width_mm` wide. `unit`:
+    one repeat to use instead of the built-in `name` (a motif of your own)."""
     poly, _ = flatten(nodes, closed)
     if closed and poly:
         poly = poly + [poly[0]]
@@ -286,7 +288,7 @@ def motif_points(nodes: Sequence, name: str, repeat_mm: float, width_mm: float, 
     total = cum[-1]
     n = max(1, round(total / repeat_mm))
     step = total / n
-    unit = _motif_unit(name)
+    unit = _motif_unit(name) if unit is None else list(unit)
     out: list[Point] = []
     eps = min(0.2, total / 100)
     for k in range(n):

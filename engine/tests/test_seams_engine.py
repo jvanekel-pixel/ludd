@@ -14,10 +14,12 @@ import pytest
 from shapely.geometry import Polygon
 
 from invariants import assert_sane
-from threadline_engine import layout, project
+from threadline_engine import layout, project, shapeops
 from threadline_engine.digitize import fills, lines
 from threadline_engine.digitize.fills import FillPattern, Param
-from threadline_engine.digitize.stitches import STITCH, DigitizeError, FillParams, generate, generate_parts, tatami
+from threadline_engine.digitize.patterns import motif_points
+from threadline_engine.digitize.stitches import (STITCH, DigitizeError, FillParams, generate, generate_parts,
+                                                 geometry_points, tatami, transform_geometry)
 from threadline_engine.layout import passes
 from threadline_engine.methods import dispatcher
 
@@ -336,7 +338,7 @@ def test_line_styles_and_motifs_registered():
 
 def test_rpc_method_list_matches_the_manifest():
     names = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert len(names) == 66
+    assert len(names) == 71
     assert sorted(dispatcher._methods) == names
 
 
@@ -427,6 +429,94 @@ def test_end_shift_can_reach_past_the_shape_without_jumps():
 def test_a_row_is_always_sewn_however_its_ends_move():
     squashed = tatami(SQUARE_20, 0, 0.4, 3.5, 0.0, end_shift=lambda r, x0, x1: (x0 + 100, x1 - 100))
     assert len(_row_heights(squashed)) == 50
+
+
+# ---------------------------------------------------------------- Phase 6 contracts
+
+
+SHAPE = {"kind": "fill", "geometry": {"outline": OUTLINE, "carve": [[[-30, 5, "c"], [40, 6, "c"]]]},
+         "params": {"angle_lines": [[[2, 2], [4, 2]], [[10, 8], [12, 8]]], "ripple_center": [5, 5]}}
+
+
+def test_carve_angle_lines_and_ripple_center_move_with_the_shape_but_give_it_no_size():
+    moved = transform_geometry(SHAPE, layout.Transform.from_dict({"x": 3, "y": 4}), (10, 10))
+    assert moved["geometry"]["carve"] == [[[-27, 9, "c"], [43, 10, "c"]]]
+    assert moved["params"]["angle_lines"] == [[[5, 6], [7, 6]], [[13, 12], [15, 12]]]
+    assert moved["params"]["ripple_center"] == [8, 9]
+    xs = [x for x, _ in geometry_points(SHAPE)]
+    assert (min(xs), max(xs)) == (0, 20)
+
+
+def test_settings_say_what_is_wrong_in_their_own_units():
+    with pytest.raises(DigitizeError, match="^Balance must be between -1 and 1$"):
+        FillParams.from_dict({"pattern": "blend", "blend_balance": 2})
+    with pytest.raises(DigitizeError, match="^Crossing angle must be between 45 and 90°$"):
+        FillParams.from_dict({"pattern": "mesh", "mesh_cross_deg": 20})
+    with pytest.raises(DigitizeError, match="^Path spacing must be between 0.8 and 6 mm$"):
+        FillParams.from_dict({"pattern": "maze", "maze_mm": 9})
+    for bad, message in (({"weave": "basket"}, "Unknown weave: basket"), ({"feather": "top"}, "Unknown feathered side: top"),
+                         ({"feather_mm": 7}, "Feather depth must be between 0.5 and 6 mm"),
+                         ({"hand_pct": 101}, "The hand-sewn look must be between 0 and 100%"),
+                         ({"blend": [{}, {}, {}, {}]}, "A blend takes up to four colors"),
+                         ({"angle_lines": [[[0, 0], [1, "a"]]]}, "An angle line has a point that isn't a number")):
+        with pytest.raises(DigitizeError, match=f"^{message}$"):
+            FillParams.from_dict(bad)
+    # A line too short to give a direction is left out.
+    p = FillParams.from_dict({"angle_lines": [[[0, 0], [10, 0]], [[1, 1], [1.2, 1]], [[0, 5], [5, 10]]]})
+    assert p.angle_lines == (((0.0, 0.0), (10.0, 0.0)), ((0.0, 5.0), (5.0, 10.0)))
+
+
+def test_weave_offsets_follow_the_table():
+    from threadline_engine.digitize.rows import weave
+
+    assert weave.offsets_for("standard") is None
+    for name, want in (("brick", [0, 1 / 2, 0]), ("twill", [0, 1 / 4, 1 / 2, 3 / 4, 0]),
+                       ("smooth", [0, 2 / 5, 4 / 5, 1 / 5, 3 / 5, 0])):
+        assert [weave.offsets_for(name)(r) for r in range(len(want))] == pytest.approx(want), name
+    scatter = [weave.offsets_for("random")(r) for r in range(200)]
+    assert all(0 <= v < 1 for v in scatter) and len({round(v, 3) for v in scatter}) > 150
+
+
+def test_a_motif_of_your_own_can_be_given_to_motif_points():
+    nodes = [[0, 0, "c"], [10, 0, "c"]]
+    assert motif_points(nodes, "wave", 5, 4, unit=[(0, 0), (0.5, 0.5), (1, 0)]) == [
+        (0, 0), (2.5, 2.0), (5.0, 0.0), (7.5, 2.0), (10.0, 0.0)]
+
+
+def test_a_cut_cut_out_or_merged_fill_keeps_its_carved_lines():
+    carved = {"kind": "fill", "geometry": {"outline": OUTLINE, "carve": [[[2, 10, "c"], [18, 10, "c"]]]}, "params": {}}
+    pieces = shapeops.split(carved, (10, -5), (10, 25))["geometries"]
+    assert [p["carve"] for p in pieces] == [carved["geometry"]["carve"]] * 2  # the line crosses both
+    below = shapeops.split(carved, (-5, 15), (25, 15))["geometries"]
+    assert sorted("carve" in p for p in below) == [False, True]
+    hole = {"kind": "fill", "geometry": {"outline": [[12, 12, "c"], [16, 12, "c"], [16, 16, "c"], [12, 16, "c"]]}}
+    assert shapeops.cut_out(carved, [hole])["geometries"][0]["carve"] == carved["geometry"]["carve"]
+    other = {"kind": "fill", "geometry": {"outline": [[15, 0, "c"], [35, 0, "c"], [35, 20, "c"], [15, 20, "c"]],
+                                          "carve": [[[25, 5, "c"], [33, 5, "c"]]]}}
+    assert len(shapeops.merge([carved, other])["geometry"]["carve"]) == 2
+
+
+def test_phase_6_features_are_found_by_the_field_that_turns_them_on():
+    def used(it):
+        return project._features({"items": [it]}) - {"fill_patterns", "motif_lines"}
+
+    fill = lambda **p: {"kind": "fill", "params": p, "geometry": {}}  # noqa: E731
+    assert used(fill(weave="brick")) == {"fill_weave"}
+    assert used(fill(weave="standard", feather="none", hand_pct=0)) == set()
+    assert used({"kind": "fill", "params": {}, "geometry": {"carve": [[[0, 0, "c"], [1, 1, "c"]]]}}) == {"fill_carve"}
+    assert used(fill(feather="left")) == {"fill_feather"}
+    assert used({"kind": "run", "params": {"hand_pct": 40}}) == {"hand_look"}
+    assert used(fill(pattern="blend")) == {"fill_blend"}
+    line = [[0, 0], [5, 0]]
+    assert used(fill(angle_lines=[line, line])) == {"fill_turning"}
+    assert used(fill(angle_lines=[line])) == set() == used(fill(pattern="stipple", angle_lines=[line, line]))
+    for pattern in ("motif", "maze", "ripple", "mesh"):
+        assert used(fill(pattern=pattern)) == {f"fill_{pattern}"}
+    own = {"motif": "user:heart", "motif_unit": [[0, 0], [1, 0]]}
+    assert used({"kind": "run", "params": {"style": "motif", **own}}) == {"user_motifs"}
+    assert used(fill(pattern="motif", **own)) == {"fill_motif", "user_motifs"}
+    assert used(fill(**own)) == set()  # left over from another pattern: not sewn
+    assert "push_comp" not in project.KNOWN_FEATURES  # not built: a project that has it is refused
 
 
 # ---------------------------------------------------------------- project features

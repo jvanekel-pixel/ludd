@@ -9,6 +9,7 @@ import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { addTraced, commit, currentDoc, currentLayout, defaultsFor, engine, fail, info } from "./actions";
 import { holdEscape } from "./escape";
 import { exportList, typedList } from "./feat/names";
+import { slotThreads } from "./design/blend";
 import { addObject, IDENTITY, newId } from "./design/layout";
 import type { Colorway, Guide, Layout, LayoutItem, LayoutOp, ObjectItem, PathNode, TextItem, Thread } from "./design/types";
 import { isObject, isText } from "./design/types";
@@ -554,9 +555,15 @@ export async function saveColorway(name: string) {
   const l = currentLayout();
   if (!l || !name.trim()) return;
   const items: Colorway["items"] = {};
-  for (const it of l.items) items[it.id] = { thread: isObject(it) || isText(it) ? it.thread : undefined, threads: it.threads };
+  for (const it of l.items) items[it.id] = { thread: isObject(it) || isText(it) ? it.thread : undefined, threads: colorwayThreads(it) };
   const rest = (l.colorways ?? []).filter((c) => c.name !== name.trim());
   if (await commit({ ...l, colorways: [...rest, { name: name.trim(), items }] })) info(`Saved the colors as "${name.trim()}".`);
+}
+
+/** An item's colors for a color set. A blend's other colors are kept as the colors they sew in. */
+function colorwayThreads(it: LayoutItem): (Thread | null)[] {
+  if (!isObject(it) || it.kind !== "fill" || it.params.pattern !== "blend") return it.threads;
+  return [it.threads[0] ?? null, ...slotThreads(it).slice(1)];
 }
 
 export async function applyColorway(name: string) {

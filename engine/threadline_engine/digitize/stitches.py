@@ -17,6 +17,8 @@ from shapely.geometry import LineString, Point as ShapelyPoint, Polygon
 from shapely.ops import substring
 
 from . import fills, lines
+from . import rows as row_hooks  # "rows" names tatami's own rows
+from .fills import turning
 from .paths import Point, corner_indices, cumulative, dist, flatten, point_at, resample, sharp_points
 from .patterns import (FILL_PATTERNS, MOTIFS, contour_paths, cross_paths, gradient_ys, motif_points, nearest_rotation,
                        polygons, stipple_paths, wave_offset)
@@ -95,6 +97,69 @@ def _finite(d: dict[str, Any], key: str, default: float) -> float:
     if not math.isfinite(f):
         raise DigitizeError(f"The setting {key} must be a number")
     return f
+
+
+def _hand_pct(d: dict[str, Any]) -> float:
+    v = _finite(d, "hand_pct", 0.0)
+    if not 0 <= v <= 100:
+        raise DigitizeError("The hand-sewn look must be between 0 and 100%")
+    return v
+
+
+def _push_comp(d: dict[str, Any]) -> float | None:
+    if d.get("push_comp_mm") is None:
+        return None
+    v = _finite(d, "push_comp_mm", 0.0)
+    if not 0 <= v <= 1.5:
+        raise DigitizeError("End trim must be between 0 and 1.5 mm")
+    return v
+
+
+def _choice(d: dict[str, Any], key: str, choices: Sequence[str], what: str) -> str:
+    """One of `choices` (the first when missing or empty)."""
+    v = str(d.get(key) or choices[0])
+    if v not in choices:
+        raise DigitizeError(f"Unknown {what}: {v}")
+    return v
+
+
+def _blend_threads(v: Any) -> tuple[dict, ...]:
+    """A blend's other colors: up to three threads."""
+    if v is None:
+        return ()
+    if not isinstance(v, list) or not all(isinstance(t, dict) for t in v):
+        raise DigitizeError("The blend's colors must be a list of threads")
+    if len(v) > 3:
+        raise DigitizeError("A blend takes up to four colors")
+    return tuple(v)
+
+
+def _angle_lines(v: Any) -> tuple:
+    """A turning fill's angle lines, as ((x, y), (x, y)) pairs; lines too short to give a
+    direction (under 0.5 mm) are left out."""
+    if v is None:
+        return ()
+    try:
+        found = [tuple((float(x), float(y)) for x, y in line) for line in v]
+    except (TypeError, ValueError):
+        raise DigitizeError("An angle line has a point that isn't a number") from None
+    if any(len(line) != 2 for line in found) or not all(math.isfinite(c) for line in found for p in line for c in p):
+        raise DigitizeError("An angle line has a point that isn't a number")
+    return tuple(line for line in found if dist(line[0], line[1]) >= 0.5)
+
+
+def carve_lines(value: Any) -> tuple[tuple[Point, ...], ...]:
+    """A fill's carved lines (geometry.carve, pen paths) as polylines in mm, checked like its
+    outline. A line needs two points."""
+    if not value:
+        return ()
+    try:
+        found = [tuple(flatten(line, False)[0]) for line in value if len(line) >= 2]
+    except (TypeError, ValueError, IndexError, KeyError):
+        raise DigitizeError("This shape has a point that isn't a number") from None
+    for line in found:
+        check_points(line, "carved line")
+    return tuple(found)
 
 
 def check_points(points: Sequence[Point], what: str = "shape") -> None:
@@ -238,6 +303,8 @@ class RunParams:
     motif: str = "wave"  # for style "motif": wave | zigzag | scallop | blanket
     motif_mm: float = 4.0  # length of one repeat
     motif_width_mm: float = 2.5
+    hand_pct: float = 0.0  # the hand-sewn look, 0 to 100
+    motif_unit: list | None = None  # a motif of your own, carried with the line (lines.carried_unit)
     extra: dict[str, float] = field(default_factory=dict)  # a registered style's own settings (fills.Param)
 
     def value(self, key: str) -> float:
@@ -249,13 +316,15 @@ class RunParams:
     @classmethod
     def from_dict(cls, d: dict[str, Any] | None) -> "RunParams":
         d = d or {}
-        p = cls(style=str(d.get("style", "single")), stitch_mm=_finite(d, "stitch_mm", 2.5),
+        style = str(d.get("style", "single"))
+        p = cls(style=style, stitch_mm=_finite(d, "stitch_mm", 2.5),
                 motif=str(d.get("motif", "wave")), motif_mm=_finite(d, "motif_mm", 4.0),
-                motif_width_mm=_finite(d, "motif_width_mm", 2.5))
+                motif_width_mm=_finite(d, "motif_width_mm", 2.5), hand_pct=_hand_pct(d),
+                motif_unit=lines.carried_unit(d.get("motif_unit")) if style == "motif" else None)
         if p.style not in lines.REGISTRY:
             raise DigitizeError(f"Unknown running stitch style: {p.style}")
         if p.style == "motif":
-            if p.motif not in lines.MOTIF_UNITS:
+            if p.motif_unit is None and p.motif not in lines.MOTIF_UNITS:
                 raise DigitizeError(f"Unknown motif: {p.motif}")
             if not 1.5 <= p.motif_mm <= 20 or not 0.5 <= p.motif_width_mm <= 10:
                 raise DigitizeError("A motif repeats every 1.5 to 20 mm and is 0.5 to 10 mm wide")
@@ -264,7 +333,7 @@ class RunParams:
         for key, param in lines.REGISTRY[p.style].params.items():
             v = _finite(d, key, param.default)
             if not param.lo <= v <= param.hi:
-                raise DigitizeError(f"{param.label} must be between {param.lo:g} and {param.hi:g} mm")
+                raise DigitizeError(param.refusal())
             p.extra[key] = v
         return p
 
@@ -279,6 +348,8 @@ def run_points(nodes: Sequence, stitch_mm: float, closed: bool = False) -> list[
 
 def running(nodes: Sequence, params: RunParams, closed: bool = False, start: Point | None = None) -> list[Rec]:
     """A running-stitch line in its style (digitize/lines: single, triple, bean, motif, ...)."""
+    if params.hand_pct:
+        raise DigitizeError("The hand-sewn look isn't built yet")
     return stitch_run(lines.REGISTRY[params.style].points(nodes, params, closed, start))
 
 
@@ -297,6 +368,8 @@ class SatinParams:
     comp_by_width: bool = False  # scale pull compensation with the column's width at each stitch
     auto_widen: bool = False  # widen spots too thin to stitch
     split_mm: float = 0.0  # split stitches longer than this into shorter, staggered ones (0: off)
+    hand_pct: float = 0.0  # the hand-sewn look, 0 to 100
+    push_comp_mm: float | None = None  # "End trim", not built (rows/push.py)
 
     @classmethod
     def from_dict(cls, d: dict[str, Any] | None) -> "SatinParams":
@@ -314,6 +387,8 @@ class SatinParams:
             comp_by_width=bool(d.get("comp_by_width", False)),
             auto_widen=bool(d.get("auto_widen", False)),
             split_mm=_finite(d, "split_mm", 0.0),
+            hand_pct=_hand_pct(d),
+            push_comp_mm=_push_comp(d),
         )
         if p.split_mm and not 2 <= p.split_mm <= 12:
             raise DigitizeError("Split satin stitches longer than 2 to 12 mm")
@@ -584,6 +659,8 @@ def _split_across(p: Point, q: Point, max_mm: float, i: int) -> list[Point]:
 
 def satin_from_pairs(pairs: list[tuple[Point, Point]], params: SatinParams) -> tuple[list[Rec], list[str]]:
     """Underlay and top stitching for a satin, given matching points on its two edges."""
+    if params.hand_pct:
+        raise DigitizeError("The hand-sewn look isn't built yet")
     widths = [dist(a, b) for a, b in pairs]
     warnings = []
     if params.auto_widen and min(widths) < SATIN_WIDEN_TO_MM:
@@ -676,6 +753,18 @@ class FillParams:
     stipple_mm: float = 3.0  # stipple: how far apart the meandering line's turns are
     cross_mm: float = 2.5  # cross-stitch: size of one square
     underlay_spacing_mm: float = 2.0  # cross-hatch underlay rows (closer on stretchy and lofty fabrics)
+    push_comp_mm: float | None = None  # "End trim", not built (rows/push.py)
+    weave: str = "standard"  # how neighboring rows' needle points line up (rows/weave.py)
+    feather: str = "none"  # which row ends are ragged: left, right (as rows run at 0 degrees), both
+    feather_mm: float = 2.0  # how far in a feathered end can be pulled
+    hand_pct: float = 0.0  # the hand-sewn look, 0 to 100
+    blend: tuple[dict, ...] = ()  # blend: the threads after the shape's own, one to three
+    blend_flip: bool = False  # blend: the colors run the other way across the rows
+    angle_lines: tuple = ()  # turning fill: ((x, y), (x, y)) lines the rows turn to follow, mm
+    ripple_center: tuple[float, float] | None = None  # ripple: where the rings spread from, mm
+    motif: str = "wave"  # motif fill: which motif
+    motif_unit: list | None = None  # motif fill: a motif of your own, carried with the shape
+    carve: tuple = ()  # not a setting: the shape's carved lines (geometry.carve) as polylines, mm
     extra: dict[str, float] = field(default_factory=dict)  # a registered pattern's own settings (fills.Param)
 
     def value(self, key: str) -> float:
@@ -719,6 +808,17 @@ class FillParams:
             stipple_mm=_finite(d, "stipple_mm", 3.0),
             cross_mm=_finite(d, "cross_mm", 2.5),
             underlay_spacing_mm=under_spacing,
+            push_comp_mm=_push_comp(d),
+            weave=_choice(d, "weave", row_hooks.weave.WEAVES, "weave"),
+            feather=_choice(d, "feather", ("none", "left", "right", "both"), "feathered side"),
+            feather_mm=_finite(d, "feather_mm", 2.0),
+            hand_pct=_hand_pct(d),
+            blend=_blend_threads(d.get("blend")),
+            blend_flip=bool(d.get("blend_flip", False)),
+            angle_lines=_angle_lines(d.get("angle_lines")),
+            ripple_center=_start_point(d.get("ripple_center")),
+            motif=str(d.get("motif") or "wave"),
+            motif_unit=lines.carried_unit(d.get("motif_unit")) if pattern == "motif" else None,
         )
         if not 0 <= p.pull_comp_mm <= 2:
             raise DigitizeError("Pull compensation must be between 0 and 2 mm")
@@ -729,6 +829,8 @@ class FillParams:
             raise DigitizeError("Stipple size 1-10 mm and cross-stitch size 1-8 mm")
         if not 0 <= p.random_pct <= 50:
             raise DigitizeError("Random must be between 0 and 50%")
+        if not 0.5 <= p.feather_mm <= 6:
+            raise DigitizeError("Feather depth must be between 0.5 and 6 mm")
         if not 0.2 <= p.spacing_mm <= 5:
             raise DigitizeError("Fill spacing must be between 0.2 and 5 mm")
         if not 1 <= p.stitch_mm <= 8:
@@ -739,7 +841,7 @@ class FillParams:
         for key, param in spec.params.items():
             v = _finite(d, key, param.default)
             if not param.lo <= v <= param.hi:
-                raise DigitizeError(f"{param.label} must be between {param.lo:g} and {param.hi:g} mm")
+                raise DigitizeError(param.refusal())
             p.extra[key] = v
         return p
 
@@ -1129,7 +1231,8 @@ def fill_underlay(poly: Polygon, params: FillParams, spec, start: Point, target:
             if under.area < MIN_PART_MM2:
                 continue
             pos = (out[-1][0], out[-1][1]) if out else start
-            cross = tatami(under, params.angle_deg + 90, params.underlay_spacing_mm, 3.0, 0.0, pos, travel_within=poly)
+            angle = turning.mean_angle(params) if turning.takes_over(params) else params.angle_deg
+            cross = tatami(under, angle + 90, params.underlay_spacing_mm, 3.0, 0.0, pos, travel_within=poly)
             if out and cross:
                 # Walk from the edge run to where the cross-hatch starts (not one long stitch).
                 out += travel(pos, (cross[0][0], cross[0][1]), poly)
@@ -1164,8 +1267,15 @@ def _fill_part(poly: Polygon, params: FillParams, end_here: bool = True) -> tupl
     out = fill_underlay(poly, params, spec, start, target)
     pos = (out[-1][0], out[-1][1]) if out else start
     if not open_pattern:
-        top = tatami(poly, params.angle_deg, params.spacing_mm, params.stitch_mm, params.pull_comp_mm / 2, pos,
-                     random=params.random_pct / 100, end_near=end_near, **spec.rows(params))
+        if turning.takes_over(params):
+            top, said = turning.rows(poly, params, pos, travel_within=poly, end_near=end_near)
+        else:
+            said = row_hooks.notes(params, params.angle_deg)
+            settings = {"random": params.random_pct / 100, "end_near": end_near, **spec.rows(params),
+                        **row_hooks.hooks(params, params.angle_deg)}
+            top = tatami(poly, params.angle_deg, params.spacing_mm, params.stitch_mm, params.pull_comp_mm / 2, pos,
+                         **settings)
+        warnings = [*warnings, *[w for w in said if w not in warnings]]
     if params.reverse and end_near is None and top and all(r[2] == STITCH for r in top):
         top = top[::-1]  # same stitches, sewn from the other end
     if out and top:
@@ -1277,6 +1387,8 @@ def generate_parts(obj: dict[str, Any]) -> list[tuple[list[Rec], list[str], int]
                 check_points([(float(n[0]), float(n[1])) for n in g[key]])
             except (TypeError, ValueError, IndexError):
                 raise DigitizeError("This shape has a point that isn't a number") from None
+    if kind in ("fill", "satin") and p.get("push_comp_mm"):
+        raise DigitizeError(row_hooks.push.NOT_BUILT)
     if kind == "run":
         nodes = g.get("nodes") or []
         if len(nodes) < 2:
@@ -1291,7 +1403,9 @@ def generate_parts(obj: dict[str, Any]) -> list[tuple[list[Rec], list[str], int]
         parts = [(*satin(g.get("rail_a") or [], g.get("rail_b") or [], SatinParams.from_dict(p),
                          _start_point(p.get("start_mm")), _start_point(p.get("end_mm"))), 0)]
     elif kind == "fill":
-        parts = fill_in_parts(g.get("outline") or [], g.get("holes") or [], FillParams.from_dict(p))
+        params = FillParams.from_dict(p)
+        params.carve = carve_lines(g.get("carve"))
+        parts = fill_in_parts(g.get("outline") or [], g.get("holes") or [], params)
     elif kind == "applique":
         from .applique import AppliqueParams, applique
 
@@ -1338,15 +1452,20 @@ def transform_geometry(obj: dict[str, Any], t: Any, center: Point) -> dict[str, 
     for key in ("nodes", "rail_a", "rail_b", "outline"):
         if g.get(key):
             g[key] = [tf(n) for n in g[key]]
-    if g.get("holes"):
-        g["holes"] = [[tf(n) for n in h] for h in g["holes"]]
+    for key in ("holes", "carve"):  # lists of point lists (carved lines never change the bounds)
+        if g.get(key):
+            g[key] = [[tf(n) for n in line] for line in g[key]]
     if g.get("width_mm") is not None and (t.scale_x != 1 or t.scale_y != 1):
         # A ribbon gets wider and narrower with the shape (by the average of the two scales).
         g["width_mm"] = float(g["width_mm"]) * math.sqrt(abs(t.scale_x * t.scale_y))
     out = {**obj, "geometry": g}
-    # A fill's chosen start and end move, turn and resize with it.
+    # A fill's chosen start and end, angle lines and ripple middle move, turn and resize with it.
     p = obj.get("params") or {}
-    moved = {k: tf(p[k])[:2] for k in ("start_mm", "end_mm") if _start_point(p.get(k)) is not None}
+    moved = {k: tf(p[k])[:2] for k in ("start_mm", "end_mm", "ripple_center") if _start_point(p.get(k)) is not None}
+    if isinstance(p.get("angle_lines"), list):
+        moved["angle_lines"] = [[tf(q)[:2] for q in line]
+                                if isinstance(line, list) and len(line) == 2 and all(_start_point(q) is not None for q in line)
+                                else line for line in p["angle_lines"]]
     if moved:
         out["params"] = {**p, **moved}
     # A mirror flips the winding of satin rails; keep rails in their original order anyway.

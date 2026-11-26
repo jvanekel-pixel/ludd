@@ -21,6 +21,11 @@ class Param:
     lo: float
     hi: float
     label: str  # for the error text: "<label> must be between <lo> and <hi> mm"
+    unit: str = "mm"  # the error text's unit: "mm", "°" or "" (a plain number)
+
+    def refusal(self) -> str:
+        unit = {"mm": " mm", "": ""}.get(self.unit, self.unit)
+        return f"{self.label} must be between {self.lo:g} and {self.hi:g}{unit}"
 
 
 @dataclass(frozen=True)
@@ -64,3 +69,4 @@ def get(name: str) -> FillPattern:
 
 from . import builtin  # noqa: E402,F401  (registers the six, in today's order)
 from . import spiral  # noqa: E402,F401
+from . import blend, motif, maze, ripple, mesh  # noqa: E402,F401  (in the panel's order)
