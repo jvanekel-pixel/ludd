@@ -683,8 +683,9 @@ fill: **Density** is the combined coverage.
   **Height** 0.5–10 mm (4), **Row gap** 0–10 mm (0.5), **Shift alternate rows** 0–1 (0.5) and
   **Angle**. Whole repeats are centered in each row; every other row is shifted; what falls outside
   the shape is cut off (bits shorter than half a repeat are left out). Rows are sewn back and forth,
-  joined along the edge. An open pattern (F-1305). A motif so detailed that the fill would need
-  far more stitches than any design is refused with a message.
+  joined along the edge. An open pattern (F-1305). A motif so busy that a motif fill would need
+  far more stitches than any design, or a motif line more than about 60,000, is refused with a
+  message (use a longer Repeat or a simpler motif).
 - **The Motifs window** (`Alt+Shift+M`, ⋯ → **Motifs…**, or **My motifs…** under a Motif list):
   the built-in motifs and yours, each drawn as two repeats.
   - **Save the selected line as a motif…**: draw **one repeat** as a line from left to right,

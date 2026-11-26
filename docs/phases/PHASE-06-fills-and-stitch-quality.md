@@ -480,3 +480,4 @@ Write: whether A1 was built and how decision 2 went; the blend density numbers f
 
 - Fix 5: a motif export needs a full path and never writes into LUDD's data folder (before, `foo.json` landed in the engine's working folder, and `<data folder>\settings` replaced LUDD's `settings.json`).
 - Blend and Cross-hatch: a Cross-hatch left from another pattern, or suggested by the Stitch Advisor, is now dropped when a fill is or becomes a Blend (it never sewed one, and its panel has no button to turn it off). An underlay left with nothing goes back to Auto.
+- Fix 3: a motif line asking for more than 60,000 stitches (`MAX_LINE_STITCHES`), estimated before anything is laid out, is refused with the fills' message. Lines have their own limit because the audit's tall zigzag sews about 137,000 stitches, under the fills' 400,000 (even the busiest motif the window saves stays under it on a 150 mm line); its hand-made file (millions) is refused too. Both in under 10 ms.

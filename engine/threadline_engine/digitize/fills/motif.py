@@ -277,10 +277,10 @@ def sew_along_edges(paths: list[list[Point]], stretches: list[list[Point]], ring
 def _check_size(unit: Sequence[Point], repeats: float, repeat: float, height: float, stitch: float) -> None:
     """Refuse a motif so busy that the fill would be far more stitches than any design, laying
     `repeats` of it. (The fill's area guard can't know how long a motif of your own is.)"""
-    from ..stitches import MAX_STITCHES, MIN_STITCH_MM, DigitizeError
+    from ..lines import motif_stitches  # here, not at the top: lines imports this package
+    from ..stitches import MAX_STITCHES, DigitizeError
 
-    length = sum(math.hypot((u1 - u0) * repeat, (v1 - v0) * height) for (u0, v0), (u1, v1) in zip(unit, unit[1:]))
-    stitches = repeats * min(max(len(unit) - 1, length / stitch), length / MIN_STITCH_MM + 1)
+    stitches = motif_stitches(unit, repeats, repeat, height, stitch)
     if stitches > MAX_STITCHES:
         raise DigitizeError(f"This fill would need about {stitches:,.0f} stitches, far more than any design. "
                             "Make it smaller or less dense.")

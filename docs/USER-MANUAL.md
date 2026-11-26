@@ -679,7 +679,8 @@ built-in motifs and yours. To make one, draw **one repeat** as a line from left 
 it, open the window and choose **Save the selected line as a motif…**. The line's start and end
 become the repeat's start and end (at least 2 mm apart; the line can't be closed). Choose it under
 **Motif** on a motif line or a motif fill. **Import…** and **Export…** move motifs between
-computers; **Delete** removes one of yours. A shape keeps its own copy of the motif it uses, so a
+computers; **Delete** removes one of yours. A motif so busy that it would sew far more stitches
+than any design is refused with a message. A shape keeps its own copy of the motif it uses, so a
 project sews the same anywhere, even if the motif isn't in that computer's list (Export it and
 Import it there to use it on new shapes).
 

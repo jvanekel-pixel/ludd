@@ -6,6 +6,7 @@ import json
 import math
 import re
 import statistics
+import time
 
 import pytest
 from shapely.geometry import LineString, Point, Polygon
@@ -605,3 +606,42 @@ def test_shape_carries_its_motif(tmp_path):
     stored = json.loads(__import__("zipfile").ZipFile(path).read("project.json"))
     assert {"user_motifs", "fill_motif", "motif_lines"} <= set(stored["features"])
     assert project.VERSION >= stored["version"] == 2
+
+
+# ---------------------------------------------------------------- too many stitches (audit finding 3)
+
+
+def _motif_line(unit, nodes, **params):
+    return {"id": "l", "kind": "run", "thread": THREAD, "geometry": {"nodes": nodes},
+            "params": {"style": "motif", "motif": "user:busy", "motif_unit": unit, **params}}
+
+
+def _tall_zigzag():
+    """A busy motif saved from the Motifs window: 196 teeth between ends 2 mm apart."""
+    teeth = [[2 * (i + 0.5) / 196, 20 if i % 2 else -20, "c"] for i in range(196)]
+    return motifs.save("Tall zigzag", [[0, 0, "c"], *teeth, [2, 0, "c"]])["unit"]
+
+
+@pytest.mark.parametrize("stitch", [1.5, 2.5])
+def test_a_saved_motif_too_busy_for_a_line_is_refused(stitch):
+    # What the app sets when this motif is chosen: its drawn proportions, within the allowed sizes.
+    line = _motif_line(_tall_zigzag(), _c((0, 0), (150, 0)), motif_mm=1.5, motif_width_mm=10, stitch_mm=stitch)
+    began = time.monotonic()
+    with pytest.raises(DigitizeError, match=r"^This line would need about [\d,]+ stitches, far more than any design"):
+        generate(line)
+    assert time.monotonic() - began < 5
+
+
+def test_a_hand_made_motif_that_runs_far_along_the_line_is_refused():
+    unit = [[0, 0]] + [[1000 if i % 2 else -1000, 0.5 if i % 2 else -0.5] for i in range(198)] + [[1, 0]]
+    began = time.monotonic()
+    with pytest.raises(DigitizeError, match="far more than any design"):
+        generate(_motif_line(unit, _c((0, 0), (150, 0)), motif_mm=1.5, motif_width_mm=10, stitch_mm=1.0))
+    assert time.monotonic() - began < 5
+
+
+def test_an_ordinary_long_motif_border_is_not_refused():
+    square = _c((0, 0), (150, 0), (150, 150), (0, 150))
+    border = {"id": "b", "kind": "run", "thread": THREAD, "geometry": {"nodes": square, "closed": True},
+              "params": {"style": "motif", "motif": "blanket", "motif_mm": 1.5, "motif_width_mm": 10}}
+    assert generate(border)[0]

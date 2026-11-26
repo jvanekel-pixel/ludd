@@ -23,6 +23,7 @@ MAX_UNIT_VALUE = 1000.0  # far bigger than any motif: a typing slip or a damaged
 FLAT_SPAN = 1e-4  # a motif that goes no further than this across its line (as a share of one repeat) is flat
 MOST_ACROSS = 10.0  # a hand-edited motif nowhere near its line stays within this many widths of it
 SEWN_WITHIN_MM = 0.1  # a motif of your own is sewn this near its shape, with no more points than that takes
+MAX_LINE_STITCHES = 60_000  # a motif line asking for more is refused (a whole design is usually 5,000 to 30,000)
 
 
 @dataclass(frozen=True)
@@ -41,6 +42,16 @@ def register(s: LineStyle) -> None:
     if s.name in REGISTRY:
         raise ValueError(f"Line style already registered: {s.name}")
     REGISTRY[s.name] = s
+
+
+def motif_stitches(unit: Sequence[tuple[float, float]], repeats: float, repeat_mm: float, width_mm: float,
+                   stitch_mm: float) -> float:
+    """About how many stitches `repeats` of a motif take, laid straight: every corner is a needle
+    point, long sides are split to the stitch length, and tiny moves are merged."""
+    from ..stitches import MIN_STITCH_MM
+
+    length = sum(math.hypot((u1 - u0) * repeat_mm, (v1 - v0) * width_mm) for (u0, v0), (u1, v1) in zip(unit, unit[1:]))
+    return repeats * min(max(len(unit) - 1, length / stitch_mm), length / MIN_STITCH_MM + 1)
 
 
 def carried_unit(value: Any) -> list[tuple[float, float]] | None:
