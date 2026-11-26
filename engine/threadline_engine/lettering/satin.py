@@ -748,6 +748,24 @@ def columns(shape: Polygon, size_mm: float) -> list[dict[str, Any]]:
     raise ColumnsFailed("no way of joining the strokes works")
 
 
+def _leftovers(shape: Polygon, covered):
+    """What the columns leave of the letter, without slivers under twice SHRINK_MM wide, as GEOS
+    gives it."""
+    left = shape.difference(covered).buffer(-SHRINK_MM, join_style="mitre")
+    if left.is_empty:
+        return left
+    return left.buffer(2 * SHRINK_MM, join_style="mitre").intersection(shape)
+
+
+def _in_fixed_order(geom) -> list[Polygon]:
+    """A shape's pieces to sew in Satin look, the same however GEOS gave them (its builds differ,
+    and Macs bundle their own): on a grid, each ring turned one way and started at the same corner,
+    in one order (extras._ordered; pieces with the same box then by area and points)."""
+    from .extras import _ordered, _place_key
+
+    return sorted(_ordered(geom), key=lambda p: (_place_key(p.bounds), round(p.area, 3), list(p.exterior.coords)))
+
+
 def _build(shape: Polygon, size_mm: float, nodes: list[_Node], keep: list[_Seg], choice: dict[int, int]) -> list[dict[str, Any]]:
     import shapely
 
@@ -801,7 +819,7 @@ def _build(shape: Polygon, size_mm: float, nodes: list[_Node], keep: list[_Seg],
 
     cols = [st for st in strokes if st.a]
     if not cols:
-        return [_fill_object(shape, "satin", size_mm)]
+        return [_fill_object(g, "satin", size_mm) for g in _in_fixed_order(shape) or [shape]]
     covered = shapely.union_all([_area(st.a, st.b) for st in cols])
 
     for n in sorted(owner):  # every place where columns meet: the columns alone must cover it
@@ -814,13 +832,7 @@ def _build(shape: Polygon, size_mm: float, nodes: list[_Node], keep: list[_Seg],
             raise _NodeFailed("a join between strokes is left bare", n)
 
     # What the columns leave: sewn first, in Satin look, when it's big enough to matter.
-    left = shape.difference(covered).buffer(-SHRINK_MM, join_style="mitre")
-    fills = []
-    if not left.is_empty:
-        grown = left.buffer(2 * SHRINK_MM, join_style="mitre").intersection(shape)
-        parts = [g for g in getattr(grown, "geoms", [grown]) if g.geom_type == "Polygon" and g.area > MIN_LEFT_MM2]
-        parts.sort(key=lambda g: (_r(g.bounds[0]), _r(g.bounds[1]), _r(g.area)))
-        fills = parts
+    fills = [g for g in _in_fixed_order(_leftovers(shape, covered)) if g.area > MIN_LEFT_MM2]
     sewn = shapely.union_all([covered, *fills])
 
     # The letter's own check: if it fails, the caller sews the whole letter in Satin look.

@@ -232,6 +232,71 @@ def test_columns_ignore_rounding_noise(font):
         assert satin.columns(noisy, SIZE) == plain, ch
 
 
+# ---------------------------------------------------------------- pieces in Satin look, from any GEOS
+
+
+def _turned(ring):
+    """A ring running the other way round."""
+    return list(ring.coords)[:-1][::-1]
+
+
+def _restarted(ring):
+    """A ring started a few points further on."""
+    pts = list(ring.coords)[:-1]
+    k = 1 + len(pts) // 3
+    return pts[k:] + pts[:k]
+
+
+def _both(ring):
+    return _restarted(Polygon(_turned(ring)).exterior)
+
+
+def _redrawn(p, ring):
+    return Polygon(ring(p.exterior), [ring(h) for h in p.interiors])
+
+
+def _as_another_geos_might(pieces):
+    """The same pieces as another GEOS build might give them, one way at a time and all at once."""
+    return {
+        "rings the other way round": [_redrawn(p, _turned) for p in pieces],
+        "rings started elsewhere": [_redrawn(p, _restarted) for p in pieces],
+        "pieces in another order": pieces[::-1],
+        "all three": [_redrawn(p, _both) for p in pieces[1:] + pieces[:1]][::-1],
+    }
+
+
+def _sewn(objs):
+    return [(o["kind"], o["params"], dz.generate(o)[0]) for o in objs]
+
+
+def test_leftover_pieces_sew_the_same_however_geos_gives_them(font, monkeypatch):
+    (shape,) = shapes_of(font, "X", 20)  # at 20 mm the crossing leaves pieces for Satin look
+    real, raw = satin._leftovers, []
+    monkeypatch.setattr(satin, "_leftovers", lambda s, covered: raw.append(real(s, covered)) or raw[-1])
+    plain = satin.columns(shape, 20)
+    pieces = [g for g in getattr(raw[-1], "geoms", [raw[-1]]) if g.geom_type == "Polygon"]
+    assert satins(plain) and len(fills(plain)) >= 3 and len(pieces) >= 3  # it really has leftover pieces
+    for how, given in _as_another_geos_might(pieces).items():
+        monkeypatch.setattr(satin, "_leftovers", lambda s, covered, given=given: shapely.GeometryCollection(given))
+        got = satin.columns(shape, 20)
+        assert got == plain, how
+        assert _sewn(got) == _sewn(plain), how
+
+
+@pytest.mark.parametrize("name", ["blob", "hairline", "wide ring"])
+def test_a_letter_with_no_columns_sews_the_same_however_its_rings_run(font, name):
+    """Nothing here is a stroke, so the whole letter is one Satin-look piece."""
+    if name == "wide ring":  # walls 8 and 9 mm: too wide for columns, with a hole
+        shape = Polygon([(0, 0), (30, 0), (30, 30), (0, 30)], [[(8, 9), (22, 9), (22, 21), (8, 21)]])
+    else:
+        (shape,) = shapes_of(font, {"blob": "B", "hairline": "l"}[name])
+    plain = satin.columns(shape, SIZE)
+    assert plain and not satins(plain)
+    for ring in (_turned, _restarted, _both):
+        got = satin.columns(_redrawn(shape, ring), SIZE)
+        assert got == plain and _sewn(got) == _sewn(plain), ring.__name__
+
+
 def test_columns_follow_a_slanted_letter(font):
     (shape,) = shapes_of(font, "I")
     slanted = affinity.skew(shape, xs=-12, origin=(0, 0))
