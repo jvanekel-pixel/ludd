@@ -665,8 +665,10 @@ stitches. Shapes with holes stay fills (L-013).
 
 ### F-1310 Blend — YES (added 2026-11-26)
 A fill's **Pattern → Blend**: the shape's color fades into a second (and a third) across the rows.
-Each color has its own rows, thinning where the next one thickens, so together they cover like one
-fill: **Density** is the combined coverage.
+The rows are exactly where a one-color fill would put them, evenly spaced; each row goes to one of
+the colors, more of them to a color where it is stronger, so each color thins where the next one
+thickens and together they cover like one fill at any **Spacing**: **Density** is the combined
+coverage. Where a color thins out it sews at least two rows side by side, never one lone row.
 - Under Pattern: the **Second color** (click it to change it; it starts white, or navy on a light
   shape), **Add a color** (up to three; a new one starts white or navy, so choose its color),
   **Remove** on the third, **Swap the colors** (the fade runs the other way) and **Balance** (which
@@ -674,7 +676,12 @@ fill: **Density** is the combined coverage.
 - The fade runs across the rows: turn the **Angle** or drag the purple dots to point it (L-040).
   Angle, Random, Weave, Edge pad, Feather, the Hand-sewn look and carved lines all apply.
 - Sewn one color after the other (a thread change for each). Order & colors lists each color and
-  can change it, and Color sets keep them. A shape too small to fade sews in its first color.
+  can change it, and Color sets keep them.
+- Every color is sewn (at least two rows) whenever the shape has two rows or more per color.
+  Fewer rows than that (a small shape or a wide Spacing): it sews the colors it can and
+  warns "This shape has too few rows to blend all its colors, so the second color is not sewn.
+  Make the shape bigger or lower the spacing (a smaller number) to fit more rows." (naming the
+  colors left out).
 - Underlay on **Auto**: none. **Edge** can be chosen; there's no Cross-hatch (it would show).
 - Turning or mirroring the fill keeps each color on the same side of the shape.
 - Looks stripy: T-032.
@@ -1250,7 +1257,7 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | T-029 | "Letters don't sit on one line in my new font" (often the j) | The baseline is worked out from each letter's shape; a dotted j's dot makes it sit too low | In the dialog, click the letter and nudge it up or down before saving. For a saved font, make it again. |
 | T-030 | "Long names run off the design" | Some names are longer than the sample | In One file per name, tick **Shrink long names to fit** and set **Widest**. |
 | T-031 | "My carved line doesn't show" | It runs along the stitch rows (Check before stitching says so), or it's too short to cross enough of them | Turn the fill's **Angle** (or redraw the line) so the rows cross it (F-1313, L-041). |
-| T-032 | "My blend looks stripy" | The rows of each color are far apart where it thins out | Make it denser (smaller **Spacing**), or set **Weave** to **Smooth** (F-1310). |
+| T-032 | "My blend looks stripy" | Where a color thins out, its rows (single, or in pairs at a wide Spacing) lie far apart between the other color's rows | Make it denser (smaller **Spacing**), or set **Weave** to **Smooth** (F-1310). |
 | T-033 | "My motif isn't on another computer" | A shape carries its own copy and sews the same, but **My motifs** is kept per computer | The list shows it as "(kept in this shape, not in My motifs)". To add it there: on the first computer, **Export…** it in the Motifs window; **Import…** it on the other (F-1311). |
 
 ---

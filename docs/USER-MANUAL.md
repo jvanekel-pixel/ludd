@@ -648,9 +648,11 @@ on **Auto**, Blend, Motif, Maze, Ripple and Mesh have no underlay at all. A proj
 of the new patterns or settings below needs this version of LUDD or newer to open.
 
 ### Blend
-**Pattern → Blend** fades the shape's color into another across the rows. Each color is its own
-rows, thinning where the next one thickens, so together they cover like one fill (Density is the
-coverage of both together).
+**Pattern → Blend** fades the shape's color into another across the rows. The rows are evenly
+spaced, just where a one-color fill puts them, and each row goes to one of the colors: more of
+them to a color where it is stronger. So each color thins where the next one thickens, and
+together they cover like one fill (Density is the coverage of all the colors together). Where a
+color thins out it sews at least two rows side by side, never one lone row.
 
     =============   first color
     =============
@@ -664,7 +666,11 @@ shape), **Add a color** (up to three; choose its color), **Swap the colors** to 
 way, and **Balance** for which color takes more of the shape. The fade runs across the rows, so
 turn the **Angle** (or drag the purple dots) to point it. Each color sews in turn, with a thread
 change between them; Order & colors lists each one. Turning or mirroring the shape keeps every
-color on the same side of it. If a blend looks stripy, make it denser or set Weave to Smooth.
+color on the same side of it. If a blend looks stripy, make it denser or set Weave to Smooth. A
+Every color is sewn whenever there are at least two rows per color; a small shape or a wide
+Spacing may have fewer rows than that: the blend then sews the
+colors it can and a warning says which color is left out (make the shape bigger or the Spacing
+smaller).
 
 ### Motif fill and My motifs
 **Pattern → Motif** covers the shape with rows of a little pattern: Wave, Zigzag, Scallop,
