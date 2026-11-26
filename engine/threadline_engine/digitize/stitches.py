@@ -814,14 +814,17 @@ def _jitter(row: int, k: int) -> float:
 
 
 def _row_stitches(x0: float, x1: float, y: float, step: float, offset: float, forward: bool,
-                  random: float = 0.0, row: int = 0) -> list[Point]:
+                  random: float = 0.0, row: int = 0, forced_xs: Sequence[float] = ()) -> list[Point]:
     """Stitches along a row; inner penetrations sit on a grid shifted by `offset` (brick pattern).
     `random` (0..0.5) moves each penetration by up to that fraction of a stitch, which breaks up
-    the lines a regular pattern makes across a fill (Embrilliance's "Rnd")."""
+    the lines a regular pattern makes across a fill (Embrilliance's "Rnd"). `forced_xs` must be
+    penetrations (where a carved line crosses the row); see _with_forced."""
     k0 = math.floor((x0 - offset) / step) + 1
     k1 = math.ceil((x1 - offset) / step)
     grid = ((offset + k * step + (random * step / 2) * _jitter(row, k)) for k in range(k0, k1))
     inner = [x for x in grid if x0 + MIN_STITCH_MM < x < x1 - MIN_STITCH_MM]
+    if forced_xs:
+        inner = _with_forced(inner, forced_xs, x0, x1)
     xs = [x0, *inner, x1]
     # Dropping a penetration too close to an end can leave one gap longer than `step`: split it.
     even: list[float] = [xs[0]]
@@ -837,11 +840,28 @@ def _row_stitches(x0: float, x1: float, y: float, step: float, offset: float, fo
     return [(x, y) for x in xs]
 
 
+FORCED_CLEAR_MM = 0.8  # grid penetrations this near a forced one are left out
+
+
+def _with_forced(grid_xs: list[float], forced_xs: Sequence[float], x0: float, x1: float) -> list[float]:
+    """The grid penetrations with the forced ones among them: each forced one at least
+    MIN_STITCH_MM inside the row and past the forced one before it; grid penetrations within
+    FORCED_CLEAR_MM of one are left out, so none crowds it."""
+    keep: list[float] = []
+    for f in sorted(forced_xs):
+        if x0 + MIN_STITCH_MM < f < x1 - MIN_STITCH_MM and (not keep or f - keep[-1] >= MIN_STITCH_MM):
+            keep.append(f)
+    if not keep:
+        return grid_xs
+    return sorted([x for x in grid_xs if all(abs(x - f) >= FORCED_CLEAR_MM for f in keep)] + keep)
+
+
 def tatami(poly: Polygon, angle: float, spacing: float, stitch: float, extend: float,
            start_near: Point | None = None, travel_within: Polygon | None = None, random: float = 0.0,
            sparse_to: float | None = None, wave: tuple[float, float] | None = None,
            end_near: Point | None = None, row_ys: Sequence[float] | None = None,
-           offsets: Callable[[int], float] | None = None) -> list[Rec]:
+           offsets: Callable[[int], float] | None = None,
+           forced: Callable[..., Sequence[float]] | None = None) -> list[Rec]:
     """Tatami fill of `poly`: serpentine rows grouped into regions, regions joined by travel.
     Travel runs inside `travel_within` (default `poly`), where later stitching covers it.
     `end_near`: finish as near this point as the rows allow (the region that can end nearest it
@@ -853,10 +873,13 @@ def tatami(poly: Polygon, angle: float, spacing: float, stitch: float, extend: f
     `row_ys`: the heights of the rows in the turned frame, lowest first (a blend gives each of its
     colors its own rows). Rows too far apart to step between are joined by travel.
     `offsets`: row number -> how far that row's needle grid is shifted, as a fraction of a stitch
-    (the weave); without it, a third of a stitch more on each row. Wave keeps its own rule."""
+    (the weave); without it, a third of a stitch more on each row. Wave keeps its own rule.
+    `forced`: (y, x0, x1) -> places along the row (turned frame) that must be needle points, where
+    carved lines cross it. On a wave fill it is also given `bend`, x -> the rippled row's height
+    there, so it can find the crossings on the ripple."""
     # With a hook, equally good choices are settled to a millionth of a mm, so the last digit of a
     # sine (not the same on every computer) can't decide which region is sewn next.
-    steady = row_ys is not None or offsets is not None
+    steady = row_ys is not None or offsets is not None or forced is not None
     rot = affinity.rotate(poly, -angle, origin=(0, 0))
     if not rot.is_valid:
         # A shape with a zero-width spike (an arm exactly twice the underlay inset) can turn
@@ -908,7 +931,6 @@ def tatami(poly: Polygon, angle: float, spacing: float, stitch: float, extend: f
                 # every quarter wave, so neighbouring rows are copies of each other moved across:
                 # they ripple together and never cross. Points that would leave the shape stay put.
                 step = min(stitch, wave[1] / 4)
-                row = _row_stitches(x0, x1, y, step, 0.0, fwd, random, r)
                 fade = wave[1] / 2  # the ripple eases out over the last half wave, so row ends meet the edge cleanly
 
                 def rippled(x: float, yy: float) -> Point:
@@ -916,10 +938,13 @@ def tatami(poly: Polygon, angle: float, spacing: float, stitch: float, extend: f
                     q = (x, yy + wave_offset(x, *wave) * max(0.0, k))
                     return q if rot.contains(ShapelyPoint(q)) else (x, yy)
 
+                cross = () if forced is None else forced(y, x0, x1, bend=lambda x: rippled(x, y)[1])
+                row = _row_stitches(x0, x1, y, step, 0.0, fwd, random, r, cross)
                 row = [rippled(x, yy) for x, yy in row]
             else:
                 shift = (r % 3) * stitch / 3 if offsets is None else offsets(r) * stitch
-                row = _row_stitches(x0, x1, y, stitch, shift, fwd, random, r)
+                row = _row_stitches(x0, x1, y, stitch, shift, fwd, random, r,
+                                    () if forced is None else forced(y, x0, x1))
             pts += row
             fwd = not fwd
         return [to_world(p) for p in pts]

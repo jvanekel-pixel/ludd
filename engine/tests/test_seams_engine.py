@@ -302,6 +302,30 @@ def test_offsets_shift_each_rows_needle_points():
     assert [(round(x, 6), round(y, 6), k) for x, y, k in written] == [(round(x, 6), round(y, 6), k) for x, y, k in plain]
 
 
+def test_forced_points_are_needle_points_that_nothing_crowds():
+    recs = tatami(SQUARE_20, 0, 0.4, 3.5, 0.0, forced=lambda y, x0, x1: [7.0, 7.1, 0.1, 25.0])
+    for r in range(50):
+        xs = sorted(x for x, y, k in recs if k == STITCH and abs(y - (0.2 + 0.4 * r)) < 1e-9)
+        # 7.0 is taken; 7.1 (crowding it), 0.1 (at the end) and 25 (off the row) are not.
+        assert any(abs(x - 7.0) < 1e-9 for x in xs), r
+        assert [x for x in xs if abs(x - 7.0) < 0.8] == [pytest.approx(7.0)], r
+        assert max(b - a for a, b in zip(xs, xs[1:])) <= 3.5 + 1e-9, r
+    assert_sane(recs, inside=SQUARE_20)
+
+
+def test_forced_gets_the_ripple_on_a_wave_fill():
+    asked = []
+
+    def at_ten(y, x0, x1, bend=None):
+        asked.append((y, bend(10.0)))
+        return [10.0]
+
+    recs = tatami(SQUARE_20, 0, 0.4, 3.5, 0.0, wave=(1.5, 8.0), forced=at_ten)
+    # Every row has a needle at x = 10, where its ripple is.
+    for y, bent in asked:
+        assert any(k == STITCH and abs(x - 10.0) < 1e-9 and abs(yy - bent) < 1e-9 for x, yy, k in recs), y
+
+
 # ---------------------------------------------------------------- project features
 
 
