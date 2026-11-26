@@ -10,7 +10,7 @@ from shapely.geometry import LineString, MultiLineString, MultiPoint, Point, Pol
 from shapely.ops import unary_union
 
 import invariants
-from snapshot_util import check, digest_pattern
+from snapshot_util import check, digest_pattern_steady
 from threadline_engine import fabrics, layout, lettering
 from threadline_engine.digitize import lines
 from threadline_engine.digitize import stitches as dz
@@ -516,4 +516,4 @@ SNAPSHOTS = {
 def test_snapshots(name, font_path):
     r = layout.render({"items": [SNAPSHOTS[name](font_path)], "merge_colors": False, "color_sort": False,
                        "basting": {"enabled": False}})
-    check("lettering_extras", name, digest_pattern(r.pattern))
+    check("lettering_extras", name, digest_pattern_steady(r.pattern))

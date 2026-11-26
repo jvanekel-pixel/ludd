@@ -2,7 +2,7 @@
  "IOT_columns": {
   "jumps": 3,
   "records": 373,
-  "sha1": "1a93dfffd5f3354ed0c56097035f1dc5ae598412",
+  "sha1": "4fd8a6fecdafa904fcf2e09abee2b4a03e567ccb",
   "stitches": 366,
   "threads": [
    "#cc2222"
@@ -32,7 +32,7 @@
  "T_12": {
   "jumps": 1,
   "records": 118,
-  "sha1": "a938d6488d0b82d7d7a9b3cc9c56fab93b7a3c25",
+  "sha1": "d12f59a9edbf42401ad775739bd54752762634eb",
   "stitches": 115,
   "threads": [
    "#cc2222"
@@ -42,7 +42,7 @@
  "small_5mm": {
   "jumps": 3,
   "records": 150,
-  "sha1": "7216e79ff33066bb592893912868f1fef065a71f",
+  "sha1": "8f3075edc4ca204c5941e8a41c6d4f07a11c5488",
   "stitches": 144,
   "threads": [
    "#cc2222"

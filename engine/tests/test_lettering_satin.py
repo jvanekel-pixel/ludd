@@ -11,7 +11,7 @@ from shapely import affinity
 from shapely.geometry import MultiPoint, Point, Polygon, box
 
 from invariants import assert_sane
-from snapshot_util import check, digest_pattern
+from snapshot_util import check, digest_pattern_steady
 from test_lettering import _rect
 from threadline_engine import layout, lettering
 from threadline_engine.digitize import stitches as dz
@@ -561,4 +561,4 @@ SNAPSHOTS = {
 @pytest.mark.parametrize("name", sorted(SNAPSHOTS))
 def test_snapshots(font, name):
     r = layout.render(_plain([_item(font, **SNAPSHOTS[name])]))
-    check("lettering_satin", name, digest_pattern(r.pattern))
+    check("lettering_satin", name, digest_pattern_steady(r.pattern))

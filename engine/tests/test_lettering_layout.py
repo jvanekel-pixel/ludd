@@ -3,6 +3,7 @@ and changes to single letters, with the tiny font built in test_lettering.py (I,
 
 import json
 import math
+import random
 
 import pyembroidery as pe
 import pytest
@@ -10,9 +11,10 @@ from shapely.geometry import LineString, Polygon
 from shapely.ops import unary_union
 
 from invariants import assert_sane
-from snapshot_util import SNAPSHOT_DIR, check, digest_pattern
+from snapshot_util import SNAPSHOT_DIR, check, digest_pattern, digest_pattern_steady
 from threadline_engine import layout, lettering, project
 from threadline_engine.digitize import stitches as dz
+from threadline_engine.layout import objects as layout_objects
 from threadline_engine.layout import text as text_pipeline
 
 from test_layout_snapshots import CASES as OLD_CASES
@@ -523,7 +525,53 @@ SNAPSHOT_CASES = {
 
 @pytest.mark.parametrize("name", sorted(SNAPSHOT_CASES))
 def test_snapshots(name, font_path):  # noqa: F811
-    check("lettering_layout", name, digest_pattern(layout.render(_lay(_text(font_path, **SNAPSHOT_CASES[name]))).pattern))
+    rendered = layout.render(_lay(_text(font_path, **SNAPSHOT_CASES[name])))
+    check("lettering_layout", name, digest_pattern_steady(rendered.pattern))
+
+
+class _LastDigitNoise:
+    """The math module with every sine and cosine off by one last digit, up or down or not at all,
+    at random: what another computer's maths library can give."""
+
+    def __init__(self, seed):
+        self._rng = random.Random(seed)
+
+    def __getattr__(self, name):
+        real = getattr(math, name)
+        if name not in ("sin", "cos"):
+            return real
+
+        def nudged(x):
+            v = real(x)
+            return math.nextafter(v, self._rng.choice((-math.inf, v, math.inf))) if v else v
+
+        return nudged
+
+
+def _forget_stitches():
+    """Empty what a render keeps, so the next one works every stitch out again."""
+    text_pipeline._text_cache.clear()
+    layout_objects._object_cache.clear()
+    lettering.extras._cache.clear()
+
+
+@pytest.mark.parametrize("seed", [1, 2, 3])
+def test_snapshots_do_not_hang_on_the_last_digit_of_a_sine(seed, font_path, monkeypatch):  # noqa: F811
+    """Every snapshot case gives its recorded stitches with the last digit of each sine and cosine
+    nudged. (The "bulge" case once failed on both Macs and passed on Windows and Linux: a stitch in
+    the middle of a row sat exactly on a rounding step, and that last digit chose which way it
+    rounded. snapshot_util.digest_pattern_steady is the cure.)"""
+    recorded = json.loads((SNAPSHOT_DIR / "lettering_layout.json").read_text(encoding="utf-8"))
+    _forget_stitches()
+    try:
+        monkeypatch.setattr(dz, "math", _LastDigitNoise(seed))
+        monkeypatch.setattr(lettering.envelope, "math", _LastDigitNoise(seed + 100))
+        for name in sorted(SNAPSHOT_CASES):
+            rendered = layout.render(_lay(_text(font_path, **SNAPSHOT_CASES[name])))
+            assert digest_pattern_steady(rendered.pattern) == recorded[name], name
+    finally:
+        monkeypatch.undo()
+        _forget_stitches()  # nothing worked out with the nudged maths may reach another test
 
 
 @pytest.mark.parametrize("name", sorted(SNAPSHOT_CASES))

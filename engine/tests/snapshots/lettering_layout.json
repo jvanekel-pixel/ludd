@@ -2,7 +2,7 @@
  "bulge": {
   "jumps": 4,
   "records": 868,
-  "sha1": "b7e33cab27bdd510f4bc24180b17fd0ef8ded694",
+  "sha1": "e580d31f66ef8285bc3dcb7974eb5577c9d6f3c8",
   "stitches": 862,
   "threads": [
    "#cc2222"
@@ -12,7 +12,7 @@
  "done_when_1": {
   "jumps": 2,
   "records": 891,
-  "sha1": "cacac626a5272c6f5e5c2ddbd5570cd10cc0b8d4",
+  "sha1": "e5294df6ec2509a7dde9eee957e54b014d461ccc",
   "stitches": 885,
   "threads": [
    "#cc2222",
@@ -24,7 +24,7 @@
  "letter_moved_recolored": {
   "jumps": 0,
   "records": 430,
-  "sha1": "2ad551cf07a9725a05d53db3071d27f5138302a6",
+  "sha1": "66da6e5d3b58fedd67f8ce0ea6c9b84219b48d95",
   "stitches": 427,
   "threads": [
    "#cc2222",
@@ -36,7 +36,7 @@
  "pennant_right": {
   "jumps": 4,
   "records": 672,
-  "sha1": "d5816df69d74aee3b6be7b49ecd7a0a56c551e80",
+  "sha1": "ae46be2de564df4bec34c2c92696c89da85783de",
   "stitches": 667,
   "threads": [
    "#cc2222"
@@ -66,7 +66,7 @@
  "vertical": {
   "jumps": 2,
   "records": 433,
-  "sha1": "338e1095d08cb60461f6b61e95e8c0e1920e8598",
+  "sha1": "923d38c6763c07474dca210ecf424cab7fff2694",
   "stitches": 430,
   "threads": [
    "#cc2222"
@@ -76,7 +76,7 @@
  "wave": {
   "jumps": 4,
   "records": 792,
-  "sha1": "53f59292737c0f086979c1aea8f66b7584569d90",
+  "sha1": "2771c857c84f9d6bd8e2c074d3e9b192849b58b0",
   "stitches": 786,
   "threads": [
    "#cc2222"
