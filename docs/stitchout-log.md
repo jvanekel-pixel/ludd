@@ -83,7 +83,7 @@ The user is testing on the machine once the software is about 95% done (decided 
 | Phase 6 | **Carved lines** | A 40 mm fill with a carved star and a carved wavy line | Grooves clear and unbroken; no loose stitches beside them |
 | Phase 6 | **Feather and hand-sewn** | Two fills feathered into each other; a line, satin and fill at 60% hand-sewn | Soft join with no gap; the hand-sewn pieces look deliberately irregular, nothing loose |
 | Phase 6 | **Motif fill, maze, ripple, mesh** | A 40 mm circle in each | Each lies flat; the maze has no crossing; mesh cells are even |
-| Phase 6 | **Turning fill** | A leaf with two angle lines 50° apart; a rectangle with a second line turned sharply | Stitches fan smoothly; no bunching inside the turn, no gaps outside it or along the edges; the sharp turn's crease holds |
+| Phase 6 | **Turning fill** | A leaf with two angle lines 50° apart; a rectangle with a second line turned sharply | Stitches fan smoothly; no bunching inside the turn, no gaps outside it or along the edges; the sharp turn's crease holds; note where a thin line of thread shows across finished rows, and how much it bothers (L-002) |
 
 ## Log
 

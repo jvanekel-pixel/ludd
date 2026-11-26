@@ -767,6 +767,9 @@ points move as Random 50% does (a higher Random stays).
   follow the line drawn first and LUDD says "Two angle lines have their middles in the same place,
   so the stitches follow the line drawn first and leave the other out. Move one of them at least
   1 mm away to use both."
+- **Thin lines of thread can show** across rows already sewn, where the fill moves between groups
+  of rows or steps to a row that starts far away on the outside of a bend (L-002). Check the
+  stitch preview before sewing.
 - Another pattern keeps the lines but doesn't use them (it sews at its one angle, with the usual
   purple dots); switch back to Tatami and they work again.
 
@@ -1193,7 +1196,7 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | ID | What | Status | Workaround | Could it be built? |
 | --- | --- | --- | --- | --- |
 | L-001 | **Two-color gradient / color blend** (one color fading into another by interleaved rows) | YES since 2026-11-26 (limit lifted; F-1310, up to three colors). The fade runs across the rows only (L-040) | — | Done. |
-| L-002 | **Fill with holes may show a travel line on top**: when holes split a tatami fill into regions, the needle can travel across rows already sewn. With **Don't sew what's hidden** on (F-1207) a lower fill can get such a line too (in the tests: about 19 mm across a square under a square, 35 mm under lettering). A turning fill (F-1315) can show one too, even without holes, where its rows are sewn in separate groups (up to about 50 mm on the test shapes). | Known weakness | Cut the fill into hole-free bands with cuts parallel to the rows (Knife), or use Contour/Stipple. | Yes (engine route planning). |
+| L-002 | **Fill with holes may show a travel line on top**: when holes split a tatami fill into regions, the needle can travel across rows already sewn. With **Don't sew what's hidden** on (F-1207) a lower fill can get such a line too (in the tests: about 19 mm across a square under a square, 35 mm under lettering). **Turning fills (F-1315) show these lines often, even without holes:** when they move between groups of rows, and where, on the outside of a bend, the next row starts far away and the needle steps straight to it (one step up to about 25 mm). In tests on shapes up to 6 cm across, most turning fills showed some; the longest single line was about 6 cm. | Known weakness | Cut the fill into hole-free bands with cuts parallel to the rows (Knife), or use Contour/Stipple. For a turning fill, check the stitch preview before sewing; **Back to one angle** sews it as a plain fill. | Yes (engine route planning). |
 | L-003 | **Multi-line text** in one lettering object | YES since 2026-11-25 (limit lifted; F-1410). A circle or a drawn line still takes one line (L-037) | — | Done. |
 | L-004 | **Open running line starting mid-line** | NO (ends only) | Split it with the Knife, or close it into a loop. | Possibly. |
 | L-005 | **Per-letter stitch angle / direction** in lettering | YES since 2026-11-25 (limit lifted; F-1413), except True satin and stitched-font letters | For those, Break into shapes (True satin) and use each shape's purple dots. | Done. |
@@ -1247,7 +1250,7 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | T-007 | Auto-trace guess leaks into the next area | Spread too high | Lower Spread (`Alt+[`), Alt+click the area to cut it out, or try the next guess (Tab). |
 | T-008 | Auto-trace guess stops short | Spread too low / shading | Raise Spread (`Alt+]`), Shift+click to add, or try "simplified colors" / AI tracing. |
 | T-009 | AI says it can't reach `http://localhost:11434` | Ollama isn't running | Start Ollama (it runs in the system tray); make sure the model is pulled (`ollama pull qwen2.5vl:7b`), then Settings → AI → Test. |
-| T-010 | A long thin travel line shows across a fill with holes | L-002 | Split the fill into hole-free bands. |
+| T-010 | A long thin travel line shows across a fill with holes, or across a turning fill | L-002 | Split a fill with holes into hole-free bands. For a turning fill, check the preview, and use **Back to one angle** if the line matters. |
 | T-011 | Lettering trims between every letter | Older version, or letters far apart | Current version hands over letter to letter; drag letter dots to tune. |
 | T-012 | The start/end dot "jumps somewhere else" when dropped | Pre-2026-10-13 build | Update; dots now follow the edge and stay put. |
 | T-013 | Can't grab a satin's purple tip | It sits just past the end of the satin, outside the shape | Zoom in; grab the purple dot outside the tip (green/red dots win where they overlap). |
