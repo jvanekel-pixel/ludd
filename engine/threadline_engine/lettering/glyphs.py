@@ -159,7 +159,8 @@ def _satin_angle(shape: Polygon) -> float:
         rot = affinity.rotate(shape, -angle, origin=(0, 0))
         rows = dz._rows(rot, angle, 0.6, 0.0)
         long_len = sum(max(0.0, (x1 - x0) - SATIN_MAX_STITCH_MM) for segs in rows for x0, x1 in segs)
-        short_bias = sum(1 for segs in rows for x0, x1 in segs if x1 - x0 < 0.8) * 0.2  # avoid slivers
+        # Avoid slivers. Rounded, so a row exactly 0.8 mm wide (a shadow's) counts the same on every computer.
+        short_bias = sum(1 for segs in rows for x0, x1 in segs if round(x1 - x0, 6) < 0.8) * 0.2
         score = long_len + short_bias
         if score < best[0] - 1e-9:
             best = (score, float(angle))

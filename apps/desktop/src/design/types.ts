@@ -250,8 +250,7 @@ export type TextItem = {
   id: string;
   kind: "text";
   name?: string;
-  /** May hold line breaks ("
-"). */
+  /** May hold line breaks ("\n"). */
   text: string;
   font: FontRef;
   /** Height of capital letters, mm. */

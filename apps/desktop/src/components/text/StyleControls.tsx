@@ -19,7 +19,11 @@ function LetterNotes({ item, stitchFont }: { item: TextItem; stitchFont: boolean
   const i = layout?.items.findIndex((it) => it.id === item.id) ?? -1;
   const parts = i >= 0 ? design?.items?.[i]?.letters : undefined;
   const chosen = Object.keys(item.letters ?? {}).length;
-  const how = stitchFont
+  // Letters made of stitches (a font made from letter files) have no outlines and no dots to move.
+  const stitched = item.font.made_of === "stitches";
+  const how = stitched
+    ? "each letter sews the stitches from its letter file"
+    : stitchFont
     ? "each letter sews the stitches its stitch font was made with"
     : item.style === "satin"
       ? "each letter is filled with long, smooth satin stitches across its strokes, at the angle that crosses them best"
@@ -30,16 +34,25 @@ function LetterNotes({ item, stitchFont }: { item: TextItem; stitchFont: boolean
     <div className="letter-notes">
       <p className="hint">
         {parts ? `${parts.length} letter part${parts.length === 1 ? "" : "s"}: ` : ""}
-        {how}. Each one starts by where the one before ended. Drag a letter's green (start) or red (end) dot on the design to move it
-        along the letter's edge{chosen ? ` (${chosen} chosen)` : ""}.
+        {how}.
+        {!stitched &&
+          ` Each one starts by where the one before ended. Drag a letter's green (start) or red (end) dot on the design to move it along the letter's edge${chosen ? ` (${chosen} chosen)` : ""}.`}
       </p>
       <div className="btn-row">
-        {chosen > 0 && (
+        {chosen > 0 && !stitched && (
           <button onClick={() => command("text.resetEnds").run()} title={`Let every letter start and end where LUDD puts them again (${formatShortcut(command("text.resetEnds").shortcut)})`}>
             Reset starts and ends
           </button>
         )}
-        <button disabled={!(command("text.toShapes").enabled?.() ?? true)} onClick={() => command("text.toShapes").run()} title={`Turn the letters into ordinary shapes, to change their points, stitch type, density and direction one by one (${formatShortcut(command("text.toShapes").shortcut)}). The words can't be retyped after.`}>
+        <button
+          disabled={stitched || !(command("text.toShapes").enabled?.() ?? true)}
+          onClick={() => command("text.toShapes").run()}
+          title={
+            stitched
+              ? "Letters from a stitched font have no outlines to edit."
+              : `Turn the letters into ordinary shapes, to change their points, stitch type, density and direction one by one (${formatShortcut(command("text.toShapes").shortcut)}). The words can't be retyped after.`
+          }
+        >
           Break into shapes…
         </button>
       </div>

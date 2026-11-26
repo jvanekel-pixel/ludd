@@ -15,7 +15,7 @@ from .files import _apply_ops, _load, _move_stitches, _split_blocks, _transform
 from .joins import _join_same_thread_objects, _merge_same, _sort_by_thread
 from .model import SCALE_WARN, Block, LayoutError, Transform, _mm, _stitch_bounds
 from .objects import OBJECT_KINDS, OBJECT_LABEL, _object_blocks
-from .text import _text_block
+from .text import _text_block, text_title
 
 
 @dataclass
@@ -48,7 +48,7 @@ def render(layout: dict[str, Any]) -> Rendered:
             text_warnings = list(text_warnings)
             blocks = _apply_ops(blocks, it.get("ops") or [], jt_mm, text_warnings, generated=True)
             b = _stitch_bounds([r for blk in blocks for r in blk.recs])
-            name = it.get("name") or f"“{str(it.get('text', '')).strip()[:24]}”"
+            name = it.get("name") or f"“{text_title(it)}”"
             item_info.append({
                 "id": it.get("id", str(idx)),
                 "name": name,

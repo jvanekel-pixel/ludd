@@ -96,6 +96,8 @@ def apply(obj: dict[str, Any], fabric_id: str | None) -> dict[str, Any]:
     if p.get("underlay") is None:
         p["underlay"] = "auto"
         p["underlay_level"] = f["underlay"]
+    elif p["underlay"] == "auto":  # chosen by width already (True satin letters): at the fabric's amount
+        p.setdefault("underlay_level", f["underlay"])
     if kind == "satin":
         p.setdefault("auto_widen", True)
     return {**obj, "params": p}

@@ -6,8 +6,11 @@ import json
 
 import pyembroidery as pe
 import pytest
+from shapely import affinity
+from shapely.geometry import Polygon
 
-from threadline_engine import layout, lettering, project
+from invariants import assert_sane
+from threadline_engine import fabrics, layout, lettering, project
 from threadline_engine.layout import text as text_pipeline
 from threadline_engine.repair import overlap
 
@@ -225,3 +228,76 @@ def test_the_leaf_motif_has_its_own_feature():
     run = {"kind": "run", "params": {"style": "motif", "motif": "leaf"}}
     assert {"motif_lines", "motif_leaf"} <= project._features({"items": [run]})
     assert "motif_leaf" not in project._features({"items": [{**run, "params": {"style": "motif", "motif": "wave"}}]})
+
+
+# ---------------------------------------------------------------- the tracks together
+
+
+def _mm_blocks(item):
+    """Each color block of a rendered text as (x mm, y mm, command) records."""
+    r = layout.render({"items": [item], "merge_colors": False, "color_sort": False})
+    return [[(x / 10, y / 10, c) for x, y, c, _, _ in b.recs] for b in r.blocks]
+
+
+def test_extras_and_columns_together(font_path):
+    """Spec 8: a True satin text with a shadow, an outline and a moved letter."""
+    item = _text(font_path, text="IOX", style="columns", size_mm=14,
+                 shadow={"dx_mm": 0.8, "dy_mm": 0.8, "thread": GREY},
+                 outline={"gap_mm": 1.0, "width_mm": 1.5, "style": "satin", "thread": BLUE},
+                 letter_edits={"1": {"dx_mm": 1.5, "dy_mm": -2.0}})
+    s = _render(item)
+    assert [r["what"] for r in s["items"][0]["runs"]] == ["shadow", "letters", "outline"]
+    assert any(p["kind"] == "satin" for p in s["items"][0]["letters"])  # real columns
+    assert not [w for w in s["warnings"] if "True satin" in w["message"]]
+    blocks = _mm_blocks(item)
+    assert len(blocks) == 3
+    for recs in blocks:
+        assert_sane(recs, max_stitch_mm=7.15)
+
+
+def test_the_satin_angle_ignores_rounding_noise():
+    """A shadow 0.8 mm thick is exactly at the sliver width: moving it mustn't change its angle,
+    or Windows and Apple-chip Macs could sew it differently."""
+    stem = Polygon([(0, 0), (4, 0), (4, 12), (0, 12)])
+    strip = affinity.translate(stem, 0.8, 0.8).difference(stem)
+    angles = {lettering._satin_angle(affinity.translate(strip, (i * 0.137) % 41.3, (i * 0.291) % 17.9))
+              for i in range(60)}
+    assert len(angles) == 1, angles
+
+
+@pytest.mark.parametrize("fabric,level", [("towel", "heavy"), ("denim", "light")])
+def test_true_satin_columns_take_the_fabrics_underlay_amount(fabric, level):
+    column = {"kind": "satin", "geometry": {}, "params": {"underlay": "auto"}}
+    assert fabrics.apply(column, fabric)["params"]["underlay_level"] == level
+    chosen = {**column, "params": {"underlay": "auto", "underlay_level": "normal"}}
+    assert fabrics.apply(chosen, fabric)["params"]["underlay_level"] == "normal"
+
+
+def _stitched_font(tmp_path):
+    bar = [[0, 0, "s"], [0, -5, "s"], [0, -10, "s"], [2, -10, "s"], [2, 0, "s"]]
+    doc = {"format": "ludd-font", "version": 2, "name": "Bars", "cap_height_mm": 10, "space_mm": 3,
+           "threads": [{"color": "#000000", "name": "Black"}],
+           "glyphs": {"I": {"advance_mm": 3, "stitches": bar, "blocks": [[0, 5, 0]]}}}
+    path = tmp_path / "bars.luddfont"
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    return str(path)
+
+
+@pytest.mark.parametrize("size,transform,says", [
+    (10, {}, False),
+    (10, {"scale_x": 1.1, "scale_y": 1.1}, False),
+    (10, {"rotate": 30}, False),
+    (10, {"scale_x": 1.5, "scale_y": 1.5}, True),
+    (10, {"scale_y": 0.7}, True),
+    (13, {"scale_x": 1.1, "scale_y": 1.1}, True),  # together more than 20%
+])
+def test_stitched_letters_resized_with_the_handles_say_so(tmp_path, size, transform, says):
+    item = {**_text(_stitched_font(tmp_path), text="II", size_mm=size, transform=transform),
+            "font": {"path": _stitched_font(tmp_path), "made_of": "stitches"}}
+    warnings = [w["message"] for w in _render(item)["warnings"]]
+    assert any("handles" in w for w in warnings) is says, warnings
+
+
+def test_a_text_on_two_lines_is_named_on_one_line(font_path):
+    s = _render(_text(font_path, text="IO\nXI"))
+    assert s["items"][0]["name"] == "“IO XI”"

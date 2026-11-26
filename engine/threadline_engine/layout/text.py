@@ -99,6 +99,11 @@ def _apply_letter_edits(objects: list[dict[str, Any]], spec: dict[str, Any]) -> 
     return out
 
 
+def text_title(it: dict[str, Any]) -> str:
+    """The start of a text's words on one line, to name it (and its parts) by."""
+    return " ".join(line.strip() for line in str(it.get("text") or "").splitlines() if line.strip())[:24]
+
+
 def _text_parts(it: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]], list[str]]:
     """Everything a text item sews, in sewing order: (the extras before the letters, the letters,
     the extras after them, warnings), turned, resized and mirrored with the text (but not yet
@@ -125,6 +130,10 @@ def _text_parts(it: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str
     except (lettering.LetteringError, dz.DigitizeError) as exc:
         raise LayoutError(f"{it.get('name') or 'Text'}: {exc}") from exc
     t = Transform.from_dict(it.get("transform"))
+    if any(o.get("kind") == "stitches" for o in objects):
+        font = spec.get("font") or {}
+        warnings = [*warnings, *lettering.stitchglyphs.handle_resize_notes(
+            str(font.get("path") or ""), float(spec.get("size_mm") or 12), t.scale_x, t.scale_y)]
     shape_t = Transform(rotate=t.rotate, scale_x=t.scale_x, scale_y=t.scale_y, flip_x=t.flip_x, flip_y=t.flip_y)
 
     def turned(o: dict[str, Any]) -> dict[str, Any]:
@@ -313,7 +322,7 @@ def text_to_shapes(it: dict[str, Any]) -> dict[str, Any]:
     t = Transform.from_dict(it.get("transform"))
     whole = (it.get("threads") or [None])[0] or it.get("thread") or DEFAULT_THREAD
     chosen = it.get("letters") or {}
-    label = it.get("name") or " ".join(str(it.get("text") or "Text").strip().splitlines())[:24]
+    label = it.get("name") or text_title(it) or "Text"
     out = []
     for group, parts in (("before", before), ("letters", letters), ("after", after)):
         prev_end = None

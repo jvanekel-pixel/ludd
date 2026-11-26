@@ -1267,7 +1267,7 @@ export async function textToShapes() {
     if (await commit({ ...now, items })) {
       useStore.getState().setSelection(shapes[0].id, shapes.slice(1).map((x) => x.id));
       const lost = it.ops?.length ? " The stops and trims you'd added to the lettering were left out: add them again on the shapes if you need them." : "";
-      info(`Broke "${it.text}" into ${shapes.length} shapes (grouped). Each is an ordinary shape now: click one (Ctrl+U ungroups) to change its points, stitches, direction or dots.${lost}`);
+      info(`Broke "${it.text.replace(/\s*[\r\n]+\s*/g, " ")}" into ${shapes.length} shapes (grouped). Each is an ordinary shape now: click one (Ctrl+U ungroups) to change its points, stitches, direction or dots.${lost}`);
     }
   } catch (err) {
     info(err instanceof Error ? err.message : String(err));

@@ -141,6 +141,28 @@ def size_notes(path: str, size_mm: float) -> list[str]:
             "size where it can and resizes the rest as they are, so check the preview before you sew."]
 
 
+def handle_resize_notes(path: str, size_mm: float, scale_x: float, scale_y: float) -> list[str]:
+    """What to say about stitched letters resized with the handles: that stretches their stitches
+    as they are; only a change of letter height rebuilds them."""
+    if abs(scale_x - 1.0) < 1e-6 and abs(scale_y - 1.0) < 1e-6:
+        return []
+    try:
+        font = _load_stitch_font(path)
+    except LetteringError:
+        return []  # reading the letters says what's wrong with it
+    if not any(isinstance(g, dict) and "stitches" in g for g in font["glyphs"].values()):
+        return []
+    own = float(font.get("cap_height_mm") or size_mm)
+    wide, tall = size_mm / own * scale_x, size_mm / own * scale_y
+    if not (_far(wide) or _far(tall)):
+        return []
+    shown = (f"{tall * 100:.0f}%" if round(wide, 2) == round(tall, 2)
+             else f"{wide * 100:.0f}% wide and {tall * 100:.0f}% tall")
+    return [f"Resized with the handles, these stitched letters are {shown} of the size the font was made at. The "
+            "handles stretch their stitches without rebuilding them, so they get too dense or too sparse. Change the "
+            "letter height instead, and LUDD rebuilds them."]
+
+
 def records(obj: dict[str, Any]) -> list[tuple[float, float, int]]:
     """A "stitches" part's stitches as (x mm, y mm, pyembroidery command)."""
     try:

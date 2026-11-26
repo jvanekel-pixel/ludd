@@ -759,9 +759,11 @@ function selectedLetters(scene: Scene): { id: string; parts: NonNullable<LayoutI
   const i = doc.layout.items.findIndex((it) => it.id === st.selectedId);
   const it = doc.layout.items[i];
   const parts = scene.design?.items?.[i]?.letters;
-  if (!it || it.kind !== "text" || it.locked || !parts?.length) return null;
+  // Letters made of stitches sew their file's own stitches: no start or end to move.
+  const dots = parts?.filter((p) => p.kind !== "stitches");
+  if (!it || it.kind !== "text" || it.locked || !dots?.length) return null;
   // While single letters are adjusted, their dots are the letters', not their starts and ends.
-  return useLetterMode.getState().id === it.id ? null : { id: it.id, parts };
+  return useLetterMode.getState().id === it.id ? null : { id: it.id, parts: dots };
 }
 
 /** The purple dots of a drawn shape: a fill's stitch direction, or a satin column's two tips

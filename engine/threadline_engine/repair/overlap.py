@@ -27,7 +27,7 @@ from ..digitize.patterns import polygons
 from ..layout import passes
 from ..layout.model import LayoutError, Transform
 from ..layout.objects import OBJECT_LABEL
-from ..layout.text import text_letters
+from ..layout.text import text_letters, text_title
 
 KEEP_MM = 1.0  # "Keep under the edge": how far under a cover's edge the fill below keeps sewing
 KEEP_RANGE_MM = (0.5, 3.0)
@@ -116,7 +116,7 @@ def _keep_mm(value: Any) -> float:
 def _name(item: dict, index: int) -> str:
     """An item's name as render() gives it (layout/render.py)."""
     if item.get("kind") == "text":
-        return item.get("name") or f"“{str(item.get('text', '')).strip()[:24]}”"
+        return item.get("name") or f"“{text_title(item)}”"
     return item.get("name") or f"{OBJECT_LABEL[item['kind']]} {index + 1}"
 
 

@@ -27,8 +27,8 @@ afterEach(() => {
   setText.mockReset();
 });
 
-function show(style: TextItem["style"], path = "C:/Fonts/test.ttf") {
-  const item = { id: "t", kind: "text", text: "IOT", style, font: { path, index: 0, family: "Test", style: "Regular" } } as unknown as TextItem;
+function show(style: TextItem["style"], path = "C:/Fonts/test.ttf", madeOf?: "stitches") {
+  const item = { id: "t", kind: "text", text: "IOT", style, font: { path, index: 0, family: "Test", style: "Regular", made_of: madeOf } } as unknown as TextItem;
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -53,6 +53,15 @@ describe("StyleControls", () => {
     expect(el.textContent).toContain(TRUE_SATIN_HINT);
     expect(el.textContent).toContain("its own satin column that follows the stroke");
     expect(styleLabel({ style: "columns" } as TextItem)).toBe("True satin");
+  });
+
+  it("offers no start and end dots for letters made of stitches", () => {
+    const el = show("satin", "C:/Fonts/mine.luddfont", "stitches");
+    expect(el.textContent).toContain("sews the stitches from its letter file");
+    expect(el.textContent).not.toContain("green (start)");
+    const apart = [...el.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Break into shapes"))!;
+    expect(apart.disabled).toBe(true);
+    expect(apart.title).toContain("no outlines to edit");
   });
 
   it("has no looks for a stitch font", () => {

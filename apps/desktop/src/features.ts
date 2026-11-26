@@ -6,15 +6,15 @@
  */
 
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { addTraced, commit, currentDoc, currentLayout, defaultsFor, engine, exportOptions, fail, info } from "./actions";
-import { DEFAULT_CUT_STOPS } from "./design/machine";
+import { addTraced, commit, currentDoc, currentLayout, defaultsFor, engine, fail, info } from "./actions";
 import { holdEscape } from "./escape";
+import { exportList, typedList } from "./feat/names";
 import { addObject, IDENTITY, newId } from "./design/layout";
-import type { Colorway, ExportReport, Guide, Layout, LayoutItem, LayoutOp, ObjectItem, PathNode, TextItem, Thread } from "./design/types";
+import type { Colorway, Guide, Layout, LayoutItem, LayoutOp, ObjectItem, PathNode, TextItem, Thread } from "./design/types";
 import { isObject, isText } from "./design/types";
 import { isTauri } from "./engine/sidecar";
 import { loadPrefs } from "./prefs";
-import { selectMachine, useStore, type TracedShape } from "./store";
+import { useStore, type TracedShape } from "./store";
 
 const BLACK: Thread = { color: "#000000", name: "Black", brand: "", catalog: "" };
 const LONG_MS = 120_000;
@@ -514,58 +514,9 @@ export function nameFileStem(name: string): string {
   return /^(con|prn|aux|nul|com\d|lpt\d)$/i.test(s) ? `_${s}` : s;
 }
 
-/** One machine file per name: the selected lettering with each name in turn, prepared exactly as
- *  Save for machine would (your machine and hoop, cut-stops for machines that only cut at colour
- *  changes). Existing files are never replaced; repeated names get "(1)", "(2)". */
+/** One machine file per name typed in: the lettering filled with each in turn (feat/names.ts). */
 export async function exportNames(names: string[], folder: string, ext: string) {
-  const l = currentLayout();
-  const text = selectedItems().find(isText) as TextItem | undefined;
-  if (!l || !text) return info("Select the lettering to change for each name.");
-  const clean = names.map((n) => n.trim()).filter(Boolean);
-  if (!clean.length) return info("Type at least one name.");
-  const machine = selectMachine(useStore.getState());
-  const options = exportOptions({ ...DEFAULT_CUT_STOPS, enabled: machine?.cuts === "color_change" });
-  const sep = folder.includes("\\") ? "\\" : "/";
-  const tooBig: string[] = [];
-  const otherWarnings = new Set<string>();
-  const renamed: string[] = [];
-  const failed: string[] = [];
-  let firstError: unknown = null;
-  let done = 0;
-  const base = (p: string) => p.split(/[\\/]/).pop() ?? p;
-  for (const name of clean) {
-    // A new name is new letters: starts and ends chosen for the original word's letters don't apply.
-    const layout: Layout = { ...l, items: l.items.map((it) => (it.id === text.id ? { ...text, text: name, letters: undefined } : it)) };
-    const dest = `${folder}${sep}${nameFileStem(name)}.${ext}`;
-    try {
-      // keep_existing: never replace a file; a name already taken (by an earlier file, a repeated
-      // name, or two names that make the same file name) is saved as "Name (1)" and so on.
-      const r = await engine().call<ExportReport & { path: string }>("layout.export", { layout, dest, options, keep_existing: true }, LONG_MS);
-      if (r.path && base(r.path).toLowerCase() !== base(dest).toLowerCase()) renamed.push(base(r.path));
-      for (const wn of r.warnings ?? []) {
-        if (wn.code === "hoop_too_big") tooBig.push(name);
-        else if (wn.level !== "info") otherWarnings.add(wn.message);
-      }
-      done++;
-    } catch (err) {
-      // One name that can't be saved doesn't stop the others.
-      failed.push(name);
-      firstError ??= err;
-    }
-  }
-  const notes = [
-    tooBig.length ? `${tooBig.length === 1 ? `"${tooBig[0]}" doesn't` : `${tooBig.length} names don't`} fit your hoop (make the letters smaller).` : "",
-    otherWarnings.size ? `Check: ${[...otherWarnings][0]}` : "",
-    renamed.length
-      ? `${renamed.length === 1 ? "One file" : `${renamed.length} files`} got a number added because the name was already taken (like "${renamed[0]}").`
-      : "",
-  ].filter(Boolean);
-  if (failed.length) {
-    fail(firstError);
-    info(`Saved ${done} of ${clean.length} files in ${folder}. Not saved: ${failed.map((n) => `"${n}"`).join(", ")}.${notes.length ? " " + notes.join(" ") : ""}`);
-  } else {
-    info(`Saved ${done} file${done === 1 ? "" : "s"} (one per name) in ${folder}.${notes.length ? " " + notes.join(" ") : ""}`);
-  }
+  await exportList(typedList(names.join("\n")), folder, ext);
 }
 
 /** Pick a folder (the installed app), or type one in the browser preview. */

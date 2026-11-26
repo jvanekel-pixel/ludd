@@ -20,8 +20,6 @@ const SHAPES: { type: TextShape["type"]; label: string; title: string }[] = [
 ];
 
 const TYPE_DELAY_MS = 450;
-/** The text box's look, as the one-line box it replaces. */
-const TEXT_AREA: React.CSSProperties = { font: "inherit", fontSize: 16, padding: "0.35rem 0.5rem", border: "1px solid var(--line)", borderRadius: 6, background: "var(--panel)", color: "var(--fg)", resize: "vertical" };
 const FONT_LIST_MAX = 200;
 const MIN_SIZE_MM = 2;
 const MAX_SIZE_MM = 200;
@@ -192,7 +190,7 @@ export function SelectedText({ item, info: itemInfo, sel }: { item: TextItem; in
         {item.monogram ? (
           <input {...textField} />
         ) : (
-          <textarea {...textField} rows={3} title={`Enter starts a new line; ${formatShortcut("Mod+Enter")} is done`} style={TEXT_AREA} />
+          <textarea {...textField} rows={3} title={`Enter starts a new line; ${formatShortcut("Mod+Enter")} is done`} />
         )}
       </label>
       <FontPicker value={item.font} onPick={(f) => setText(item.id, { font: { path: f.path, index: f.index, family: f.family, style: f.style, ...(f.made_of ? { made_of: f.made_of } : {}) } })} />
