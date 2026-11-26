@@ -73,6 +73,7 @@ import type {
 import { isObject, isRibbon, isText } from "./design/types";
 import { useContextMenu } from "./contextMenu";
 import { angleOf } from "./design/direction";
+import { withoutDeadCrossHatch } from "./design/fillPatterns";
 import { RpcError } from "./engine/rpc";
 import { isTauri } from "./engine/sidecar";
 import { canAdvise, loadAISettings, runAdvisor } from "./ai";
@@ -987,7 +988,7 @@ function deleteSelectedNode() {
 }
 
 export function defaultsFor(kind: ObjectKind): Record<string, unknown> {
-  return { ...DEFAULT_PARAMS[kind], ...(loadPrefs().objectDefaults?.[kind] ?? {}) };
+  return withoutDeadCrossHatch<Record<string, unknown>>({ ...DEFAULT_PARAMS[kind], ...(loadPrefs().objectDefaults?.[kind] ?? {}) });
 }
 
 /** Settings that belong to one shape, not to the next one you draw. */
@@ -1316,7 +1317,7 @@ function unchanged(id: string, before: LayoutItem): boolean {
 export function setObjectParams(id: string, patch: Record<string, unknown>) {
   const o = currentLayout()?.items.find((it) => it.id === id);
   if (o && isObject(o)) rememberDefaults(o.kind, patch);
-  editObject(id, (x) => ({ ...x, params: { ...x.params, ...patch } }) as ObjectItem);
+  editObject(id, (x) => ({ ...x, params: withoutDeadCrossHatch<Record<string, unknown>>({ ...x.params, ...patch }) }) as ObjectItem);
 }
 
 /** A satin ribbon's width; new ribbons start with it too. */

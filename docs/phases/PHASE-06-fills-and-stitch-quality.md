@@ -479,3 +479,4 @@ Write: whether A1 was built and how decision 2 went; the blend density numbers f
 ### After the first audit (at `34227e2`, not passed): fixes
 
 - Fix 5: a motif export needs a full path and never writes into LUDD's data folder (before, `foo.json` landed in the engine's working folder, and `<data folder>\settings` replaced LUDD's `settings.json`).
+- Blend and Cross-hatch: a Cross-hatch left from another pattern, or suggested by the Stitch Advisor, is now dropped when a fill is or becomes a Blend (it never sewed one, and its panel has no button to turn it off). An underlay left with nothing goes back to Auto.

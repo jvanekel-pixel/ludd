@@ -169,6 +169,16 @@ export const fixedFillEnd = (id?: string): boolean => !!fillPatternDef(id).open;
 export const turnsRows = (p: { pattern?: string; angle_lines?: unknown }): boolean =>
   (p.pattern ?? "tatami") === "tatami" && Array.isArray(p.angle_lines) && p.angle_lines.length >= 2;
 
+/** A pattern that never sews a cross-hatch underlay (a Blend) keeps none from another pattern or a
+ *  suggestion: its panel has no button to turn it off, and it would silently do nothing. An
+ *  underlay left with nothing goes back to Auto. */
+export function withoutDeadCrossHatch<P extends Record<string, unknown>>(params: P): P {
+  const under = params.underlay;
+  if (!fillPatternDef(params.pattern as string | undefined).noCrossHatch || !Array.isArray(under) || !under.includes("tatami")) return params;
+  const rest = under.filter((u) => u !== "tatami");
+  return { ...params, underlay: rest.length ? rest : undefined };
+}
+
 /** Whether a fill with this pattern shows the two purple dots that set its rows' direction. */
 export const hasDirectionDots = (id?: string): boolean => {
   const def = fillPatternDef(id);
