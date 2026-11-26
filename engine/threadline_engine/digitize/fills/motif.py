@@ -34,6 +34,7 @@ from . import FillPattern, Param, register, spiral
 
 GRAZE_MM = 0.01  # lines are cut to the shape grown this much, so one that only touches its edge stays whole
 DECIMALS = 6  # the shape's own frame is rounded to a millionth of a mm
+TIE_MM = 1e-6  # distances closer than this are the same, whatever the last digits say
 OTHER_EDGE_MM = 10_000.0  # added to how far it is to a point by another edge (see reach)
 
 
@@ -54,7 +55,7 @@ def own_frame(poly) -> tuple[shapely.Polygon, Point]:
 def place(points: Sequence[Point], origin: Point) -> list[Point]:
     """Points from a shape's own frame back where the shape is (with no -0.0 left over)."""
     x0, y0 = origin
-    return [(round(x + x0, 9) + 0.0, round(y + y0, 9) + 0.0) for x, y in points]
+    return [(round(x + x0, DECIMALS) + 0.0, round(y + y0, DECIMALS) + 0.0) for x, y in points]
 
 
 def turn(points: Sequence[Point], degrees: float) -> list[Point]:
@@ -85,6 +86,41 @@ def edges(area) -> tuple[np.ndarray, np.ndarray]:
     return np.concatenate([r[:-1] for r in rings]), np.concatenate([r[1:] for r in rings])
 
 
+def kept_points(points: Sequence[Point], tolerance: float) -> list[int]:
+    """Which points a line needs to stay within `tolerance` of itself, first and last always
+    (Douglas-Peucker). A point only counts as farther than another, or than `tolerance`, by more
+    than a millionth of a mm, so of equally far points the first is taken and every computer keeps
+    the same ones; the geometry library's own simplify, meeting a tie on a symmetric ring, may not.
+
+    Plain arithmetic in a plain loop: the maze simplifies its rings thousands of times."""
+    xs, ys = [p[0] for p in points], [p[1] for p in points]
+    least = (tolerance + TIE_MM) ** 2  # distances are compared squared
+    keep = {0, len(points) - 1}
+    spans = [(0, len(points) - 1)]
+    while spans:
+        a, b = spans.pop()
+        if b - a < 2:
+            continue
+        ax, ay = xs[a], ys[a]
+        dx, dy = xs[b] - ax, ys[b] - ay
+        square = dx * dx + dy * dy
+        scale = 1 / square if square else 0.0
+        far, beat, at = 0.0, -1.0, a + 1
+        for i in range(a + 1, b):
+            ox, oy = xs[i] - ax, ys[i] - ay
+            t = (ox * dx + oy * dy) * scale
+            if t > 0:  # nearest the far end or along the line, else nearest the near end
+                t = 1.0 if t > 1 else t
+                ox, oy = ox - t * dx, oy - t * dy
+            square_off = ox * ox + oy * oy
+            if square_off > beat:
+                far, beat, at = square_off, (math.sqrt(square_off) + TIE_MM) ** 2, i
+        if far > least:
+            keep.add(at)
+            spans += [(a, at), (at, b)]
+    return sorted(keep)
+
+
 def edge_rings(shape) -> list[LineString]:
     """The shape's edges (its outline, then its holes) as closed lines, each going the same way
     round from its top left point, so that every computer walks them alike."""
@@ -113,8 +149,9 @@ def clip(points: Sequence[Point], area, sides: tuple[np.ndarray, np.ndarray] | N
     cuts: list[list[float]] = []  # for each step of the line, where along it (0 to 1) it meets a side
     middles = []
     for p, q in zip(line[:-1], line[1:]):
+        # (No numpy dot products: their fused multiply-add on Apple chips changes last digits.)
         r = q - p
-        square = float(r @ r)
+        square = float(r[0] * r[0] + r[1] * r[1])
         ts = [0.0, 1.0]
         near = np.all((high >= np.minimum(p, q) - 1e-6) & (low <= np.maximum(p, q) + 1e-6), axis=1)
         if square > 0 and near.any():
@@ -126,7 +163,7 @@ def clip(points: Sequence[Point], area, sides: tuple[np.ndarray, np.ndarray] | N
             ts += t[(u >= -1e-9) & (u <= 1 + 1e-9) & (t > 0) & (t < 1)].tolist()
             along = ~across & (np.abs(ap[:, 0] * r[1] - ap[:, 1] * r[0]) <= 1e-9 * math.sqrt(square))
             for end in (a[near][along], b[near][along]):  # a side lying along the line
-                te = ((end - p) @ r) / square
+                te = ((end - p) * r).sum(axis=1) / square
                 ts += te[(te > 0) & (te < 1)].tolist()
         ts = sorted(set(ts))
         cuts.append(ts)
@@ -153,6 +190,29 @@ def clip(points: Sequence[Point], area, sides: tuple[np.ndarray, np.ndarray] | N
         else:
             joined.append(piece)
     return joined
+
+
+def onto_edges(stretches: list[list[Point]], rings: list) -> list[list[Point]]:
+    """Stretches cut to the grown shape, their ends moved back onto the edges they were cut at.
+
+    An end off the edge by a corner is as near one side as the other, and which side it counts as
+    being on would turn on a last digit; so would the way the next join goes. An end by a corner
+    goes to the corner, any other to the nearest point on a side."""
+    corners = np.concatenate([np.asarray(r.coords)[:-1] for r in rings])
+    sides = np.concatenate([np.diff(np.asarray(r.coords), axis=0) for r in rings])  # each from its corner
+    squares = np.maximum((sides ** 2).sum(axis=1), 1e-18)
+
+    def onto(p: Point) -> Point:
+        to_corners = np.hypot(corners[:, 0] - p[0], corners[:, 1] - p[1])
+        k = int(np.argmin(np.round(to_corners, 6)))
+        if to_corners[k] <= 3 * GRAZE_MM:
+            return float(corners[k, 0]), float(corners[k, 1])
+        t = np.clip(((np.asarray(p) - corners) * sides).sum(axis=1) / squares, 0.0, 1.0)
+        feet = corners + sides * t[:, None]
+        k = int(np.argmin(np.round(np.hypot(feet[:, 0] - p[0], feet[:, 1] - p[1]), 6)))
+        return float(feet[k, 0]), float(feet[k, 1])
+
+    return [[onto(s[0]), *s[1:-1], onto(s[-1])] for s in stretches]
 
 
 def by_edge(p: Point, rings: list) -> tuple[int, float, Point]:
@@ -232,12 +292,12 @@ def _rows(local, params, stitch: float) -> list[list[list[Point]]]:
     from ..lines import MOTIF_UNITS, sewn_unit  # here, not at the top: lines imports this package
     from ..stitches import DigitizeError
 
-    unit = sewn_unit(params.motif_unit)  # a motif of your own; None: the built-in one named
+    repeat, height = params.value("motif_mm"), params.value("motif_width_mm")
+    gap, shift = params.value("motif_gap_mm"), params.value("motif_stagger") * repeat
+    unit = sewn_unit(params.motif_unit, repeat, height)  # a motif of your own; None: the built-in one named
     if unit is None and params.motif not in MOTIF_UNITS:
         raise DigitizeError(f"Unknown motif: {params.motif}")
     shape_unit = MOTIF_UNITS[params.motif] if unit is None else unit
-    repeat, height = params.value("motif_mm"), params.value("motif_width_mm")
-    gap, shift = params.value("motif_gap_mm"), params.value("motif_stagger") * repeat
     frame = turned(local, params.angle_deg)
     area = grown(frame)
     sides = edges(area)
@@ -283,8 +343,9 @@ def _paths(poly, params, pos):
     cover = local.buffer(0.3)  # as far outside the shape as the fill lets any travel go
     shapely.prepare(cover)
     here = (pos[0] - origin[0], pos[1] - origin[1]) if params.start_mm is not None else spiral.FAR
+    rings = edge_rings(local)
     paths: list[list[Point]] = []
-    sew_along_edges(paths, pieces, edge_rings(local), cover, here, stitch)
+    sew_along_edges(paths, onto_edges(pieces, rings), rings, cover, here, stitch)
     return [place(p, origin) for p in paths], []
 
 

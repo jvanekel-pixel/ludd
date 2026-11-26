@@ -8,43 +8,43 @@
  },
  "maze_star": {
   "jumps": 0,
-  "records": 121,
-  "sha1": "d3955eaec8119d5ee49e0b61fccbc43ccf5a1880",
-  "stitches": 121,
+  "records": 132,
+  "sha1": "1866b0ac9ed314a49bf31a81beb20261edd85631",
+  "stitches": 132,
   "trims": 0
  },
  "mesh_60": {
   "jumps": 0,
   "records": 302,
-  "sha1": "3503362a4ed5745c27ce0b4a99131d1880b32798",
+  "sha1": "687bd7fb8e40df59c17012074718f3a3b1af999d",
   "stitches": 302,
   "trims": 0
  },
  "mesh_90": {
   "jumps": 0,
   "records": 436,
-  "sha1": "4589784778991f9898c4dd38a4c96f6290662815",
+  "sha1": "acec8ff4d63cab3f05b12fb1529a71daa279d09b",
   "stitches": 436,
   "trims": 0
  },
  "motif_user": {
   "jumps": 0,
   "records": 280,
-  "sha1": "a386b1a26a9533e40acde0d1f50161873a30904d",
+  "sha1": "29776a97104f757e8457305c7d46cf01d516d7ff",
   "stitches": 280,
   "trims": 0
  },
  "motif_wave": {
   "jumps": 0,
   "records": 606,
-  "sha1": "10bc5881800d06c2dbe2883a55ee8eb710b3856a",
+  "sha1": "b6e196fb7aa6052601d4f798be94c14fb1c42495",
   "stitches": 606,
   "trims": 0
  },
  "ripple_square": {
   "jumps": 0,
   "records": 343,
-  "sha1": "003719b1c6cb0054f074d85c8d63e964e233b50a",
+  "sha1": "17032254d8eb66a8de8faee6d1fe6b84ebd8087e",
   "stitches": 343,
   "trims": 0
  }

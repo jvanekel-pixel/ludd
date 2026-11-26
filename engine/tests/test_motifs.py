@@ -5,6 +5,7 @@ project on a computer that doesn't have it. Every test uses a data folder of its
 import json
 import math
 import re
+import statistics
 
 import pytest
 from shapely.geometry import LineString, Point, Polygon
@@ -427,15 +428,18 @@ def test_a_built_in_name_with_a_carried_unit_sews_the_unit():
 def test_a_carried_unit_is_sewn_as_wide_as_the_width_setting():
     """Built-in motifs are about 1 across; a motif of your own is scaled so Width means the same."""
     hill = [[0, 0], [0.5, -0.3], [1, 0]]
-    assert lines.sewn_unit([(u, v) for u, v in hill]) == [(0, 0), (0.5, pytest.approx(-1)), (1, 0)]
-    assert lines.sewn_unit(None) is None
+    assert lines.sewn_unit([(u, v) for u, v in hill], 4, 2.5) == [(0, 0), (0.5, pytest.approx(-1)), (1, 0)]
+    assert lines.sewn_unit(None, 4, 2.5) is None
     both_sides = [(0, 0), (0.25, 0.5), (0.75, -1.5), (1, 0)]
-    assert [v for _, v in lines.sewn_unit(both_sides)] == pytest.approx([0, 0.25, -0.75, 0])
+    assert [v for _, v in lines.sewn_unit(both_sides, 4, 2.5)] == pytest.approx([0, 0.25, -0.75, 0])
+    # Points that make no difference once sewn are left out; corners stay.
+    crowded = [(0, 0), (0.25, 0.2501), (0.5, 0.5), (0.5001, 0.4999), (0.75, 0.25), (1, 0)]
+    assert [u for u, _ in lines.sewn_unit(crowded, 4, 2)] == [0, 0.5, 1]
 
 
 @pytest.mark.parametrize("flat", [[(0, 0), (1, 0)], [(0, 0), (0.5, 1e-9), (1, 0)], [(0, 0.4), (1, 0.4)]])
 def test_a_flat_motif_sews_flat(flat):
-    assert [v for _, v in lines.sewn_unit(flat)] == [0] * len(flat)
+    assert {v for _, v in lines.sewn_unit(flat, 4, 2.5)} == {0}
     ys = [y for _, y in _stitches(generate(_line_obj([list(p) for p in flat]))[0])]
     assert max(ys) - min(ys) < 1e-6
 
@@ -487,6 +491,26 @@ def test_a_saved_motif_chosen_at_the_defaults_sews_with_its_drawn_proportions():
             peaks = sorted({round(x, 3) for x, y in row if y < top + 0.001})
             assert len(peaks) > 2 and [b - a for a, b in zip(peaks, peaks[1:])] == pytest.approx(
                 [repeat] * (len(peaks) - 1), abs=0.01)
+
+
+@pytest.mark.parametrize("repeat", [4, 12])
+def test_a_curved_motif_sews_in_stitches_a_machine_can_sew(repeat):
+    """A drawn curve is saved as many points close together; sewn small, each would be a stitch a
+    third of a millimeter long, and they'd pile up. Only the points its shape needs are sewn."""
+    curve = [[0, 0, "c"], [5, -6, "s"], [10, 0, "s"], [15, 6, "s"], [20, 0, "c"]]
+    unit = motifs.save("S curve", curve)["unit"]
+    assert len(unit) > 100
+    span = max(v for _, v in unit) - min(v for _, v in unit)
+    pts = _stitches(generate(_line_obj(unit, motif_mm=repeat, motif_width_mm=repeat * span, end=repeat * 4))[0])
+    steps = [math.dist(a, b) for a, b in zip(pts, pts[1:])]
+    assert statistics.median(steps) >= 0.7 and min(steps) >= 0.3, (statistics.median(steps), min(steps))
+    # Still the curve you drew, within 0.12 mm either way.
+    drawn, _ = flatten(curve, False)
+    expected = LineString([(x * repeat / 20 + k * repeat, y * repeat / 20) for k in range(4) for x, y in drawn])
+    assert expected.hausdorff_distance(LineString(pts)) <= 0.12
+    # The same in a motif fill.
+    fill = _stitches(generate(_fill_obj(unit, motif_mm=repeat, motif_width_mm=repeat * span))[0])
+    assert statistics.median(math.dist(a, b) for a, b in zip(fill, fill[1:])) >= 0.7
 
 
 def test_a_motif_of_your_own_passes_the_invariants():

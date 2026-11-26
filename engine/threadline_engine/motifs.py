@@ -228,8 +228,9 @@ def export(motif_id: str, dest: str) -> dict[str, Any]:
     if isinstance(motif_id, str) and motif_id in lines.MOTIF_UNITS:
         name, unit = _builtin(motif_id)
     else:
-        name, unit = _load(_own_file(motif_id), "that motif")
-        name = _clean_name(name) or motif_id[len(PREFIX):]
+        own = _own_file(motif_id)
+        name, unit = _load(own, own.name)
+        name = _clean_name(name) or own.stem
     if not isinstance(dest, str) or not dest.strip() or "\0" in dest or not Path(dest).name:
         raise MotifError("Choose where to save the motif file.")
     path = Path(dest)

@@ -51,7 +51,7 @@ def _motif(nodes, params, closed=False, start=None):
     # The motif's corners are the needle points; long sides are split to the stitch length. A motif
     # of your own that the line carries (params.motif_unit) is sewn instead of the named one.
     pts = motif_points(nodes, params.motif, params.motif_mm, params.motif_width_mm, closed,
-                       unit=sewn_unit(params.motif_unit))
+                       unit=sewn_unit(params.motif_unit, params.motif_mm, params.motif_width_mm))
     return resample(pts, max(params.stitch_mm, 1.0), list(range(len(pts))))
 
 

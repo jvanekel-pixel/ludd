@@ -22,6 +22,7 @@ MIN_UNIT_POINTS, MAX_UNIT_POINTS = 2, 200
 MAX_UNIT_VALUE = 1000.0  # far bigger than any motif: a typing slip or a damaged file
 FLAT_SPAN = 1e-4  # a motif that goes no further than this across its line (as a share of one repeat) is flat
 MOST_ACROSS = 10.0  # a hand-edited motif nowhere near its line stays within this many widths of it
+SEWN_WITHIN_MM = 0.1  # a motif of your own is sewn this near its shape, with no more points than that takes
 
 
 @dataclass(frozen=True)
@@ -69,20 +70,33 @@ def carried_unit(value: Any) -> list[tuple[float, float]] | None:
     return unit
 
 
-def sewn_unit(unit: Sequence[tuple[float, float]] | None) -> list[tuple[float, float]] | None:
-    """A motif of your own as motif_points() sews it; None (a built-in motif) stays None.
+def sewn_unit(unit: Sequence[tuple[float, float]] | None, repeat_mm: float,
+              width_mm: float) -> list[tuple[float, float]] | None:
+    """A motif of your own as motif_points() sews it at this Repeat and Width; None (a built-in
+    motif) stays None. This is the one place these rules live: motif lines and motif fills both
+    sew through it.
 
-    motif_points sews across as v x width, and built-in motifs are about 1 across. One of your own
-    keeps the proportions you drew (the same scale along and across), so its v is divided by how
-    far across it goes (its biggest v less its smallest): then the Width setting (a motif fill's
-    Height) is how wide it really sews, as for the built-ins. A flat one sews flat. This is the one
-    place the rule lives: motif lines and motif fills both sew through it."""
+    - motif_points sews across as v x width, and built-in motifs are about 1 across. One of your
+      own keeps the proportions you drew (the same scale along and across), so its v is divided
+      by how far across it goes (its biggest v less its smallest): then the Width setting (a motif
+      fill's Height) is how wide it really sews, as for the built-ins. A flat one sews flat.
+    - A curve you drew is saved as many points close together, which would sew as tiny stitches
+      that pile up: points that make no difference at this size are left out (_thinned)."""
     if unit is None:
         return None
     vs = [v for _, v in unit]
     span = max(vs) - min(vs)
     scale = 1 / span if span > FLAT_SPAN else 0.0
-    return [(u, min(max(v * scale, -MOST_ACROSS), MOST_ACROSS)) for u, v in unit]
+    return _thinned([(u, min(max(v * scale, -MOST_ACROSS), MOST_ACROSS)) for u, v in unit], repeat_mm, width_mm)
+
+
+def _thinned(unit: list[tuple[float, float]], repeat_mm: float, width_mm: float) -> list[tuple[float, float]]:
+    """The unit without the points it can do without, staying within SEWN_WITHIN_MM of its shape
+    as sewn (measured in mm); its first and last points stay."""
+    from ..fills.motif import kept_points
+
+    at = [(u * repeat_mm, v * width_mm) for u, v in unit]
+    return [unit[i] for i in kept_points(at, SEWN_WITHIN_MM)]
 
 
 def register_motif(name: str, unit: list[tuple[float, float]]) -> None:

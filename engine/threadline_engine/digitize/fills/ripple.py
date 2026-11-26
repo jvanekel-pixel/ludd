@@ -20,7 +20,7 @@ from shapely.geometry import LineString, Point as ShapelyPoint
 
 from ..paths import Point, dist
 from . import FillPattern, Param, register, spiral
-from .motif import edge_rings, edges, grown, own_frame, place, sew_along_edges
+from .motif import edge_rings, edges, grown, onto_edges, own_frame, place, sew_along_edges
 
 SAG_MM = 0.1  # no stitch cuts further than this inside its circle
 SHORTEST_ARC_MM = 1.0  # shorter bits of a ring are left out
@@ -176,7 +176,7 @@ def _paths(poly, params, pos):
                 _step_out(paths, _arc_points(center, r, seam, TURN, longest), rings, cover, spacing, longest)
         else:
             arcs = [_arc_points(center, r, start, width, longest) for r, spans in found[n:end] for start, width in spans]
-            sew_along_edges(paths, arcs, rings, cover, toward, longest)
+            sew_along_edges(paths, onto_edges(arcs, rings), rings, cover, toward, longest)
         n = end
     return [place(p, origin) for p in paths], []
 

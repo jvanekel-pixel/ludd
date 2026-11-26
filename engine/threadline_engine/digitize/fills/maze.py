@@ -27,13 +27,14 @@ from typing import Iterator
 
 import numpy as np
 import shapely
-from shapely.geometry import LineString, Point as ShapelyPoint, box
+from shapely.geometry import LineString, Point as ShapelyPoint, Polygon, box
 from shapely.geometry.polygon import orient
+from shapely.strtree import STRtree
 
-from ..paths import Point, cumulative, dist, point_at, sharp_points
+from ..paths import Point, cumulative, dist, point_at
 from ..patterns import polygons
 from . import FillPattern, Param, register
-from .motif import own_frame, place
+from .motif import kept_points, own_frame, place
 
 BRANCHED_WARNING = "This shape is too branched for one maze; Contour may suit it better."
 MOST_PIECES = 4
@@ -41,9 +42,37 @@ SIMPLIFY_MM = 0.02  # a wobbly outline with thousands of points buffers very slo
 GAP_SHARES = (1.0, 1.5, 0.75, 2.0)  # how wide a ring is left open, in Path spacings (tried in turn)
 SAG_MM = 0.08  # no stitch cuts further than this inside the curve it follows
 SHORTEST_STEP_MM = 0.6  # stitches aren't made shorter than this to follow a tight curve
+CORNER = 0.906307787  # the cosine of 25 degrees: turns sharper than that are corners, kept
 CUT_MM = 0.002  # the slit that opens a shape at a hole
+# How near two stitches that don't meet may come: this far apart if any layout allows it, else at
+# least TOUCH_MM, so thread never lies on thread.
+CLEAR_MM, TOUCH_MM = 0.2, 0.05
 OPENINGS_TRIED = 6  # once some rings have to be left out, only the best places are tried
+SMALL_MAZE_MM = 3000.0  # rings no longer than this in all are quick enough to try every place (see _spirals)
 TRIES_PER_PIECE = 12  # ways of making a pinched-off piece's maze tried before it's sewn apart
+
+
+def _about(v: float) -> float:
+    """v to the nearest tenth, for choosing between near equals. The steps fall between the round
+    numbers shapes are drawn at, so a last digit can't tip one either way."""
+    return round(v + 0.0123, 1)
+
+
+def _tidy(polygon: Polygon, tolerance: float) -> Polygon:
+    """The polygon without the points its outline and holes can do without, each ring started at
+    its top left (see motif.kept_points)."""
+
+    def ring(r) -> list[Point]:
+        points = [tuple(p) for p in np.round(np.asarray(r.coords, dtype=float)[:-1, :2], 6).tolist()]
+        k = min(range(len(points)), key=lambda i: (round(points[i][1], 3), round(points[i][0], 3), i))
+        closed = points[k:] + points[: k + 1]
+        return [closed[i] for i in kept_points(closed, tolerance)]
+
+    shell, holes = ring(polygon.exterior), [ring(r) for r in polygon.interiors]
+    if len(shell) < 4 or any(len(h) < 4 for h in holes):
+        return polygon
+    tidied = Polygon(shell, holes)
+    return tidied if tidied.is_valid else polygon
 
 
 class _Ring:
@@ -99,13 +128,13 @@ def _pieces(geom, spacing: float) -> list:
     thin = max(0.15, 0.2 * spacing)
     out = []
     for g in polygons(geom):
-        opened = g.buffer(-thin, join_style="mitre").buffer(thin, join_style="mitre").intersection(g)
-        for part in polygons(opened):
-            part = shapely.transform(part.simplify(0.01), lambda xy: np.round(xy, 6))
-            if not part.is_valid:
-                part = max(polygons(part.buffer(0)), key=lambda p: p.area, default=part)
-            if part.geom_type == "Polygon" and not part.is_empty \
-                    and part.exterior.length >= max(1.5 * spacing, 4.0) - 1e-3:
+        opened = g.buffer(-thin, join_style="mitre").buffer(thin, join_style="mitre")
+        # Nothing thin: keep the piece as it is (cutting an identical outline back to it would
+        # leave extra points wherever the last digit happened to put them).
+        parts = [g] if g.symmetric_difference(opened).area < 0.01 else polygons(opened.intersection(g))
+        for part in parts:
+            part = _tidy(part, 0.01)
+            if not part.is_empty and part.exterior.length >= max(1.5 * spacing, 4.0) - 1e-3:
                 out.append(part)
     return sorted(out, key=lambda p: (round(p.bounds[1], 2), round(p.bounds[0], 2), round(p.area, 2)))
 
@@ -148,44 +177,58 @@ def _cut_open(shape) -> list:
 # ---------------------------------------------------------------- needle points
 
 
-def _off(x: Point, p: Point, q: Point) -> float:
-    """How far x is from the straight line p to q."""
-    dx, dy = q[0] - p[0], q[1] - p[1]
+def _from_segment(p: Point, a: Point, b: Point) -> float:
+    """How far p is from the straight line from a to b."""
+    dx, dy = b[0] - a[0], b[1] - a[1]
     square = dx * dx + dy * dy
-    t = max(0.0, min(1.0, ((x[0] - p[0]) * dx + (x[1] - p[1]) * dy) / square)) if square else 0.0
-    return math.hypot(x[0] - p[0] - t * dx, x[1] - p[1] - t * dy)
+    t = max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / square)) if square else 0.0
+    return math.hypot(p[0] - a[0] - t * dx, p[1] - a[1] - t * dy)
 
 
-def _sag(line: list[Point], cum: list[float], a: float, b: float) -> float:
-    """How far the line between distances a and b along it strays from a straight stitch."""
+def _strays(line: list[Point], cum: list[float], a: float, b: float) -> bool:
+    """Whether the line between distances a and b along it strays more than SAG_MM from a
+    straight stitch."""
     p, q = point_at(line, cum, a), point_at(line, cum, b)
-    return max((_off(line[k], p, q) for k in range(bisect.bisect_right(cum, a), bisect.bisect_left(cum, b))),
-               default=0.0)
+    return any(_from_segment(line[k], p, q) > SAG_MM
+               for k in range(bisect.bisect_right(cum, a), bisect.bisect_left(cum, b)))
 
 
 def _along_curve(line: list[Point], longest: float) -> list[Point]:
-    """Needle points along a stretch of a ring: evenly spaced where that keeps every stitch within
-    SAG_MM of it, else closer together where it curves."""
+    """Needle points along a stretch of a ring, from its start to its end: evenly spaced where
+    that keeps every stitch within SAG_MM of it, else closer together where it curves."""
     cum = cumulative(line)
-    total = cum[-1]
+    total = round(cum[-1], 6)  # so a last digit can't add a stitch
     n = max(1, math.ceil(total / longest - 1e-9))
-    if all(_sag(line, cum, total * i / n, total * (i + 1) / n) <= SAG_MM for i in range(n)):
-        return [point_at(line, cum, total * i / n) for i in range(n + 1)]
-    stops = [0.0]
-    while total - stops[-1] > 1e-9:
-        s = stops[-1]
-        step = min(longest, total - s)
-        while step > SHORTEST_STEP_MM and _sag(line, cum, s, s + step) > SAG_MM:
-            step = max(SHORTEST_STEP_MM, 0.8 * step)
-        if 0 < total - s - step < SHORTEST_STEP_MM:  # no stub left at the end
-            step = (total - s) / 2
-        stops.append(s + step)
-    return [point_at(line, cum, s) for s in stops]
+    stops = [total * i / n for i in range(n + 1)]
+    if any(_strays(line, cum, a, b) for a, b in zip(stops, stops[1:])):
+        stops = [0.0]
+        while total - stops[-1] > 1e-6:
+            s = stops[-1]
+            step = min(longest, total - s)
+            while step > SHORTEST_STEP_MM and _strays(line, cum, s, s + step):
+                step = max(SHORTEST_STEP_MM, 0.8 * step)
+            if 1e-6 < total - s - step < SHORTEST_STEP_MM:  # no stub left at the end
+                step = (total - s) / 2
+            stops.append(s + step)
+    return [line[0], *(point_at(line, cum, s) for s in stops[1:-1]), line[-1]]
+
+
+def _corners(walk: list[Point]) -> list[int]:
+    """Where a walk round a ring turns sharply, wiggles under 0.1 mm smoothed over (as
+    paths.sharp_points finds corners, but the same on every computer)."""
+    keep = kept_points(walk, 0.1)
+    found = []
+    for a, i, c in zip(keep, keep[1:], keep[2:]):
+        ux, uy = walk[i][0] - walk[a][0], walk[i][1] - walk[a][1]
+        vx, vy = walk[c][0] - walk[i][0], walk[c][1] - walk[i][1]
+        if ux * vx + uy * vy < CORNER * math.hypot(ux, uy) * math.hypot(vx, vy):
+            found.append(i)
+    return found
 
 
 def _ring_needles(walk: list[Point], longest: float) -> list[Point]:
     """Needle points along part of a ring, its sharp corners kept."""
-    stops = sorted({0, len(walk) - 1, *sharp_points(walk)})
+    stops = sorted({0, len(walk) - 1, *_corners(walk)})
     out = walk[:1]
     for a, b in zip(stops, stops[1:]):
         out += _along_curve(walk[a : b + 1], longest)[1:]
@@ -208,9 +251,11 @@ def _spaced(path: list[Point], on: list) -> tuple[list[Point], list]:
 # ---------------------------------------------------------------- one maze
 
 
-def _build(rings: list, opening: float, gap: float, longest: float) -> tuple[list[Point], list, float]:
-    """The double spiral over `rings`, the first opened `opening` mm round it: its needle points,
-    which ring each is on (None for the steps between rings) and the longest step between rings."""
+def _build(rings: list, opening: float, gap: float, longest: float,
+           most_step: float = math.inf) -> tuple[list[Point], list] | None:
+    """The double spiral over `rings`, the first opened `opening` mm round it: its needle points
+    and which ring each is on (None for the steps between rings). None if a step between rings
+    would be longer than `most_step`."""
     from ..stitches import _subdivide
 
     at = [opening]
@@ -231,22 +276,31 @@ def _build(rings: list, opening: float, gap: float, longest: float) -> tuple[lis
         ring_leg(k, walks[k][::-1])
     if len(rings) > 1:  # out to the edge, into the first ring's opening, beside where it began
         legs.append((None, [legs[-1][1][-1], rings[0].point(at[0] - gaps[0] / 2)]))
-    longest_step = max((dist(*points) for k, points in legs if k is None), default=0.0)
+    if any(dist(*points) > most_step for k, points in legs if k is None):
+        return None
     path, on = [], []
     for k, points in legs:
         needles = _subdivide(points, longest) if k is None else _ring_needles(points, longest)
         path += needles
         on += [k] * len(needles)
-    path, on = _spaced(path, on)
-    return path, on, longest_step
+    return _spaced(path, on)
 
 
-def _good(path: list[Point], cover) -> bool:
-    """Whether a path crosses nowhere (not even touching itself) and stays in the shape."""
+def _room(path: list[Point], cover) -> float:
+    """How near two stitches of the path that don't meet come to each other, in mm to a millionth,
+    looking no further than CLEAR_MM; -1 if the path crosses itself or leaves the shape."""
     if len(path) < 2:
-        return False
+        return -1.0
     line = LineString(path)
-    return line.is_simple and cover.covers(line)
+    if not line.is_simple or not cover.covers(line):
+        return -1.0
+    xy = np.asarray(path)
+    steps = shapely.linestrings(np.stack([xy[:-1], xy[1:]], axis=1))
+    low, high = np.minimum(xy[:-1], xy[1:]) - CLEAR_MM, np.maximum(xy[:-1], xy[1:]) + CLEAR_MM
+    i, j = STRtree(steps).query(shapely.box(low[:, 0], low[:, 1], high[:, 0], high[:, 1]))
+    apart = j > i + 1
+    near = shapely.distance(steps[i[apart]], steps[j[apart]])
+    return round(min(CLEAR_MM, float(near.min())) if len(near) else CLEAR_MM, 6)
 
 
 def _openings(ring: _Ring) -> list[float]:
@@ -255,8 +309,8 @@ def _openings(ring: _Ring) -> list[float]:
     sides = []
     for i, (a, b) in enumerate(zip(ring.closed, ring.closed[1:])):
         length = dist(a, b)
-        if length >= 2.0:
-            sides.append((-round(length, 1), round((a[1] + b[1]) / 2, 1), round((a[0] + b[0]) / 2, 1),
+        if round(length, 3) >= 2.0:
+            sides.append((-_about(length), _about((a[1] + b[1]) / 2), _about((a[0] + b[0]) / 2),
                           ring.cum[i] + length / 2))
     return [s for *_, s in sorted(sides)[:8]] + [ring.length * i / 16 for i in range(16)]
 
@@ -269,28 +323,49 @@ def _openings_near(ring: _Ring, where: Point) -> list[float]:
 def _openings_facing(ring: _Ring, line: LineString) -> list[float]:
     """Where a ring might be opened, the places facing `line` first (of equally near ones, the
     best sides first)."""
-    return sorted(_openings(ring), key=lambda s: round(line.distance(ShapelyPoint(ring.point(s))), 1))
+    return sorted(_openings(ring), key=lambda s: _about(line.distance(ShapelyPoint(ring.point(s)))))
 
 
 def _spirals(rings: list, openings: list[float], spacing: float, longest: float, cover) -> Iterator[tuple]:
     """Mazes over a piece's rings that cross nowhere and stay in the shape, best first, as
     (needle points, the ring each is on, how many rings). All the rings if any way works, else
-    fewer (the middle is left open); the first ring alone always works."""
+    fewer rings (the middle is left open); the first ring alone always works. With all the rings,
+    a way keeping stitches CLEAR_MM apart is looked for first: from every place while there's
+    little to sew (each try takes longer the more there is), else from the best OPENINGS_TRIED.
+    A way keeping them only TOUCH_MM apart (so that thread never lies on thread) is next best."""
     n = len(rings)
     counts = sorted({c for c in [n, n - 1, n - 2, *(n - 2**i for i in range(2, 12))] if c > 1}, reverse=True)
-    for i, count in enumerate(counts):
+    little = sum(r.length for r in rings) <= SMALL_MAZE_MM
+    for count in counts:
         found = False
-        for opening in openings if i == 0 else openings[:OPENINGS_TRIED]:
+        close: list = []  # ways found while looking for a roomier one, that keep only TOUCH_MM apart
+        places = openings if count == n else openings[:OPENINGS_TRIED]
+        roomy = 0 if count < n else len(places) if little else OPENINGS_TRIED  # places searched for room
+        for k, opening in enumerate(places):
+            if k == roomy and close:
+                found = True
+                yield from close
+                close = []
+            wanted = CLEAR_MM if k < roomy else TOUCH_MM
             for share in GAP_SHARES:
                 gap = share * spacing
-                path, on, step = _build(rings[:count], opening, gap, longest)
                 # Steps between rings stay short: a long one crosses to another part of a ring.
-                if step <= 2 * math.hypot(2 * spacing, gap) + 0.5 and _good(path, cover):
+                built = _build(rings[:count], opening, gap, longest, 2 * math.hypot(2 * spacing, gap) + 0.5)
+                if built is None:
+                    continue
+                path, on = built
+                room = _room(path, cover)
+                if room >= wanted:
                     found = True
                     yield path, on, count
+                elif room >= TOUCH_MM:
+                    close.append((path, on, count))
+        if close:
+            found = True
+            yield from close
         if found:
             return
-    path, on, _ = _build(rings[:1], openings[0], spacing, longest)
+    path, on = _build(rings[:1], openings[0], spacing, longest)
     yield path, on, 1
 
 
@@ -329,7 +404,7 @@ def _put_in(path: list[Point], on: list, ring: int, inner: _Piece, spacing: floa
         return None
     starts, ends = np.asarray([path[i] for i in host]), np.asarray([path[i + 1] for i in host])
     first = inner.rings[0]
-    facing = sorted(_openings(first), key=lambda s: round(float(_away(first.point(s), starts, ends).min()), 1))
+    facing = sorted(_openings(first), key=lambda s: _about(float(_away(first.point(s), starts, ends).min())))
     for tries, (piece_path, _, apart) in enumerate(_grow(inner, facing, spacing, longest, cover)):
         if tries >= TRIES_PER_PIECE:
             break
@@ -338,7 +413,7 @@ def _put_in(path: list[Point], on: list, ring: int, inner: _Piece, spacing: floa
         for k in nearest[:4]:
             for way in (piece_path, piece_path[::-1]):
                 joined = _joined(path, on, host[int(k)], way, ring, spacing, longest)
-                if joined is not None and _good(joined[0], cover):
+                if joined is not None and _room(joined[0], cover) >= TOUCH_MM:
                     return joined[0], joined[1], apart
     return None
 
@@ -416,9 +491,7 @@ def _paths(poly, params, pos):
     spacing = params.value("maze_mm")
     longest = min(max(params.stitch_mm, 1.0), LONG_STITCH_MM)
     local, origin = own_frame(poly)
-    base = shapely.transform(local.simplify(SIMPLIFY_MM), lambda xy: np.round(xy, 6))
-    if base.is_empty or not base.is_valid or base.geom_type != "Polygon":
-        base = local
+    base = _tidy(local, SIMPLIFY_MM)
     roots = [_tree(p, spacing) for part in _cut_open(base)
              for p in _pieces(part.buffer(-spacing / 2, join_style=1), spacing)]
     if not roots:

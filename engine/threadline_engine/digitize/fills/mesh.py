@@ -16,7 +16,7 @@ import shapely
 
 from ..paths import Point, dist, resample
 from . import FillPattern, Param, register, spiral
-from .motif import clip, edge_rings, edges, grown, own_frame, place, sew_along_edges, turn, turned
+from .motif import clip, edge_rings, edges, grown, onto_edges, own_frame, place, sew_along_edges, turn, turned
 
 SHORTEST_LINE_MM = 0.8  # shorter bits of line are left out, unless they're the way between two edges
 
@@ -35,6 +35,7 @@ def _lines(shape, degrees: float, cell: float, rings: list) -> list[list[Point]]
         found += [turn([p[0], p[-1]], degrees) for p in pieces]
     if not found:
         return []
+    found = onto_edges(found, rings)
     ends = spiral._edge_ends(found, rings)
     return [line for line, (a, b) in zip(found, ends) if dist(*line) >= SHORTEST_LINE_MM or a[0] != b[0]]
 

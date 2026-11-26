@@ -180,6 +180,24 @@ def test_a_shape_far_from_the_middle_of_the_hoop_sews_the_same(pattern):
     invariants.assert_moves_with_shape(obj, -20, -20)  # round the origin, where signs change
 
 
+def test_of_equally_far_points_simplifying_keeps_the_first():
+    """Distances that differ by less than a millionth of a mm, as a last digit makes them on
+    another computer, count as the same; a point no farther than the tolerance can go."""
+    assert motif.kept_points([(0, 0), (1, 1), (2, 1 + 1e-10), (3, 0)], 0.5) == [0, 1, 3]
+    assert motif.kept_points([(0, 0), (1, 0.5 + 1e-10), (2, 0)], 0.5) == [0, 2]
+    assert motif.kept_points([(0, 0), (1, 0.51), (2, 0)], 0.5) == [0, 1, 2]
+
+
+def test_line_ends_by_a_corner_go_to_the_corner():
+    """Mesh lines at 45 degrees run through the corners of a square. Cut on the grown outline,
+    their ends are as near one side as the other; left there, a last digit would choose the way
+    the next join goes."""
+    rings = motif.edge_rings(box(0, 0, 10, 10))
+    ends = [[(-0.0071, -0.0071), (5.0, 3.0), (10.0071, 10.0071)], [(3.0, -0.01), (10.01, 7.0)]]
+    got = motif.onto_edges(ends, rings)
+    assert [[(round(x, 9), round(y, 9)) for x, y in s] for s in got] == [[(0, 0), (5, 3), (10, 10)], [(3, 0), (10, 7)]]
+
+
 def _resized(pattern, scale, **params):
     """A 20 mm square made `scale` times bigger with the handles, as the app draws it, its top
     left corner kept at (0, 0): its records in mm."""
@@ -262,8 +280,8 @@ def test_no_thread_cuts_across_a_motif_fill(name):
     assert off < 1.0
 
 
-@pytest.mark.parametrize("width,centre", [(40, 20), (43, 21.5), (37.5, 18.75)])
-def test_whole_repeats_are_centered_on_the_shape(width, centre):
+@pytest.mark.parametrize("width,middle", [(40, 20), (43, 21.5), (37.5, 18.75)])
+def test_whole_repeats_are_centered_on_the_shape(width, middle):
     outline = _nodes([(0, 0), (width, 0), (width, 20), (0, 20)])
     paths = [p for row in _rows_of(outline, angle_deg=0, motif="zigzag", motif_mm=5, motif_stagger=0) for p in row]
     whole = [p for p in paths if min(y for _, y in p) > 0.05 and max(y for _, y in p) < 19.95]  # not cut
@@ -271,7 +289,7 @@ def test_whole_repeats_are_centered_on_the_shape(width, centre):
     for path in whole:
         top = max(y for _, y in path)
         peaks = _peaks(path, top)
-        mirrored = sorted(round(2 * centre - x, 3) for x in peaks)
+        mirrored = sorted(round(2 * middle - x, 3) for x in peaks)
         assert peaks == pytest.approx(mirrored, abs=0.01)
         assert min(x for x, _ in path) == pytest.approx(0, abs=0.02)
         assert max(x for x, _ in path) == pytest.approx(width, abs=0.02)
