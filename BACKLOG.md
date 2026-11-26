@@ -83,8 +83,15 @@ Planned on 2026-11-24: every item in this section, and the nice-to-haves above t
 - [ ] Stitch fonts: the preview in the dialog repeats the engine's baseline rules in TypeScript; have the engine return each letter's drop instead
 - [ ] Stitched letters resized with the corner handles only stretch (LUDD says so): fold a handle resize into the letter height so they're rebuilt
 - [ ] True satin: many large letters fall back (Arial at 60 mm: 27 of 62), mostly columns whose sides cross near the 7 mm limit; split wide strokes or relax the fold test
-- [ ] True satin on letters whose strokes are all over 7 mm (Arial at 150 mm) sews as Satin-look fills, as designed (edges within 0.04 mm of Satin look's), but with no note: say so
+- [ ] True satin on letters whose strokes are all over 7 mm (Arial at 150 mm) sews as Satin-look fills, as designed (edges within 0.05 mm of Satin look's), but with no note: say so
 - [ ] Shadow plus outline adds 2 to 3 s to the first drawing of a two-word text (mostly choosing the shadow fills' angles)
 - [ ] Order & colors has no "Back to ..." for a single letter's own color (the letter panel can undo it)
 - [ ] Color sets don't include single letters' own colors (L-035)
 - [ ] True satin shows a start and end dot on every column (74 on "Happy Birthday"): consider showing them only for the letter under the mouse, or only on fills
+
+## From the Phase 5 audit (2026-11-25)
+- [ ] A stitched font typed under 6 mm says "underlay is left out so they stay thin", but its stitches aren't changed (the knowledge base says so; the app's note doesn't). Give stitched fonts their own wording, such as "Letters 5 mm tall are hard to stitch clearly. 6 mm or more is safer."
+- [ ] The thin-stroke warning measures strokes at the letter height typed in; the resize handles and a single letter's own size don't count (the under-6 mm rule now does)
+- [ ] An envelope's squeeze or swell isn't counted in the under-6 mm rule (the knowledge base says so): a pinched 7 mm text's middle letters can sew under 6 mm with underlay. The manual's "goes by the height each letter sews at" could add "(an envelope isn't counted)"
+- [ ] True satin's pass or fall-back checks (`lettering/satin.py`: a letter's 97% cover, a join's cover, a column outside the letter) compare GEOS areas with their limits exactly; a letter right at a limit could fall back on one computer and not another. Low risk; a small margin or rounding before the compare would settle it
+- [ ] Older than Phase 5: the text layout cache and the overlap areas cache key on the font path saved in the project; when that font is missing and a stand-in is used, installing the real font elsewhere doesn't redraw until the text is edited or LUDD restarts. Key on the font actually used
