@@ -75,3 +75,14 @@ Planned on 2026-11-24: every item in this section, and the nice-to-haves above t
 - [ ] If P4-A1 is built, give `remove_hidden` its own project feature flag
 - [ ] Planner: reword Phase 4 done-when 2 to "no cell over the limit past the keep margin" (what is built and tested); add an L- entry for the margin band over the limit, which today is only in F-1207 (Phase 4 audit, finding 1)
 - [ ] `test_lower_fill_stops_under_the_cover` allows keep + 0.4 mm; the fill reaches keep + 0.16 to 0.20 mm: tighten to + 0.25 so a regression shows (Phase 4 audit, finding 3)
+
+## From Phase 5 (2026-11-25)
+- [ ] `RepairDialog.dom.test.tsx` "shows before and after ... after a 300 ms pause" uses real time: on a busy computer two clicks and a 100 ms wait can pass 300 ms and fail it (seen once in Phase 5's merge). Use fake timers
+- [ ] Stitch fonts from letter files: the file-name guesser could also read uppercase/lowercase/caps/capital words, trailing uc/lc, U/L prefixes, doubled letters ("aa"), "capa", words such as exclamation_point, question_mark, full_stop, amp, plus, equals, star, dollar, percent, parentheses, "num1", size suffixes that differ per file, order numbers in front and "(1)"/"copy"; letters sold in several formats show as used twice; and one stray design in the folder stops the shared prefix from being removed (these are expected patterns; no bought font was available)
+- [ ] Stitch fonts from letter files: a dotted j sits too low (the g j p q y rule puts its dot at small-letter height); treat j by its stem, not its box
+- [ ] Stitch fonts: the preview in the dialog repeats the engine's baseline rules in TypeScript; have the engine return each letter's drop instead
+- [ ] Stitched letters resized with the corner handles only stretch (LUDD says so): fold a handle resize into the letter height so they're rebuilt
+- [ ] True satin: many large letters fall back (Arial at 60 mm: 27 of 62), mostly columns whose sides cross near the 7 mm limit; split wide strokes or relax the fold test
+- [ ] Shadow plus outline adds 2 to 3 s to the first drawing of a two-word text (mostly choosing the shadow fills' angles)
+- [ ] Order & colors has no "Back to ..." for a single letter's own color (the letter panel can undo it)
+- [ ] Color sets don't include single letters' own colors (L-035)
