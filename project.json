@@ -35,9 +35,9 @@
   },
   "phase": 5,
   "status": "active",
-  "nextAction": "Phase 5 (lettering) in a fresh session once Phase 4 is merged: answer its spec's Owner decisions first",
-  "blockedOnHuman": "Answer the Phase 5 spec's Owner decisions",
-  "lastSessionAt": "2026-11-25T19:50:00Z",
+  "nextAction": "Phase 5 audit on the top model (phase-audit-gate), started by the planning session; then the owner's yes to push and open the pull request",
+  "blockedOnHuman": null,
+  "lastSessionAt": "2026-11-26T02:14:00Z",
   "health": {
     "tests": "passing",
     "build": "passing",

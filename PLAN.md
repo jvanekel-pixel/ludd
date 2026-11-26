@@ -72,17 +72,17 @@ Spec: docs/phases/PHASE-04-merge-safe-stitch-files.md
 Why it matters: lettering is LUDD's biggest gap (11 of 17 lettering features missing) and where hobbyists spend most time; AlphaTricks ($119) and BX fonts keep users tied to Embrilliance.
 Spec: docs/phases/PHASE-05-lettering.md
 > Verify: `python scripts/check.py --all` | Done when: a two-line, slanted, envelope-shaped name with one letter moved and recolored renders, a folder of 26 single-letter PES files becomes a working stitch font, and a CSV of names fills two placeholders
-- [ ] P5-A1 Multi-line text with line spacing and left/center/right (lifts L-003)
-- [ ] P5-A2 Slant
-- [ ] P5-A3 Envelopes (bulge, pinch, pennant, wave, arch) and vertical text
-- [ ] P5-A4 Adjust single letters: move, turn, size, thread, stitch angle (lifts L-005)
-- [ ] P5-B1 True satin columns from outline fonts (narrows L-014)
-- [ ] P5-B2 Small letters: underlay left out under 6 mm; thin-stroke warning
-- [ ] P5-C1 Stitch font from a folder of single-letter stitch files
-- [ ] P5-D1 Names from a list (CSV) and templates with placeholders
-- [ ] P5-D2 Monogram styles and frames
-- [ ] P5-D3 Shadow and outline that follow the text
-- [ ] P5-D4 Placement guides for towels, bedding and garments
+- [x] P5-A1 Multi-line text with line spacing and left/center/right (lifts L-003)
+- [x] P5-A2 Slant
+- [x] P5-A3 Envelopes (bulge, pinch, pennant, wave, arch) and vertical text
+- [x] P5-A4 Adjust single letters: move, turn, size, thread, stitch angle (lifts L-005)
+- [x] P5-B1 True satin columns from outline fonts (narrows L-014)
+- [x] P5-B2 Small letters: underlay left out under 6 mm; thin-stroke warning
+- [x] P5-C1 Stitch font from a folder of single-letter stitch files
+- [x] P5-D1 Names from a list (CSV) and templates with placeholders
+- [x] P5-D2 Monogram styles and frames
+- [x] P5-D3 Shadow and outline that follow the text
+- [x] P5-D4 Placement guides for towels, bedding and garments
 
 ## Phase 6: Fills & Stitch Quality
 Why it matters: two-color blend is Hatch 4's headline feature and is locked to its $1,199 Digitizer level; push compensation, weave and feathering make ordinary fills sew better.
