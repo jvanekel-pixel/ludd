@@ -45,3 +45,4 @@ def register_motif(name: str, unit: list[tuple[float, float]]) -> None:
 __all__ = ["LineStyle", "MOTIF_UNITS", "Param", "REGISTRY", "register", "register_motif"]
 
 from . import builtin  # noqa: E402,F401  (registers single, triple, bean, motif and the four motifs)
+from . import leaf  # noqa: E402,F401  (the leaf motif)
