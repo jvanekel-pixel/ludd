@@ -114,8 +114,9 @@ def layout_text(spec: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
     from . import monogram as monograms  # here: it uses _move and _centre from this module
 
     monogram_style = str(spec.get("monogram_style") or "classic")
-    # A monogram's side letters are smaller.
-    smallest = monograms.smallest_letter(size, monogram_style) if monogram else size
+    # A monogram's side letters are smaller (unless it's one letter).
+    initials = [c for c in text if not c.isspace()]  # line breaks count as spaces
+    smallest = monograms.smallest_letter(size, monogram_style, len(initials)) if monogram else size
     if smallest < SMALL_TEXT_MM:
         warnings.append(small_text_warning(smallest))
 
@@ -163,8 +164,7 @@ def layout_text(spec: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
         return envelope.bend(objects, bend[0], bend[1], angles)
 
     if monogram:
-        letters = [c for c in text if not c.isspace()]  # line breaks count as spaces
-        return done(bent(monograms.layout(letters, size, spacing, glyphs_for, monogram_style)))
+        return done(bent(monograms.layout(initials, size, spacing, glyphs_for, monogram_style)))
 
     kind = shape.get("type", "line")
     vertical = bool(spec.get("vertical"))

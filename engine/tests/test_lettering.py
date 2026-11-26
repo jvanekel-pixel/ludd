@@ -125,7 +125,7 @@ def test_monogram_has_a_bigger_middle_letter(font_path):
     heights = [max(n[1] for n in o["geometry"]["outline"]) - min(n[1] for n in o["geometry"]["outline"]) for o in objs]
     assert heights[1] == pytest.approx(10, abs=0.05) and heights[0] == pytest.approx(7, abs=0.05)
     with pytest.raises(LetteringError, match="three letters"):
-        lettering.layout_text(spec(font_path, text="IO", monogram=True))
+        lettering.layout_text(spec(font_path, text="IOIX", monogram=True))  # one to three letters
 
 
 def test_validation_and_small_text_warning(font_path):

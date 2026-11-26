@@ -136,7 +136,7 @@ export function SelectedText({ item, info: itemInfo, sel }: { item: TextItem; in
     clearTimeout(timer.current);
     if (t.trim() && t !== item.text) setText(item.id, { text: t });
   };
-  /** The words: several lines, but a monogram's three initials on one. */
+  /** The words: several lines, but a monogram's initials on one. */
   const textField = {
     ref: (el: HTMLInputElement | HTMLTextAreaElement | null) => {
       input.current = el;
@@ -188,7 +188,7 @@ export function SelectedText({ item, info: itemInfo, sel }: { item: TextItem; in
   return (
     <Section id="lettering" sel={sel} defaultOpen title="Lettering" summary={`${item.font.family} · ${styleLabel(item)}`}>
       <label className="text-field">
-        <span>{item.monogram ? "Three initials" : "Text"}</span>
+        <span>{item.monogram ? "Initials (1 to 3)" : "Text"}</span>
         {item.monogram ? (
           <input {...textField} />
         ) : (

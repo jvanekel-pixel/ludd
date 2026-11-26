@@ -27,11 +27,10 @@ def _sizes(count: int, size: float, style: str) -> list[float]:
     return [size] if count == 1 else [size * SIDE_LETTER, size, size * SIDE_LETTER][:count]
 
 
-def smallest_letter(size: float, style: str = "classic") -> float:
-    """The height of the monogram's smallest letters (mm), for the small-letter warning."""
-    if style == "block":
-        return size
-    return size * (STACKED_LETTER if style == "stacked" else SIDE_LETTER)
+def smallest_letter(size: float, style: str = "classic", count: int = 3) -> float:
+    """The height of the smallest letter (mm) in a monogram of `count` letters, for the
+    small-letter warning (one letter alone is full size)."""
+    return min(_sizes(min(max(count, 1), 3), size, style))
 
 
 def layout(letters: list[str], size: float, spacing: float, glyphs_for: Callable[[str, float], list[Glyph]],

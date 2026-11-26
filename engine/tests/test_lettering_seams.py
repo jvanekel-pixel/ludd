@@ -54,6 +54,18 @@ def test_letters_are_numbered_by_what_they_draw(font_path):
     assert [o["letter"] for o in objs] == [0, 1, 2]
 
 
+@pytest.mark.parametrize("text,style,size,warns", [
+    ("I", "classic", 7, False),  # one letter alone is full size
+    ("I", "stacked", 7, False),
+    ("IO", "classic", 8, True),  # the small one is 5.6 mm
+    ("IOI", "stacked", 12, True),  # the stacked pair are 5.6 mm
+    ("IOI", "block", 7, False),
+])
+def test_a_monograms_small_letter_warning_counts_its_letters(font_path, text, style, size, warns):
+    _, warnings = lettering.layout_text(spec(font_path, text=text, monogram=True, monogram_style=style, size_mm=size))
+    assert any("hard to stitch" in w for w in warnings) is warns
+
+
 def test_a_slant_hook_changes_each_shape_before_it_is_stitched(font_path):
     from shapely import affinity
 
