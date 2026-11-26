@@ -301,6 +301,170 @@ def test_small_letter_warning_text(font):
             "6 mm or more is safer.") in warnings
 
 
+# ---------------------------------------------------------------- small letters, by the height they sew at
+
+LOOKS = ["satin", "fill", "columns"]
+
+
+def _small_notes(warnings):
+    return [w for w in warnings if "hard to stitch" in w]
+
+
+def _note(mm):
+    return f"Letters {mm} mm tall are hard to stitch clearly; underlay is left out so they stay thin. 6 mm or more is safer."
+
+
+def _sized(font, size, style, scale=1.0, scale_y=None, **kw):
+    """An "IOT" text typed `size` mm tall, resized with its handles (`scale` wide, `scale_y` tall)."""
+    t = {"scale_x": scale, "scale_y": scale if scale_y is None else scale_y}
+    return _item(font, size_mm=size, style=style, transform=t, **kw)
+
+
+def _underlays(letters):
+    """Each letter's underlays: {letter number: [one per part]}."""
+    out = {}
+    for o in letters:
+        out.setdefault(o["letter"], []).append(o["params"]["underlay"])
+    return out
+
+
+def _by_kind(letters):
+    return {o["kind"]: o["params"]["underlay"] for o in letters}
+
+
+def _big_underlays(font, style, size=20):
+    """The underlay an unresized `size` mm text gets, by kind of part (a True satin column's and a
+    satin-look fill's differ)."""
+    letters, _ = layout.text_letters(_sized(font, size, style))
+    want = _by_kind(letters)
+    if style == "columns":
+        want.setdefault("fill", ["edge"])  # a leftover or a thin part, when a smaller size has one
+    return want
+
+
+@pytest.mark.parametrize("style", LOOKS)
+def test_a_small_text_that_is_not_resized_has_no_underlay(font, style):
+    letters, warnings = layout.text_letters(_sized(font, 5, style))
+    assert letters and all(o["params"]["underlay"] == [] for o in letters)
+    assert _small_notes(warnings) == [_note(5)]
+
+
+@pytest.mark.parametrize("style", LOOKS)
+def test_small_text_enlarged_with_the_handles_gets_its_underlay(font, style):
+    letters, warnings = layout.text_letters(_sized(font, 5, style, 4.0))  # sews 20 mm tall
+    want = _big_underlays(font, style)
+    assert all(want.values())
+    assert [o["params"]["underlay"] for o in letters] == [want[o["kind"]] for o in letters]
+    assert not _small_notes(warnings)
+
+
+@pytest.mark.parametrize("style", LOOKS)
+def test_text_shrunk_with_the_handles_under_6_mm_loses_its_underlay(font, style):
+    letters, warnings = layout.text_letters(_sized(font, 15, style, 4 / 15))  # sews 4 mm tall
+    assert letters and all(o["params"]["underlay"] == [] for o in letters)
+    assert _small_notes(warnings) == [_note(4)]
+
+
+@pytest.mark.parametrize("style", LOOKS)
+def test_a_single_letters_own_size_counts(font, style):
+    edits = {"0": {"scale": 0.45}, "2": {"scale": 0.4}}  # I sews 5.4 mm tall, T 4.8 mm
+    letters, warnings = layout.text_letters(_item(font, style=style, letter_edits=edits))
+    got = _underlays(letters)
+    assert set(got) == {0, 1, 2}
+    assert all(u == [] for u in got[0] + got[2]) and all(u != [] for u in got[1])
+    assert _small_notes(warnings) == [_note(4.8)]  # the smallest letter as sewn
+
+
+@pytest.mark.parametrize("style", LOOKS)
+def test_the_height_decides_not_the_width(font, style):
+    wider, warnings = layout.text_letters(_sized(font, 5, style, 4.0, 1.0))  # 4x as wide, still 5 mm tall
+    assert all(o["params"]["underlay"] == [] for o in wider) and _small_notes(warnings) == [_note(5)]
+    narrow, warnings = layout.text_letters(_sized(font, 15, style, 0.25, 1.0))  # a quarter as wide, 15 mm tall
+    assert all(o["params"]["underlay"] != [] for o in narrow) and not _small_notes(warnings)
+    short, warnings = layout.text_letters(_sized(font, 15, style, 1.0, 4 / 15))  # as wide, 4 mm tall
+    assert all(o["params"]["underlay"] == [] for o in short) and _small_notes(warnings) == [_note(4)]
+
+
+def test_a_turned_letters_height_is_stretched_along_its_own_height(font):
+    # The O turned on its side runs its height across the text, so narrowing the text shortens it.
+    item = _sized(font, 12, "satin", 0.4, 1.0, letter_edits={"1": {"rotate": 90}})
+    letters, warnings = layout.text_letters(item)
+    got = _underlays(letters)
+    assert got[1] == [[]] and got[0] == got[2] == [["edge"]]
+    assert _small_notes(warnings) == [_note(4.8)]
+
+
+def test_letters_on_a_curve_are_each_measured_along_their_own_height(font):
+    """A 7 mm arch narrowed to 40%: the upright letters stay 7 mm tall; the ones leaning over at
+    the ends sew shorter. An I's long edge is its height as sewn, so it decides what each gets."""
+    item = _item(font, text="IIIIIII", size_mm=7, style="satin", shape={"type": "arc_up", "radius_mm": 12},
+                 transform={"scale_x": 0.4, "scale_y": 1.0})
+    letters, warnings = layout.text_letters(item)
+    heights = []
+    for o in letters:
+        ring = [(n[0], n[1]) for n in o["geometry"]["outline"]]
+        heights.append(max(math.dist(p, q) for p, q in zip(ring, ring[1:] + ring[:1])))
+    assert min(heights) < 5.5 and max(heights) > 6.5  # some of each
+    assert [o["params"]["underlay"] == [] for o in letters] == [h < 6 for h in heights]
+    (note,) = _small_notes(warnings)
+    assert float(note.split()[1]) == pytest.approx(min(heights), abs=0.1)
+
+
+def test_a_letter_a_hair_under_6_mm_is_never_called_6(font):
+    _, warnings = layout.text_letters(_sized(font, 8, "satin", 0.7485))  # 5.99 mm
+    assert _small_notes(warnings) == [_note(5.9)]
+    letters, warnings = layout.text_letters(_sized(font, 7, "satin", 0.8571))  # 6 mm to a hundredth
+    assert not _small_notes(warnings) and all(o["params"]["underlay"] == ["edge"] for o in letters)
+
+
+@pytest.mark.parametrize("style", LOOKS)
+def test_resizing_across_6_mm_and_back_never_sews_old_underlay(font, style):
+    """Warm caches give the same stitches and warnings as empty ones, whichever side of 6 mm the
+    text was on before."""
+    steps = [_sized(font, 5, style), _sized(font, 5, style, 4.0), _sized(font, 5, style),
+             _sized(font, 15, style, 4 / 15), _sized(font, 15, style),
+             _item(font, style=style, letter_edits={"1": {"scale": 0.4}}), _item(font, style=style),
+             _item(font, style=style, letter_edits={"1": {"scale": 0.4}})]
+
+    def sew(item):
+        r = layout.render(_plain([item]))
+        return [(round(x, 2), round(y, 2), c) for x, y, c in r.pattern.stitches], layout.text_letters(item)[1]
+
+    def forget():
+        layout._text_cache.clear()
+        layout._object_cache.clear()
+        lettering.extras._cache.clear()
+
+    forget()
+    warm = [sew(item) for item in steps]
+    for item, got in zip(steps, warm):
+        forget()
+        assert sew(item) == got, item["transform"] or item.get("letter_edits")
+
+
+@pytest.mark.parametrize("style", LOOKS)
+def test_text_that_stays_6_mm_or_more_sews_as_laid_out(font, style):
+    spec = {"text": "IOT", "font": {"path": font, "index": 0}, "size_mm": SIZE, "style": style}
+    laid, laid_notes = lettering.layout_text(spec)
+    letters, warnings = layout.text_letters(_item(font, style=style))
+    assert [o["params"]["underlay"] for o in letters] == [o["params"]["underlay"] for o in laid]
+    assert all(o["params"]["underlay"] for o in letters)
+    assert warnings == laid_notes and not _small_notes(warnings)
+
+
+def test_a_stitched_fonts_letters_keep_their_own_underlay(font, tmp_path):
+    """Letters from a stitch font aren't touched: not by the handles, not by their own size."""
+    for cap, scale in ((5, 4.0), (SIZE, 1 / 3)):  # made small and enlarged; made big and shrunk
+        dest = tmp_path / "fonts" / f"s{cap:g}.luddfont"
+        lettering.export_stitch_font({"path": font, "family": "Satin Test"}, str(dest), "IOT", cap_height_mm=cap)
+        item = {**_item(font, size_mm=cap, style="satin", transform={"scale_x": scale, "scale_y": scale},
+                        letter_edits={"0": {"scale": 0.5}}), "font": {"path": str(dest)}}
+        letters, warnings = layout.text_letters(item)
+        want = [] if cap < 6 else ["edge"]
+        assert letters and all(o["params"]["underlay"] == want for o in letters)
+        assert _small_notes(warnings) == ([_note(5)] if cap < 6 else [])
+
+
 def test_thin_stroke_warning(font):
     _, warnings = lettering.layout_text({"text": "ll", "font": {"path": font, "index": 0}, "size_mm": SIZE, "style": "columns"})
     want = [w for w in warnings if w.startswith("This font's strokes are only")]

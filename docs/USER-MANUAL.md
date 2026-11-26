@@ -714,8 +714,10 @@ both sides; they still sew and edit as before.
   and stacked letters; shadow and outline; extra letter spacing; **One file per name…**; **Save
   this font as a stitch font**.
 Letters under 6 mm tall are hard to sew (dots and thin parts start to drop out), so LUDD leaves
-their underlay out to keep them thin, and warns you (for a monogram, by its smallest letters). It
-also warns when a font's strokes are so thin at your size that they sew as a single line: use a
+their underlay out to keep them thin, and warns you, naming the smallest height (for a monogram,
+its smallest letters). It goes by the height each letter sews at: resizing with the handles and a
+single letter's own size count (making text only wider doesn't). A stitched font's letters keep
+the underlay they were made with. It also warns when a font's strokes are so thin at your size that they sew as a single line: use a
 bolder font or bigger letters. Projects carry their fonts inside them, so
 lettering looks the same on another PC. If an older project uses a font that isn't installed on
 this computer, its lettering is shown in a standard font (Arial) with a warning in Checks, so the

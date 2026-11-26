@@ -3,7 +3,8 @@
 A text is sewn in five steps: its letters are laid out (lettering.layout_text, cached), single
 letters are changed (_apply_letter_edits), the extras are made from the letters (lettering.extras:
 a shadow before them; an outline and a frame after), each part is stitched (_part_stitches) and
-the parts are put into color blocks (_blocks), one for each run sewn in the same thread."""
+the parts are put into color blocks (_blocks), one for each run sewn in the same thread. Before
+stitching, each installed-font letter's underlay is chosen by the height it sews at (_as_sewn)."""
 
 from __future__ import annotations
 
@@ -52,13 +53,23 @@ def _number(value: Any) -> float | None:
     return v if math.isfinite(v) else None
 
 
+def _letter_turn(edit: dict[str, Any]) -> float:
+    """How far a single letter is turned by itself (degrees)."""
+    return _number(edit.get("rotate")) or 0.0
+
+
+def _letter_size(edit: dict[str, Any]) -> float:
+    """A single letter's own size (1: as laid out), kept within 0.1 to 10."""
+    grow = _number(edit.get("scale"))
+    return min(max(grow, 0.1), 10.0) if grow and grow > 0 else 1.0
+
+
 def _edited_letter(parts: list[dict[str, Any]], edit: dict[str, Any]) -> list[dict[str, Any]]:
     """One letter's parts changed: resized and turned about the middle of their box, then moved
     (its stitch angles turn with it); then its own stitch angle and thread, if given."""
     dx, dy = _number(edit.get("dx_mm")) or 0.0, _number(edit.get("dy_mm")) or 0.0
-    turn = _number(edit.get("rotate")) or 0.0
-    grow = _number(edit.get("scale"))
-    grow = min(max(grow, 0.1), 10.0) if grow and grow > 0 else 1.0
+    turn = _letter_turn(edit)
+    grow = _letter_size(edit)
     points = [p for o in parts for p in lettering.envelope.part_points(o)]
     if points and (dx or dy or turn or grow != 1.0):
         x0, y0, x1, y1 = dz.bounds(points)
@@ -99,6 +110,44 @@ def _apply_letter_edits(objects: list[dict[str, Any]], spec: dict[str, Any]) -> 
     return out
 
 
+def _sewn_heights(objects: list[dict[str, Any]], edits: Any, t: Transform) -> dict[int, float]:
+    """The height (mm, to 0.01) each installed-font letter sews at: the height it's laid out at,
+    times its own size, times how much the text's handles stretch it along its own height (turned
+    with it, on a curve or by itself). A stretch across the letter doesn't count. A stitched
+    font's letters aren't in it."""
+    edits = edits if isinstance(edits, dict) else {}
+    heights: dict[int, float] = {}
+    for o in objects:
+        laid = o.get("letter_mm")
+        if laid is None:
+            continue
+        edit = edits.get(str(o["letter"]))
+        edit = edit if isinstance(edit, dict) else {}
+        a = math.radians(float(o.get("turn_deg") or 0.0) + _letter_turn(edit))
+        stretch = math.hypot(math.sin(a) * t.scale_x, math.cos(a) * t.scale_y)
+        heights[o["letter"]] = round(float(laid) * _letter_size(edit) * stretch, 2)
+    return heights
+
+
+def _as_sewn(objects: list[dict[str, Any]], warnings: list[str], spec: dict[str, Any],
+             t: Transform) -> tuple[list[dict[str, Any]], list[str]]:
+    """The letters with the underlay for the height each sews at, and the small-letter warning
+    naming the smallest of them (the layout only knows the height typed in). A stitched font's
+    text is left as it is. The cached letters and warnings passed in are never changed."""
+    heights = _sewn_heights(objects, spec.get("letter_edits"), t)
+    if not heights:
+        return objects, list(warnings)
+    style = spec.get("style") or "satin"
+    out = [o if o.get("letter_mm") is None else lettering.underlay_for_height(o, heights[o["letter"]], style)
+           for o in objects]
+    said = next((n for n, w in enumerate(warnings) if isinstance(w, lettering.SmallLettersWarning)), None)
+    notes = [w for w in warnings if not isinstance(w, lettering.SmallLettersWarning)]
+    smallest = min(heights.values())
+    if smallest < lettering.SMALL_TEXT_MM:
+        notes.insert(len(notes) if said is None else said, lettering.small_text_warning(smallest))
+    return out, notes
+
+
 def text_title(it: dict[str, Any]) -> str:
     """The start of a text's words on one line, to name it (and its parts) by."""
     return " ".join(line.strip() for line in str(it.get("text") or "").splitlines() if line.strip())[:24]
@@ -130,6 +179,7 @@ def _text_parts(it: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str
     except (lettering.LetteringError, dz.DigitizeError) as exc:
         raise LayoutError(f"{it.get('name') or 'Text'}: {exc}") from exc
     t = Transform.from_dict(it.get("transform"))
+    objects, warnings = _as_sewn(objects, warnings, spec, t)
     if any(o.get("kind") == "stitches" for o in objects):
         font = spec.get("font") or {}
         warnings = [*warnings, *lettering.stitchglyphs.handle_resize_notes(

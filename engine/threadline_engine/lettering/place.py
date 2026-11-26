@@ -54,6 +54,12 @@ class _Turn:
     rotate: float
 
 
+def _turned_letter(obj: dict[str, Any], turn: _Turn) -> dict[str, Any]:
+    """A letter part stood on a curve: its stitch angle turned with it, and the turn kept, so that
+    its own height is still known when the text's handles stretch it (layout.text)."""
+    return {**turn_with(obj, turn), "turn_deg": turn.rotate}
+
+
 def _clean_text(text: str) -> str:
     """Composed accents (e + combining acute -> é); line breaks kept as "\\n" (Windows and old Mac
     ones too); tabs and other breaks as spaces; invisible marks out."""
@@ -142,7 +148,10 @@ def layout_text(spec: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
                     g.objects = [envelope.lean_satin_look(o, slant) for o in g.objects]
         for g in got:
             if g.objects:  # each object says which letter it's part of, and on which line (from 0)
-                g.objects = [{**o, "letter": drawn, "line": line} for o in g.objects]
+                # An installed font's letter also says the height it's laid out at: its underlay goes by
+                # the height it sews at (layout.text). A stitched font's letters keep their own (None).
+                g.objects = [{**o, "letter": drawn, "line": line, "letter_mm": None if is_stitch_font else sz}
+                             for o in g.objects]
                 drawn += 1
         return got
 
@@ -328,7 +337,7 @@ def _arched(lines: dict[int, list[Glyph]], kind: str, radius: float, size: float
                 return (lx * ca - b * sa + cx, lx * sa + b * ca + cy)
 
             turn = _Turn(math.degrees(rot))
-            objects += [turn_with(_move(o, place), turn) for o in g.objects]
+            objects += [_turned_letter(_move(o, place), turn) for o in g.objects]
             pos += g.advance
         wraps = wraps or total > 2 * math.pi * line_radius + 0.5
     if wraps:
@@ -390,7 +399,7 @@ def _along_path(glyphs: list[Glyph], total: float, size: float, nodes: list, clo
             return (lx * ca - y * sa + px, lx * sa + y * ca + py)
 
         turn = _Turn(math.degrees(rot))
-        objects += [turn_with(_move(o, place), turn) for o in g.objects]
+        objects += [_turned_letter(_move(o, place), turn) for o in g.objects]
         pos += g.advance
     return objects, length
 

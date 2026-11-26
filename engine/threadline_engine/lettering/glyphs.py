@@ -19,12 +19,32 @@ from .fonts import LetteringError, _glyph_shapes, _load
 SATIN_MAX_STITCH_MM = 6.8  # rows narrower than this sew as one satin-like stitch (under the 7 mm "long loose stitch" check, with room for rounding)
 SMALL_TEXT_MM = 6.0  # below this, dots and thin parts start to drop out, and underlay is left out
 THIN_STROKE_MM = 0.8  # strokes thinner than this sew as a single line
+# The underlay under each look's fills in an installed font's letters SMALL_TEXT_MM tall or more
+# (a True satin column chooses its own by its width: "auto").
+FILL_UNDERLAY = {"fill": ("edge", "tatami"), "satin": ("edge",)}
 
 
-def small_text_warning(smallest_mm: float) -> str:
+class SmallLettersWarning(str):
+    """small_text_warning's words, marked so that a text on the design can say them again by the
+    heights its letters sew at (layout.text)."""
+
+
+def small_text_warning(smallest_mm: float) -> SmallLettersWarning:
     """Said when the smallest letters are under SMALL_TEXT_MM tall."""
-    return (f"Letters {round(smallest_mm, 1):g} mm tall are hard to stitch clearly; underlay is left out so they "
-            f"stay thin. {SMALL_TEXT_MM:g} mm or more is safer.")
+    shown = min(round(smallest_mm, 1), SMALL_TEXT_MM - 0.1)  # one a hair under 6 mm is never called 6
+    return SmallLettersWarning(f"Letters {shown:g} mm tall are hard to stitch clearly; underlay is left out so they "
+                               f"stay thin. {SMALL_TEXT_MM:g} mm or more is safer.")
+
+
+def underlay_for_height(obj: dict[str, Any], height_mm: float, style: str) -> dict[str, Any]:
+    """An installed font's letter part with the underlay for a letter `height_mm` tall in the look
+    `style`: none under SMALL_TEXT_MM, so it stays thin (an empty list, not None: fabrics.apply would
+    add one back), and from there up its look's own. A copy: the part given isn't changed."""
+    if obj.get("kind") == "satin":  # a True satin column
+        normal: Any = "auto"
+    else:
+        normal = list(FILL_UNDERLAY["fill" if style == "fill" else "satin"])
+    return {**obj, "params": {**(obj.get("params") or {}), "underlay": [] if height_mm < SMALL_TEXT_MM else normal}}
 
 
 def thin_stroke_warning(width_mm: float) -> str:
@@ -136,18 +156,19 @@ def _outline_glyphs(text: str, path: str, index: int, size_mm: float, spacing_mm
 
 def _fill_object(shape: Polygon, style: str, size_mm: float | None = None) -> dict[str, Any]:
     """One letter shape as a fill: woven ("fill"), or rows across its strokes (Satin look, any
-    other style). Letters under SMALL_TEXT_MM tall (`size_mm`) get no underlay, so they stay thin."""
+    other style). Letters under SMALL_TEXT_MM tall (`size_mm`) get no underlay, so they stay thin.
+    (A text on the design goes by the height each letter sews at: layout.text.)"""
     shape = shape.simplify(0.03)
     nodes = [[round(x, 3), round(y, 3), "c"] for x, y in list(shape.exterior.coords)[:-1]]
     holes = [[[round(x, 3), round(y, 3), "c"] for x, y in list(h.coords)[:-1]] for h in shape.interiors]
     if style == "fill":
-        params = {"angle_deg": 45, "spacing_mm": 0.4, "stitch_mm": 3.5, "pull_comp_mm": 0.2, "underlay": ["edge", "tatami"]}
+        params = {"angle_deg": 45, "spacing_mm": 0.4, "stitch_mm": 3.5, "pull_comp_mm": 0.2,
+                  "underlay": list(FILL_UNDERLAY["fill"])}
     else:
         params = {"angle_deg": _satin_angle(shape), "spacing_mm": 0.35, "stitch_mm": SATIN_MAX_STITCH_MM,
-                  "pull_comp_mm": 0.25, "underlay": ["edge"]}
-    if size_mm is not None and size_mm < SMALL_TEXT_MM:
-        params["underlay"] = []  # an empty list, not None: fabrics.apply would add one back
-    return {"kind": "fill", "geometry": {"outline": nodes, "holes": holes}, "params": params}
+                  "pull_comp_mm": 0.25, "underlay": list(FILL_UNDERLAY["satin"])}
+    obj = {"kind": "fill", "geometry": {"outline": nodes, "holes": holes}, "params": params}
+    return obj if size_mm is None else underlay_for_height(obj, size_mm, style)
 
 
 def _satin_angle(shape: Polygon) -> float:

@@ -642,8 +642,8 @@ stitches. Shapes with holes stay fills (L-013).
 `Shift+T`, click where it goes, type in the panel: several lines are fine (Enter starts a new one;
 `Ctrl+Enter` or clicking away finishes; a monogram takes up to 3 initials on one line). Any
 installed font (search; 200 shown at a time) or a `.luddfont` stitch font. Letter height = capital
-H, 2–200 mm. Thread. **Satin look**, **True satin** (F-1414) or **Fill**. Letters under 6 mm warn
-and sew without underlay (F-1420). Fonts are embedded in the project; a missing font shows as Arial
+H, 2–200 mm. Thread. **Satin look**, **True satin** (F-1414) or **Fill**. Letters that sew under
+6 mm tall warn and have no underlay (F-1420). Fonts are embedded in the project; a missing font shows as Arial
 with a warning. The lettering panel's **More options** fold (called Advanced before 2026-11-25)
 holds layout, shadow and outline, letter spacing, One file per name and Save this font as a stitch
 font.
@@ -741,8 +741,8 @@ about 7 mm or thinner than 0.8 mm, a dot, a sliver) is sewn first in Satin look.
 columns wouldn't cover it well is sewn whole in Satin look (never half and half), and a note says how
 many. **Break into shapes** gives editable satin columns. Works best on small and medium letters: of
 Arial's A–Z, a–z and 0–9, none fall back at 12 mm and one at 25 mm; at 60 mm 27 of 62 do (strokes
-near 7 mm fold at curves). The fabric preset sets spacing, pull compensation and underlay; under
-6 mm there's no underlay (F-1420). Not yet checked on fabric (L-016).
+near 7 mm fold at curves). The fabric preset sets spacing, pull compensation and underlay; letters
+sewn under 6 mm tall have no underlay (F-1420). Not yet checked on fabric (L-016).
 
 ### F-1415 Make a stitch font from letter files — YES (since 2026-11-25)
 `Ctrl+Alt+F`, or the font list's **Make a stitch font from letter files…**. Choose a folder (or
@@ -803,8 +803,14 @@ with measurements in inches and centimeters and a small drawing, and **Print a p
 practice: check on your item. Nothing in the design changes.
 
 ### F-1420 Small letters — YES (since 2026-11-25)
-Installed-font letters under 6 mm sew without underlay, so they stay thin, with a note (this changes
-how small text already in your designs sews). A font whose strokes are under 0.8 mm at that size
+Installed-font letters that sew under 6 mm tall have no underlay, so they stay thin, with a note
+naming the smallest height (this changes how small text already in your designs sews). The height
+counted is the one sewn: the letter height, stretched up or down by the resize handles (making
+text only wider or narrower doesn't count), times a single letter's own size (F-1413). So 5 mm
+text enlarged to 20 mm gets its underlay, and 15 mm text shrunk to 4 mm loses it. The squeeze or
+swell of an envelope isn't counted. A stitched font's letters keep the underlay the font was made
+with; under 6 mm letter height they get the same note, but their stitches aren't changed.
+A font whose strokes are under 0.8 mm at your letter height (the handles aren't counted there)
 sews them as a single line, and LUDD says so: use a bolder font or bigger letters.
 
 ---
@@ -1145,7 +1151,7 @@ Use this to answer "did that change?" or "why is it different?". Full detail: `d
 
 | Date | Change |
 | --- | --- |
-| 2026-11-25 | **Lettering and personalization**: several lines with alignment (F-1410), slant (F-1411), envelopes and stacked letters (F-1412), single letters (F-1413, `Alt+Shift+A`), True satin (F-1414), stitch fonts from letter files (F-1415, `Ctrl+Alt+F`), name lists and templates (F-1416, `Ctrl+Alt+P`), monogram styles and frames (F-1417), shadow and outline (F-1418), placement guides (F-1419, `Alt+Shift+G`). Installed-font letters under 6 mm now sew without underlay (F-1420). The lettering panel's Advanced fold is now **More options**. Lifts L-003 and L-005; L-014 is now PARTIAL. |
+| 2026-11-25 | **Lettering and personalization**: several lines with alignment (F-1410), slant (F-1411), envelopes and stacked letters (F-1412), single letters (F-1413, `Alt+Shift+A`), True satin (F-1414), stitch fonts from letter files (F-1415, `Ctrl+Alt+F`), name lists and templates (F-1416, `Ctrl+Alt+P`), monogram styles and frames (F-1417), shadow and outline (F-1418), placement guides (F-1419, `Alt+Shift+G`). Installed-font letters that sew under 6 mm tall (resizing counts) now sew without underlay (F-1420). The lettering panel's Advanced fold is now **More options**. Lifts L-003 and L-005; L-014 is now PARTIAL. |
 | 2026-11-25 | **Repair bought designs** (a stitch file with no repair sews as before): **Repair this design** (F-1902, `Ctrl+Alt+D`, with before and after numbers and Show on the design); **Remove tiny stitches** and **Thin out dense spots** (F-1903); **Limit density for this fabric** (F-1904); **Rebuild stitches at this size** (F-1905); **Fix it** on three checks; insert stitches and jumps and lock a jump (F-1906); needle path view (F-407); **Don't sew what's hidden under shapes on top** for drawn shapes (F-1207). Removing hidden stitches under another stitch file is not built (L-030). |
 | 2026-11-24 | **Spiral fill and more shapes** (nothing already sewn changes): a new **Spiral** fill pattern (F-1305; the thread joining its pieces follows the edge, L-026); the Shapes menu adds a rounded rectangle, oval, triangle, polygon and heart (`Ctrl+Alt+4`–`8`, F-501). Behind the scenes, the stitch engine and panel were split into smaller parts, and `python scripts/check.py` runs every check. Also corrected: Stipple and Cross-stitch don't move their start with the green dot (F-701). |
 | 2026-11-24 | **Sewing time and thread estimate** (F-406): the Design section shows about how long the design sews on your machine, how many thread changes, and about how much top and bobbin thread it uses, per color under **Thread used**. Machine profiles can set `speed_spm`. |

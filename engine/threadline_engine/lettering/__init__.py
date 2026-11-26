@@ -41,8 +41,9 @@ from .fonts import (FONT_EXTS, INDEX_VERSION, STAND_IN_FAMILIES, STITCH_FONT_EXT
                     _is_symbol, _load, _names, _signed_area, _stamp, _winding, _x_advance, font_dirs, font_stamp,
                     list_fonts, resolve_font, substitute_font)
 from .fontfile import EXTRA_CHARS, _free_path, _load_stitch_font, export_stitch_font, stitch_font_dir  # noqa: F401
-from .glyphs import (SATIN_MAX_STITCH_MM, SMALL_TEXT_MM, Glyph, _Missing, _PARAMS, _Scale, _check_letter_object,  # noqa: F401
-                     _fill_object, _near_letter, _outline_glyphs, _satin_angle, _stitch_font_glyphs)
+from .glyphs import (SATIN_MAX_STITCH_MM, SMALL_TEXT_MM, Glyph, SmallLettersWarning, _Missing, _PARAMS, _Scale,  # noqa: F401
+                     _check_letter_object, _fill_object, _near_letter, _outline_glyphs, _satin_angle,
+                     _stitch_font_glyphs, small_text_warning, underlay_for_height)
 from .place import _Turn, _along_path, _centre, _clean_text, _move, layout_text, turn_with  # noqa: F401
 
 #: Everything of a text item that decides its letters and what's sewn with them. layout_text and
