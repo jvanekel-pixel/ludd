@@ -797,7 +797,9 @@ a file type and a folder, and LUDD saves one machine file per name (Emma.pes, Ja
 whole design with the selected lettering changed to that name. Each file is prepared just as **Save
 for machine** would (your machine and hoop; for the PE550D, a stop wherever the thread needs
 cutting). Files already in the folder are never replaced: a repeated name is saved as "Emma (1).pes",
-and LUDD tells you which files got a number. It also tells you if any name is too wide for your
+and LUDD tells you which files got a number. Very long names are cut to 100 characters in the file
+name, and the few names Windows keeps for itself (such as Con or Aux, even before a dot) get a _ in
+front. It also tells you if any name is too wide for your
 hoop, and if one name can't be saved, the others still are and a message names it, says why and
 stays until you close it. It's offered when lettering is selected. For team shirts, party favors
 and gifts.

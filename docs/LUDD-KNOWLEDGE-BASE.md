@@ -773,7 +773,10 @@ sample words for someone else); a row with nothing to fill makes no file. A row 
 doesn't stop the others: LUDD names it and says why, in a message that stays until you close it.
 **Shrink long names to fit** with **Widest**: a longer name gets smaller letters and spacing. A
 `color` column takes a hex color or a thread number from the chart you choose; a `file` column
-names the file. **Preview on the design** (◀ ▶) shows each row without changing the design. **Name
+names the file. In file names, characters Windows or Mac refuse become `_`, a name longer than
+100 characters (or 200 bytes) is cut, and a Windows device name (Con, Aux, Nul, COM1…), even with
+a dot and more after it, gets a `_` in front. A name already taken, cut or not, gets "(1)", "(2)".
+**Preview on the design** (◀ ▶) shows each row without changing the design. **Name
 templates**: **Save this layout as a name template…** (in that window, or `Ctrl+Alt+P`) saves the
 whole design into the data folder's `templates`; **Start from a template** opens one as a new
 design (Save asks for a name, so the template stays as it was).

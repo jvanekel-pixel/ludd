@@ -506,12 +506,34 @@ export function textOnLineItem(text: TextItem, nodes: PathNode[], closed: boolea
   };
 }
 
-/** A name as a file name: no characters Windows or macOS refuse, no device names (CON, NUL...). */
+/** The most of a name that goes into its file name: characters, and UTF-8 bytes (Mac and Linux
+ *  limit a file name by its bytes; 200 leaves room for " (1)" and the file type). */
+const STEM_MAX_CHARS = 100;
+const STEM_MAX_BYTES = 200;
+
+/** The start of `s` within both limits, never cutting a character in two. */
+function stemStart(s: string): string {
+  const utf8 = new TextEncoder();
+  let out = "";
+  let chars = 0;
+  let bytes = 0;
+  for (const c of s) {
+    bytes += utf8.encode(c).length;
+    if (++chars > STEM_MAX_CHARS || bytes > STEM_MAX_BYTES) break;
+    out += c;
+  }
+  return out;
+}
+
+/** A name as a file name: no characters Windows or macOS refuse, not too long, and no Windows
+ *  device name (CON, NUL...), which older Windows refuses with anything after a dot too
+ *  ("Con.Smith"). The same rule as for a name template's file (engine names.py). */
 export function nameFileStem(name: string): string {
   // eslint-disable-next-line no-control-regex
-  const s = name.trim().replace(/[\\/:*?"<>|\x00-\x1f]/g, "_").replace(/[. ]+$/, "");
+  const s = stemStart(name.trim().replace(/[\\/:*?"<>|\x00-\x1f]/g, "_")).replace(/[. ]+$/, "");
   if (!s) return "_";
-  return /^(con|prn|aux|nul|com\d|lpt\d)$/i.test(s) ? `_${s}` : s;
+  // Spaces before the dot too ("Con .Smith"): LUDD's export refuses those on Windows.
+  return /^(con|prn|aux|nul|com\d|lpt\d) *(\..*)?$/i.test(s) ? `_${s}` : s;
 }
 
 /** One machine file per name typed in: the lettering filled with each in turn (feat/names.ts). */
