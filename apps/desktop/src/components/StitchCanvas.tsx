@@ -44,6 +44,7 @@ import { cursorCss, type CursorName } from "../cursors";
 import { OPPOSITE, resizeCursorFor, sideAxis, sideMids, stretchFactor } from "../design/handles";
 import { columnRing, columnTips, fillDirection, fillRing, nearestOnLine, nearestOnRings } from "../design/direction";
 import { drawOverlays, runCanvasTool, snapToSources, type CanvasCtx } from "../canvas/hooks";
+import { useLetterMode } from "../feat/letters";
 import { useRepairHighlight } from "./RepairDialog";
 import { nearestStitch, pickable, stitchesInBox } from "../design/stitchPick";
 import { fixedFillEnd } from "../design/fillPatterns";
@@ -758,7 +759,9 @@ function selectedLetters(scene: Scene): { id: string; parts: NonNullable<LayoutI
   const i = doc.layout.items.findIndex((it) => it.id === st.selectedId);
   const it = doc.layout.items[i];
   const parts = scene.design?.items?.[i]?.letters;
-  return it && it.kind === "text" && !it.locked && parts?.length ? { id: it.id, parts } : null;
+  if (!it || it.kind !== "text" || it.locked || !parts?.length) return null;
+  // While single letters are adjusted, their dots are the letters', not their starts and ends.
+  return useLetterMode.getState().id === it.id ? null : { id: it.id, parts };
 }
 
 /** The purple dots of a drawn shape: a fill's stitch direction, or a satin column's two tips
@@ -1219,6 +1222,7 @@ export function StitchCanvas() {
   const showRulers = useStore((s) => s.showRulers);
   const showWire = useStore((s) => s.showWire);
   const repairMarks = useRepairHighlight((s) => s.shown); // "Show on the design" (an overlay)
+  const letterMode = useLetterMode(); // adjusting single letters (an overlay)
 
   // Create the Pixi app once.
   useEffect(() => {
@@ -1313,7 +1317,7 @@ export function StitchCanvas() {
     const scene = sceneRef.current;
     if (scene) drawOverlay(scene);
     if (host.current) host.current.classList.toggle("drawing", tool !== "select" || measure !== null || !!useStore.getState().ruler || !!useStore.getState().angleFor);
-  }, [selectedId, extraIds, selectedNode, tool, pen, images, measure, ghost, autoTrace, autoAll, knife, stitchEdit, guides, edgeFit, repairMarks]);
+  }, [selectedId, extraIds, selectedNode, tool, pen, images, measure, ghost, autoTrace, autoAll, knife, stitchEdit, guides, edgeFit, repairMarks, letterMode]);
 
   useEffect(() => {
     const scene = sceneRef.current;

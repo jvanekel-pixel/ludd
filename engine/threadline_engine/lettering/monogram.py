@@ -9,9 +9,15 @@ from .glyphs import Glyph
 from .place import _centre, _move
 
 
-def layout(letters: list[str], size: float, spacing: float,
-           glyphs_for: Callable[[str, float], list[Glyph]]) -> list[dict[str, Any]]:
-    """The monogram of `letters` (the text without its spaces), centred side to side."""
+def smallest_letter(size: float, style: str = "classic") -> float:
+    """The height of the monogram's smallest letters (mm), for the small-letter warning."""
+    return size * 0.7
+
+
+def layout(letters: list[str], size: float, spacing: float, glyphs_for: Callable[[str, float], list[Glyph]],
+           style: str = "classic") -> list[dict[str, Any]]:
+    """The monogram of `letters` (the text without its spaces), centred side to side. `style`:
+    "classic" (small, big, small) is the only one until P5-D2."""
     objects: list[dict[str, Any]] = []
     letters = letters[:3]
     if len(letters) != 3:

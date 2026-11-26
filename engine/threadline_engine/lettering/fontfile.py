@@ -55,7 +55,7 @@ def export_stitch_font(font: dict[str, Any], dest: str, chars: str, cap_height_m
 
     `chars` empty: every character the font can draw. `dest` empty: a new file in LUDD's fonts
     folder, where the font list finds it."""
-    from .glyphs import _fill_object
+    from .glyphs import _glyph_objects
 
     if not isinstance(font, dict) or not font.get("path"):
         raise LetteringError("Pick a font to convert first")
@@ -73,7 +73,7 @@ def export_stitch_font(font: dict[str, Any], dest: str, chars: str, cap_height_m
         gname = lf.cmap.get(ord(ch))
         if gname is None or ch.isspace():
             continue
-        objs = [_fill_object(s, style) for s in _glyph_shapes(lf, gname, scale)]
+        objs = _glyph_objects(_glyph_shapes(lf, gname, scale), style, cap_height_mm)
         if not objs:
             continue
         glyphs[ch] = {"advance_mm": round(lf.font["hmtx"][gname][0] * scale, 3), "objects": objs}

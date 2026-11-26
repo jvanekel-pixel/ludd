@@ -49,8 +49,8 @@ HIDDEN_NOTE = "{} is completely hidden under {}. Delete it, or move it up in the
 _areas_cache: dict[tuple[str, str], BaseGeometry | None] = {}
 _cuts_cache: dict[tuple, tuple | None] = {}
 _CACHE_MAX = 4096  # as layout/objects.py keeps stitches: a traced picture can be a thousand shapes
-_SHAPE_KEYS = ("kind", "geometry", "params", "transform", "text", "font", "size_mm", "spacing_mm", "style", "shape",
-               "monogram", "letters")  # what an item's areas depend on
+_SHAPE_KEYS = ("kind", "geometry", "params", "transform", *lettering.TEXT_SPEC_KEYS,
+               "letters")  # what an item's areas depend on
 
 # What a damaged shape can raise here. The pass leaves such a shape out; render() then meets it
 # and says what's wrong with it, in the same words as with the switch off.

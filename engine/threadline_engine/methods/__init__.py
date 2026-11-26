@@ -11,5 +11,6 @@ from __future__ import annotations
 
 from .registry import dispatcher
 from . import core, designs, machines, threads, layouts, projects, tracing, shapes, text, ai, help, repair  # noqa: F401,E402
+from . import fonts, names  # noqa: F401,E402
 
 __all__ = ["dispatcher"]

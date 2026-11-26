@@ -11,8 +11,9 @@ from pathlib import Path
 from typing import Any
 
 from ..digitize import stitches as dz
+from . import stitchglyphs
 from .fonts import STITCH_FONT_EXTS, LetteringError, _signed_area, resolve_font, substitute_font
-from .glyphs import SMALL_TEXT_MM, Glyph, _Missing, _outline_glyphs, _stitch_font_glyphs
+from .glyphs import SMALL_TEXT_MM, Glyph, _Missing, _outline_glyphs, _stitch_font_glyphs, small_text_warning
 
 
 def _move(obj: dict[str, Any], fn) -> dict[str, Any]:
@@ -83,18 +84,31 @@ def layout_text(spec: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
         font = {**font, "path": stand_in["path"], "index": stand_in["index"]}
     if not 2 <= size <= 200:
         raise LetteringError("Letter height must be between 2 and 200 mm")
-    smallest = size * 0.7 if monogram else size  # a monogram's side letters are smaller
+    from . import monogram as monograms  # here: it uses _move and _centre from this module
+
+    monogram_style = str(spec.get("monogram_style") or "classic")
+    # A monogram's side letters are smaller.
+    smallest = monograms.smallest_letter(size, monogram_style) if monogram else size
     if smallest < SMALL_TEXT_MM:
-        warnings.append(f"Letters {smallest:.1f} mm tall are hard to stitch clearly (dots and thin parts drop out); "
-                        f"{SMALL_TEXT_MM:.0f} mm or more is safer.")
+        warnings.append(small_text_warning(smallest))
 
     is_stitch_font = Path(str(font["path"])).suffix.lower() in STITCH_FONT_EXTS
+    if is_stitch_font:
+        warnings += stitchglyphs.size_notes(str(font["path"]), size)
     missing = _Missing()
+    drawn = 0  # letters that draw something, numbered from 0 in the order they're laid out
 
-    def glyphs_for(t: str, sz: float) -> list[Glyph]:
+    def glyphs_for(t: str, sz: float, line: int = 0) -> list[Glyph]:
+        nonlocal drawn
         if is_stitch_font:
-            return _stitch_font_glyphs(t, font["path"], sz, spacing, missing)
-        return _outline_glyphs(t, font["path"], int(font.get("index", 0)), sz, spacing, style, missing)
+            got = _stitch_font_glyphs(t, font["path"], sz, spacing, missing)
+        else:
+            got = _outline_glyphs(t, font["path"], int(font.get("index", 0)), sz, spacing, style, missing)
+        for g in got:
+            if g.objects:  # each object says which letter it's part of, and on which line (from 0)
+                g.objects = [{**o, "letter": drawn, "line": line} for o in g.objects]
+                drawn += 1
+        return got
 
     def done(objects: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[str]]:
         if not objects:
@@ -105,9 +119,8 @@ def layout_text(spec: dict[str, Any]) -> tuple[list[dict[str, Any]], list[str]]:
 
     objects: list[dict[str, Any]] = []
     if monogram:
-        from .monogram import layout as monogram_layout
-
-        return done(monogram_layout([c for c in text if not c.isspace()], size, spacing, glyphs_for))
+        letters = [c for c in text if not c.isspace()]
+        return done(monograms.layout(letters, size, spacing, glyphs_for, monogram_style))
 
     glyphs = glyphs_for(text, size)
     total = sum(g.advance for g in glyphs) - spacing

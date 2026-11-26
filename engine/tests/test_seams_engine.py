@@ -246,7 +246,7 @@ def test_registered_pattern_params_are_range_checked():
 
 def test_line_styles_and_motifs_registered():
     assert list(lines.REGISTRY) == ["single", "triple", "bean", "motif"]
-    assert list(lines.MOTIF_UNITS) == ["wave", "zigzag", "scallop", "blanket"]
+    assert list(lines.MOTIF_UNITS)[:4] == ["wave", "zigzag", "scallop", "blanket"]  # LUDD 1.0's, in their order
     assert all(callable(s.points) for s in lines.REGISTRY.values())
 
 
@@ -255,7 +255,7 @@ def test_line_styles_and_motifs_registered():
 
 def test_rpc_method_list_matches_the_manifest():
     names = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert len(names) == 61
+    assert len(names) == 64
     assert sorted(dispatcher._methods) == names
 
 

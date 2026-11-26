@@ -82,6 +82,7 @@ import { cancelTraceQueue, queueAccept, queueAcceptMany, setStep, toggleLastPoin
 import { canFit, nextFit } from "./satinFit";
 import { acceptGuess, loadTraceModel, nextGuess, setSpacing, setSpread } from "./autoTrace";
 import * as feat from "./features";
+import { nudgeLetter, pruneLetterEdits, recolorRuns } from "./feat/letters";
 import { loadPrefs, savePrefs } from "./prefs";
 import { isDirty, MACHINE_SPEED, PLAYER_SPEEDS, selectHoop, selectImages, selectLayout, selectMachine, useStore, type Tool } from "./store";
 
@@ -1166,7 +1167,7 @@ async function defaultFont(): Promise<FontRef> {
     fonts.find((f) => /^(Helvetica|Liberation Sans|DejaVu Sans|Segoe UI)$/.test(f.family) && f.style === "Regular") ??
     fonts.find((f) => f.kind === "outline");
   if (!pick) throw new Error("No fonts were found on this computer");
-  return { path: pick.path, index: pick.index, family: pick.family, style: pick.style };
+  return { path: pick.path, index: pick.index, family: pick.family, style: pick.style, ...(pick.made_of ? { made_of: pick.made_of } : {}) };
 }
 
 /** Add text (or a three-letter monogram) at a point, selected and ready to type over. */
@@ -1212,11 +1213,16 @@ export function setText(id: string, patch: Partial<TextItem>) {
   // New words, font, size or look make new letters: the starts and ends chosen for the old ones go.
   const before = l.items.find((it) => it.id === id);
   const newLetters =
-    !!before && isText(before) && (["text", "font", "size_mm", "spacing_mm", "style", "shape", "monogram"] as const).some((k) => k in patch && JSON.stringify(patch[k]) !== JSON.stringify(before[k]));
-  void commit({
-    ...l,
-    items: l.items.map((it) => (it.id === id && it.kind === "text" ? { ...it, ...patch, ...(patch.thread ? { threads: [] } : {}), ...(newLetters ? { letters: undefined } : {}) } : it)),
-  });
+    !!before &&
+    isText(before) &&
+    (["text", "font", "size_mm", "spacing_mm", "style", "shape", "monogram", "align", "line_spacing", "slant_deg", "envelope", "vertical", "monogram_style"] as const).some(
+      (k) => k in patch && JSON.stringify(patch[k]) !== JSON.stringify(before[k]),
+    );
+  const changed = (it: TextItem): TextItem => {
+    const next = { ...it, ...patch, ...(patch.thread ? { threads: [] } : {}), ...(newLetters ? { letters: undefined } : {}) };
+    return "text" in patch ? pruneLetterEdits(next) : next;
+  };
+  void commit({ ...l, items: l.items.map((it) => (it.id === id && it.kind === "text" ? changed(it) : it)) });
 }
 
 /** A letter's green (start) or red (end) dot dragged to `at` (mm, as shown): kept on the text in
@@ -1269,7 +1275,7 @@ export async function textToShapes() {
 }
 
 /** Convert a font into an editable LUDD stitch font (.luddfont). */
-export async function saveStitchFont(font: FontRef, style: "satin" | "fill") {
+export async function saveStitchFont(font: FontRef, style: TextItem["style"]) {
   try {
     info("Making the stitch font…");
     // Empty dest and chars: every letter the font has (with accents), saved in LUDD's fonts folder,
@@ -1661,14 +1667,15 @@ const isSatinFill = () => {
 /** Recolor the displayed color block `block` (all of its sources). null puts the file's thread back. */
 export function recolorBlock(block: number, thread: Thread | null) {
   const l = currentLayout();
-  const sources = useStore.getState().design?.blocks[block]?.sources;
-  if (l && sources?.length) void commit(recolor(l, sources, thread));
+  const design = useStore.getState().design;
+  const sources = design?.blocks[block]?.sources;
+  if (l && sources?.length) void commit(recolorRuns(l, sources, thread, design));
 }
 
 /** Recolor some of the design's color stops (an item's own color, by item and block): one undo step. */
 export function recolorSources(sources: { item: number; block: number }[], thread: Thread | null) {
   const l = currentLayout();
-  if (l && sources.length) void commit(recolor(l, sources, thread));
+  if (l && sources.length) void commit(recolorRuns(l, sources, thread, useStore.getState().design));
 }
 
 /** One thread for several things at once (everything selected): drawn shapes and lettering take
@@ -1697,11 +1704,12 @@ export function setItemsThread(ids: string[], thread: Thread): number {
 /** Recolor several blocks at once (one undo step). */
 export function recolorBlocks(changes: { block: number; thread: Thread | null }[]) {
   let l = currentLayout();
-  const blocks = useStore.getState().design?.blocks;
+  const design = useStore.getState().design;
+  const blocks = design?.blocks;
   if (!l || !blocks) return;
   for (const c of changes) {
     const sources = blocks[c.block]?.sources;
-    if (sources?.length) l = recolor(l, sources, c.thread);
+    if (sources?.length) l = recolorRuns(l, sources, c.thread, design);
   }
   void commit(l);
 }
@@ -2097,6 +2105,7 @@ const canRedo = () => !drawing() && engineReady() && latestHistory().future.leng
 // Letter keys don't switch tools mid-shape (A sits by Tab and Shift); the tool buttons still do.
 const notDrawing = () => engineReady() && !drawing();
 const nudge = (dx: number, dy: number) => () => {
+  if (nudgeLetter(dx, dy)) return; // a letter picked in single-letter mode moves instead
   const s = useStore.getState();
   const img = currentDoc()?.images.find((im) => im.id === s.selectedId);
   if (img) {

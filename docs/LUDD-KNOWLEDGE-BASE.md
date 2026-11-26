@@ -1253,6 +1253,11 @@ drawing a satin).
 | Show whole design | `End` | `player.end` |
 | Faster playback | `]` | `player.fasterAlt` |
 | Slower playback | `[` | `player.slowerAlt` |
+| Adjust single letters | `Alt+Shift+A` | `text.letters` |
+| Put the letters back | `Alt+Shift+Z` | `text.resetLetters` |
+| Make a stitch font from letter files… | `Mod+Alt+F` | `text.fontFromFiles` |
+| Save this layout as a name template… | `Mod+Alt+P` | `text.saveTemplate` |
+| Placement guides… | `Alt+Shift+G` | `text.placement` |
 | Repair this design… | `Mod+Alt+D` | `stitch.repair` |
 | Remove stitches hidden under what's on top | `Alt+Shift+H` | `stitch.removeHidden` |
 | Thin out dense spots | `Alt+Shift+D` | `stitch.declump` |

@@ -65,7 +65,9 @@ export function itemMenu(item: LayoutItem | undefined, several: boolean): Contex
   const together = several ? [c("arrange.group"), c("arrange.ungroup"), c("object.merge"), c("text.onLine")] : [];
   return [
     ...(shape || kind === "text" ? [c("object.thread")] : []),
-    ...(kind === "text" ? [c("text.edit"), c("text.names"), c("text.resetEnds"), c("text.toShapes")] : []),
+    ...(kind === "text"
+      ? [c("text.edit"), c("text.letters"), c("text.resetLetters"), c("text.names"), c("text.saveTemplate"), c("text.resetEnds"), c("text.toShapes")]
+      : []),
     ...(kind === "file" ? [c("edit.stitches")] : []),
     SEP,
     ...EDIT,

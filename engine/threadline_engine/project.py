@@ -198,6 +198,26 @@ def _has_op(item: dict, names) -> bool:
     return isinstance(ops, list) and any(isinstance(o, dict) and isinstance(o.get("op"), str) and o["op"] in names for o in ops)
 
 
+def _new_text_layout(item: dict) -> bool:
+    """Lettering with more than one line, another alignment or line spacing, a slant, an
+    envelope, stacked letters, or changes to single letters."""
+    text = item.get("text")
+    return (isinstance(text, str) and ("\n" in text or "\r" in text)) or item.get("align") not in (None, "center") \
+        or item.get("line_spacing") not in (None, 1.3) or bool(item.get("slant_deg")) or bool(item.get("envelope")) \
+        or bool(item.get("vertical")) or bool(item.get("letter_edits"))
+
+
+def _new_text_extras(item: dict) -> bool:
+    """Lettering with a shadow, an outline or a frame, or a monogram LUDD 1.0.0 can't sew: another
+    style, or fewer than three letters."""
+    if item.get("shadow") or item.get("outline") or item.get("ornament"):
+        return True
+    if not item.get("monogram"):
+        return False
+    letters = [c for c in str(item.get("text") or "") if not c.isspace()]
+    return item.get("monogram_style") not in (None, "classic") or len(letters) < 3
+
+
 ITEM_FEATURES: dict[str, Callable[[dict, dict, dict], bool]] = {  # (item, params, geometry)
     "fill_patterns": lambda it, p, g: it.get("kind") in ("fill", "applique") and p.get("pattern") not in (None, "", "tatami"),
     "motif_lines": lambda it, p, g: it.get("kind") == "run" and p.get("style") == "motif",
@@ -210,6 +230,14 @@ ITEM_FEATURES: dict[str, Callable[[dict, dict, dict], bool]] = {  # (item, param
     # Repairs on a stitch file, and stitches or jumps added to one.
     "stitch_repairs": lambda it, p, g: _has_op(it, kept.REPAIR_OPS),
     "stitch_inserts": lambda it, p, g: _has_op(it, ("insert_stitch", "insert_jump", "lock_jump")),
+    # Lettering and personalization.
+    "text_layout_2": lambda it, p, g: it.get("kind") == "text" and _new_text_layout(it),
+    "text_columns": lambda it, p, g: it.get("kind") == "text" and it.get("style") == "columns",  # True satin
+    "text_extras": lambda it, p, g: it.get("kind") == "text" and _new_text_extras(it),
+    "font_stitch_glyphs": lambda it, p, g: (it.get("kind") == "text" and isinstance(it.get("font"), dict)
+                                            and it["font"].get("made_of") == "stitches"),
+    # The laurel frame's leaf: a line with it, once "Break into shapes" has made the frame lines.
+    "motif_leaf": lambda it, p, g: it.get("kind") == "run" and p.get("style") == "motif" and p.get("motif") == "leaf",
 }
 KNOWN_FEATURES = set(LAYOUT_FEATURES) | set(ITEM_FEATURES)
 

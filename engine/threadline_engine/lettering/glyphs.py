@@ -7,16 +7,23 @@ import math
 import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from shapely.geometry import Polygon
 
 from ..digitize import stitches as dz
+from . import stitchglyphs
 from .fontfile import _load_stitch_font
 from .fonts import LetteringError, _glyph_shapes, _load
 
 SATIN_MAX_STITCH_MM = 6.8  # rows narrower than this sew as one satin-like stitch (under the 7 mm "long loose stitch" check, with room for rounding)
 SMALL_TEXT_MM = 6.0  # below this, dots and thin parts start to drop out
+
+
+def small_text_warning(smallest_mm: float) -> str:
+    """Said when the smallest letters are under SMALL_TEXT_MM tall."""
+    return (f"Letters {smallest_mm:.1f} mm tall are hard to stitch clearly (dots and thin parts drop out); "
+            f"{SMALL_TEXT_MM:.0f} mm or more is safer.")
 
 
 @dataclass
@@ -43,8 +50,17 @@ class _Missing:
         return out
 
 
+def _glyph_objects(shapes: list[Polygon], style: str, size_mm: float) -> list[dict[str, Any]]:
+    """The objects that stitch one outline letter's shapes (mm, from the letter's origin on the
+    baseline), in the look `style` for letters `size_mm` tall."""
+    return [_fill_object(shape, style) for shape in shapes]
+
+
 def _outline_glyphs(text: str, path: str, index: int, size_mm: float, spacing_mm: float, style: str,
-                    missing: _Missing | None = None) -> list[Glyph]:
+                    missing: _Missing | None = None,
+                    shape_map: Callable[[Polygon], Polygon] | None = None) -> list[Glyph]:
+    """`shape_map` changes each letter's shape about its own baseline before it is turned into
+    objects (a slant), so the stitching is chosen for the shape as it is sewn."""
     lf = _load(path, index)
     scale = size_mm / lf.cap
     out: list[Glyph] = []
@@ -62,8 +78,10 @@ def _outline_glyphs(text: str, path: str, index: int, size_mm: float, spacing_mm
             out[-1].advance += lf.kern_pair(prev, gname) * scale
         objs = []
         if not ch.isspace():
-            for shape in _glyph_shapes(lf, gname, scale):
-                objs.append(_fill_object(shape, style))
+            shapes = _glyph_shapes(lf, gname, scale)
+            if shape_map is not None:
+                shapes = [shape_map(shape) for shape in shapes]
+            objs = _glyph_objects(shapes, style, size_mm)
         out.append(Glyph(objs, adv))
         prev = gname
     return out
@@ -146,7 +164,11 @@ def _stitch_font_glyphs(text: str, path: str, size_mm: float, spacing_mm: float,
             g = glyphs[key]
             if prev and out and isinstance(kern.get(prev + key), (int, float)):
                 out[-1].advance += float(kern[prev + key]) * k
-            objs = [dz.transform_geometry(o, _Scale(k), (0.0, 0.0)) for o in g.get("objects") or [] if isinstance(o, dict)]
+            if "stitches" in g:  # a letter made of stitches (a version 2 stitch font)
+                objs = stitchglyphs.letter_objects(f, g, k)
+            else:
+                objs = [dz.transform_geometry(o, _Scale(k), (0.0, 0.0)) for o in g.get("objects") or []
+                        if isinstance(o, dict)]
             for o in objs:
                 _check_letter_object(o)  # checked now, not half way through stitching
             out.append(Glyph(objs, float(g.get("advance_mm") or 0) * k + spacing_mm))

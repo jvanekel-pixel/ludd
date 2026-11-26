@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { command, info, loadFonts, saveStitchFont, setText, takeTextToEdit } from "../actions";
-import { formatShortcut } from "../commands";
 import { heldCount, holdEscape } from "../escape";
 import { MM_PER_IN } from "../design/grid";
 import type { FontInfo, LayoutItemInfo, TextItem, TextShape, Thread } from "../design/types";
-import { selectLayout, useStore } from "../store";
+import { useStore } from "../store";
 import { Section, Sub, type SelKind } from "./Accordion";
+import { ExtrasControls, ExtrasMore } from "./text/ExtrasControls";
+import { LayoutControls, LayoutMore } from "./text/LayoutControls";
+import { isStitchFont } from "./text/slots";
+import { StyleControls, styleLabel } from "./text/StyleControls";
 import { ThreadPicker } from "./ThreadDialogs";
 
 const SHAPES: { type: TextShape["type"]; label: string; title: string }[] = [
@@ -19,9 +22,6 @@ const TYPE_DELAY_MS = 450;
 const FONT_LIST_MAX = 200;
 const MIN_SIZE_MM = 2;
 const MAX_SIZE_MM = 200;
-
-/** A LUDD stitch font: its letters are ready-made stitches, so Satin look / Fill don't apply. */
-const isStitchFont =(path: string) => /\.(luddfont|tlfont)$/i.test(path);
 
 /** Searchable font list: type part of a name ("script", "arial"). */
 function FontPicker({ value, onPick }: { value: TextItem["font"]; onPick: (f: FontInfo) => void }) {
@@ -80,47 +80,24 @@ function FontPicker({ value, onPick }: { value: TextItem["font"]; onPick: (f: Fo
               </li>
             ))}
           </ul>
+          <button
+            className="wide"
+            title="Make a stitch font from a folder of single-letter stitch files"
+            onClick={() => {
+              setOpen(false);
+              command("text.fontFromFiles").run();
+            }}
+          >
+            Make a stitch font from letter files…
+          </button>
         </div>
       )}
     </div>
   );
 }
 
-/** How the letters are stitched, in plain words, and what you can do with each one. */
-function LetterNotes({ item, stitchFont }: { item: TextItem; stitchFont: boolean }) {
-  const design = useStore((s) => s.design);
-  const layout = useStore(selectLayout);
-  const i = layout?.items.findIndex((it) => it.id === item.id) ?? -1;
-  const parts = i >= 0 ? design?.items?.[i]?.letters : undefined;
-  const chosen = Object.keys(item.letters ?? {}).length;
-  const how = stitchFont
-    ? "each letter sews the stitches its stitch font was made with"
-    : item.style === "satin"
-      ? "each letter is filled with long, smooth satin stitches across its strokes, at the angle that crosses them best"
-      : "each letter is a woven (tatami) fill";
-  return (
-    <div className="letter-notes">
-      <p className="hint">
-        {parts ? `${parts.length} letter part${parts.length === 1 ? "" : "s"}: ` : ""}
-        {how}. Each one starts by where the one before ended. Drag a letter's green (start) or red (end) dot on the design to move it
-        along the letter's edge{chosen ? ` (${chosen} chosen)` : ""}.
-      </p>
-      <div className="btn-row">
-        {chosen > 0 && (
-          <button onClick={() => command("text.resetEnds").run()} title={`Let every letter start and end where LUDD puts them again (${formatShortcut(command("text.resetEnds").shortcut)})`}>
-            Reset starts and ends
-          </button>
-        )}
-        <button disabled={!(command("text.toShapes").enabled?.() ?? true)} onClick={() => command("text.toShapes").run()} title={`Turn the letters into ordinary shapes, to change their points, stitch type, density and direction one by one (${formatShortcut(command("text.toShapes").shortcut)}). The words can't be retyped after.`}>
-          Break into shapes…
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/** Lettering: what it says, its font and size, satin look or fill, and the shape it follows. */
-export function SelectedText({ item, sel }: { item: TextItem; info: LayoutItemInfo; sel: SelKind }) {
+/** Lettering: what it says, its font and size, how it's stitched, and the shape it follows. */
+export function SelectedText({ item, info: itemInfo, sel }: { item: TextItem; info: LayoutItemInfo; sel: SelKind }) {
   // The thread it's sewn in: a color changed in Order & colors wins over its own.
   const sewn = item.threads?.[0] ?? item.thread;
   const units = useStore((s) => s.units);
@@ -162,7 +139,7 @@ export function SelectedText({ item, sel }: { item: TextItem; info: LayoutItemIn
   const stitchFont = isStitchFont(item.font.path);
 
   return (
-    <Section id="lettering" sel={sel} defaultOpen title="Lettering" summary={`${item.font.family} · ${item.style === "satin" ? "Satin" : "Fill"}`}>
+    <Section id="lettering" sel={sel} defaultOpen title="Lettering" summary={`${item.font.family} · ${styleLabel(item)}`}>
       <label className="text-field">
         <span>{item.monogram ? "Three initials" : "Text"}</span>
         <input
@@ -202,7 +179,7 @@ export function SelectedText({ item, sel }: { item: TextItem; info: LayoutItemIn
           }}
         />
       </label>
-      <FontPicker value={item.font} onPick={(f) => setText(item.id, { font: { path: f.path, index: f.index, family: f.family, style: f.style } })} />
+      <FontPicker value={item.font} onPick={(f) => setText(item.id, { font: { path: f.path, index: f.index, family: f.family, style: f.style, ...(f.made_of ? { made_of: f.made_of } : {}) } })} />
 
       <div className="size-row">
         <label className="num-field">
@@ -239,24 +216,9 @@ export function SelectedText({ item, sel }: { item: TextItem; info: LayoutItemIn
         </span>
       </button>
 
-      {stitchFont ? (
-        <p className="hint">A stitch font sews the stitches it was made with.</p>
-      ) : (
-        <div className="seg" role="group" aria-label="Stitch look">
-          <button aria-pressed={item.style === "satin"} onClick={() => setText(item.id, { style: "satin" })} title="Smooth, shiny stitches across each stroke: best for names and small text">
-            Satin look
-          </button>
-          <button aria-pressed={item.style === "fill"} onClick={() => setText(item.id, { style: "fill" })} title="Woven fill: best for big, bold letters">
-            Fill
-          </button>
-        </div>
-      )}
-      <LetterNotes item={item} stitchFont={!!stitchFont} />
-
-      <label className="check">
-        <input type="checkbox" checked={item.monogram} onChange={(e) => setText(item.id, { monogram: e.target.checked, text: e.target.checked ? (item.text.replace(/\s/g, "").slice(0, 3).padEnd(3, "A")) : item.text })} />
-        Monogram (three letters, big middle initial)
-      </label>
+      <LayoutControls item={item} info={itemInfo} />
+      <StyleControls item={item} info={itemInfo} />
+      <ExtrasControls item={item} info={itemInfo} />
 
       {!item.monogram && (
         <Sub id="text-shape" title="Shape" summary={SHAPES.find((sh) => sh.type === item.shape.type)?.label}>
@@ -302,7 +264,9 @@ export function SelectedText({ item, sel }: { item: TextItem; info: LayoutItemIn
         </Sub>
       )}
 
-      <Sub id="text-advanced" title="Advanced">
+      <Sub id="text-advanced" title="More options">
+        <LayoutMore item={item} info={itemInfo} />
+        <ExtrasMore item={item} info={itemInfo} />
         <div className="size-row">
           <label className="num-field">
             <span>Extra letter spacing</span>

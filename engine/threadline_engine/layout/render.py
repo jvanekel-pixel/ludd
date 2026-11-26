@@ -44,9 +44,9 @@ def render(layout: dict[str, Any]) -> Rendered:
 
     for idx, it in enumerate(items):
         if it.get("kind") == "text":
-            block, text_warnings, centre, parts = _text_block(it, idx, layout.get("fabric"))
+            blocks, text_warnings, centre, parts, runs = _text_block(it, idx, layout.get("fabric"))
             text_warnings = list(text_warnings)
-            blocks = _apply_ops([block], it.get("ops") or [], jt_mm, text_warnings, generated=True)
+            blocks = _apply_ops(blocks, it.get("ops") or [], jt_mm, text_warnings, generated=True)
             b = _stitch_bounds([r for blk in blocks for r in blk.recs])
             name = it.get("name") or f"“{str(it.get('text', '')).strip()[:24]}”"
             item_info.append({
@@ -54,6 +54,7 @@ def render(layout: dict[str, Any]) -> Rendered:
                 "name": name,
                 "kind": "text",
                 "letters": parts,
+                "runs": runs,
                 "center_mm": list(centre),
                 "bounds_mm": [v / 10 for v in b] if b else None,
                 "source_size_mm": None,
