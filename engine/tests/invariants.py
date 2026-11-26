@@ -148,6 +148,16 @@ def coverage(recs, poly, reach_mm) -> float:
     return min(1.0, reached.intersection(poly).area / poly.area)
 
 
+def largest_bare_spot(recs, poly, reach_mm) -> float:
+    """The largest piece of `poly` (mm²) further than reach_mm from every stitch line: bare fabric
+    that the coverage share, an average over the whole shape, can hide."""
+    lines = _stitch_lines(recs)
+    if not lines:
+        return float(poly.area)
+    bare = poly.difference(shapely.union_all(shapely.buffer(lines, reach_mm)))
+    return max((float(g.area) for g in getattr(bare, "geoms", [bare]) if not g.is_empty), default=0.0)
+
+
 def thread_per_mm2(recs, poly) -> float:
     """mm of thread laid inside `poly` for each mm² of it, every pass counted."""
     lines = _stitch_lines(recs)

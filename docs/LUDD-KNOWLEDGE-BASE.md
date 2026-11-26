@@ -754,10 +754,17 @@ points move as Random 50% does (a higher Random stays).
 - Weave, Random, Edge pad, Feather, the Hand-sewn look, carved lines and underlay work on them
   (the cross-hatch runs across the lines' average direction). The rows finish at the row end
   nearest the red dot. The lines move, turn, mirror and resize with the shape.
+- The rows reach every edge and corner of the shape: in LUDD's tests (fans, a leaf, a ribbon,
+  sharp turns) no spot is more than 0.5 mm from thread (rows are 0.4 mm apart).
 - Where the turn is too sharp for the shape, the rows would loop over each other; LUDD cuts them
-  where they would, so they meet in a crease, still covers the shape, and warns "The stitch
-  direction turns too sharply for this shape here. Move the angle lines further apart or make the
-  turn gentler." (L-042).
+  where they would, so they meet in a crease without bare fabric. A small crease in a gentle turn
+  is cut without a word; where the rows would have folded back more than 1.5 mm (about four rows)
+  it warns "The stitch direction turns too sharply for this shape here. Move the angle lines
+  further apart or make the turn gentler." (L-042).
+- Two lines whose middles are in the same place (under 1 mm apart) leave no room to turn: the rows
+  follow the line drawn first and LUDD says "Two angle lines have their middles in the same place,
+  so the stitches follow the line drawn first and leave the other out. Move one of them at least
+  1 mm away to use both."
 - Another pattern keeps the lines but doesn't use them (it sews at its one angle, with the usual
   purple dots); switch back to Tatami and they work again.
 
@@ -1219,7 +1226,7 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | L-038 | **Stitched fonts** (made from letter files): resize well only within 20% of their own size (past it LUDD rebuilds what it can, and the corner handles never rebuild), can't be broken into shapes, and take no shadow or outline | By design | Change the letter height rather than using the handles; check the preview. | Partly. |
 | L-040 | **A Blend fades across its rows only**, not along them (no round or two-way fades) | By design for now | Turn the Angle (or the purple dots) to point the fade. | Possibly. |
 | L-041 | **Carved lines show only where rows cross them**, and only on rows fills (Tatami, Gradient, Wave, Blend), not on open patterns | By design | Turn the Angle or the line so the rows cross it; change the pattern. | No. |
-| L-042 | **Turning fills are Tatami only.** There's no fixed limit on the turn (lines 60° apart are tested), but where it's too sharp for the shape the rows meet in a crease, with a warning | By design | Move the angle lines further apart or make the turn gentler; check the preview. | Partly (smoother sharp turns). |
+| L-042 | **Turning fills are Tatami only.** There's no fixed limit on the turn (lines 60° apart are tested), but where it's too sharp for the shape the rows meet in a crease (the shape is still filled), with a warning when the crease is deep. Two lines with their middles under 1 mm apart: only the first is followed. Three or more lines in a row that point very differently can't all be followed: lines at 0°, 60° and 120°, 13 mm apart across a 50 × 30 mm shape, leave the rows 86° off the middle line where it lies | By design | Move the angle lines further apart or make the turn gentler; with three or more lines, keep neighboring lines closer in direction; check the preview. | Partly (smoother sharp turns). |
 | L-043 | **Maze on a shape with a hole, or pinched into many parts**, sews as separate mazes (a note suggests Contour) | By design | Use Contour, or cut the shape into simpler pieces (Knife). | Possibly. |
 | L-044 | **Push compensation ("End trim")**: stitching pushes fabric out past a fill's first and last rows and a satin's ends, so shapes can sew longer than drawn; LUDD doesn't shorten them for you | NO (not built: it waits on a patent check the owner hasn't confirmed). Edge pad handles pull, the other direction | Draw satin ends, and fill edges that run along the rows, a little short on stretchy or lofty fabric. | Yes, if the check allows. |
 

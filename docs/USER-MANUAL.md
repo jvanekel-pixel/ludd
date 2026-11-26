@@ -765,9 +765,14 @@ On a **Tatami** fill, press **Shift+I** (or **Add another line** under Angle, or
 another angle line) and click twice to draw a second direction line: the rows turn smoothly to
 follow each line where it lies, like the veins of a leaf. The fill's old direction becomes the
 first line. Drag a line's purple dots to move it, right-click a line to remove it, **I** to draw
-the first one again, or **Back to one angle** to keep only the first line's angle. If the turn is
-too sharp for the shape, the rows meet in a crease and LUDD says so: move the lines further apart
-or make the turn gentler. Other patterns don't use the lines, but they come back with Tatami.
+the first one again, or **Back to one angle** to keep only the first line's angle. The rows reach
+every edge of the shape. If the turn is too sharp for the shape, the rows meet in a crease (the
+shape stays filled), and when the crease is deep LUDD says so: move the lines further apart or make
+the turn gentler. Two lines with their middles in the same place can't both be followed: the rows
+follow the first one, and LUDD tells you to move the other at least 1 mm away. With three or more
+lines in a row, keep neighbors fairly close in direction: lines at 0°, 60° and 120° side by side
+leave the rows far off the middle one. Other patterns don't use the lines, but they come back with
+Tatami.
 
 ### Motif lines
 A line's **Style → Motif** repeats a little pattern along it: **Wave**, **Zigzag**, **Scallop**,
