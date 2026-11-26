@@ -17,7 +17,7 @@ from invariants import assert_sane
 from threadline_engine import layout, project
 from threadline_engine.digitize import fills, lines
 from threadline_engine.digitize.fills import FillPattern, Param
-from threadline_engine.digitize.stitches import STITCH, DigitizeError, FillParams, tatami
+from threadline_engine.digitize.stitches import STITCH, DigitizeError, FillParams, generate, generate_parts, tatami
 from threadline_engine.layout import passes
 from threadline_engine.methods import dispatcher
 
@@ -241,6 +241,85 @@ def test_registered_pattern_params_are_range_checked():
             FillParams.from_dict({"pattern": "test_throwaway", "test_size_mm": 3})
     finally:
         fills.REGISTRY.pop("test_throwaway", None)
+
+
+# ---------------------------------------------------------------- parts: one per thread (Phase 6)
+
+
+def test_one_part_objects_are_unchanged():
+    from test_digitize import SNAPSHOT_CASES
+
+    for name, obj in SNAPSHOT_CASES.items():
+        parts = generate_parts(obj)
+        assert [slot for _, _, slot in parts] == [0], name
+        assert (parts[0][0], parts[0][1]) == generate(obj), name
+
+
+def _two_parts(pieces, params):
+    """A throwaway pattern: rows across in the shape's thread, then rows down in a second one."""
+    return [(tatami(pieces[0], 0, 1.0, 3.5, 0.0), [], 0), (tatami(pieces[0], 90, 1.0, 3.5, 0.0), ["Second part."], 1)]
+
+
+@pytest.fixture
+def throwaway_pattern():
+    added = []
+
+    def add(spec):
+        fills.register(spec)
+        added.append(spec.name)
+
+    yield add
+    for name in added:
+        fills.REGISTRY.pop(name, None)
+    layout._object_cache.clear()
+
+
+def _thread(color):
+    return {"color": color, "name": color, "catalog": "", "brand": ""}
+
+
+OUTLINE = [[0, 0, "c"], [20, 0, "c"], [20, 20, "c"], [0, 20, "c"]]
+
+
+def test_threads_k_overrides_slot_k(throwaway_pattern):
+    throwaway_pattern(FillPattern("test_two_parts", "rows", parts=_two_parts, rows=lambda p: {},
+                                  step_mm2=lambda p: p.spacing_mm * p.stitch_mm))
+    item = {"id": "a", "kind": "fill", "geometry": {"outline": OUTLINE}, "thread": _thread("#cc0000"),
+            "params": {"pattern": "test_two_parts", "blend": [_thread("#0000cc")]}}
+    r = layout.render({"items": [item]})
+    assert [b.thread["color"] for b in r.blocks] == ["#cc0000", "#0000cc"]
+    assert [b.sources for b in r.blocks] == [[(0, 0)], [(0, 1)]]
+    sources = [rec[4] for b in r.blocks for rec in b.recs if rec[4] >= 0]
+    assert sources == sorted(set(sources))  # numbered through both parts, none twice
+    assert any("Second part." in w["message"] for w in r.warnings)
+    green = layout.render({"items": [{**item, "threads": [None, _thread("#00cc00")]}]})
+    assert [b.thread["color"] for b in green.blocks] == ["#cc0000", "#00cc00"]
+    assert [b.original["color"] for b in green.blocks] == ["#cc0000", "#0000cc"]
+    both = layout.render({"items": [{**item, "threads": [_thread("#222222"), _thread("#00cc00")]}]})
+    assert [b.thread["color"] for b in both.blocks] == ["#222222", "#00cc00"]
+    # As one list of records (generate), the thread change is a trim and a jump.
+    recs, warnings = generate(item)
+    assert warnings == ["Second part."] and sum(1 for *_, k in recs if k == pe.TRIM) == 1
+
+
+def test_a_covering_open_pattern_may_have_cross_hatch_and_edge_pad(throwaway_pattern):
+    asked = []
+
+    def lines_across(poly, params, pos):
+        asked.append(poly.bounds)
+        x0, y0, x1, y1 = poly.bounds
+        return [[(x0, y), (x1, y)] for y in (y0 + 1, (y0 + y1) / 2, y1 - 1)], []
+
+    throwaway_pattern(FillPattern("test_cover", "open", paths=lines_across, covers=True,
+                                  step_mm2=lambda p: 1.0))
+    throwaway_pattern(FillPattern("test_open", "open", paths=lines_across, step_mm2=lambda p: 1.0))
+    obj = {"kind": "fill", "geometry": {"outline": OUTLINE},
+           "params": {"pattern": "test_cover", "pull_comp_mm": 1.0, "underlay": ["tatami"]}}
+    covering = generate(obj)[0]
+    plain = generate({**obj, "params": {**obj["params"], "pattern": "test_open"}})[0]
+    assert asked[0] == pytest.approx((-0.5, -0.5, 20.5, 20.5))  # widened by the pull compensation
+    assert asked[1] == pytest.approx((0, 0, 20, 20))
+    assert len(covering) > len(plain)  # the cross-hatch
 
 
 # ---------------------------------------------------------------- line styles

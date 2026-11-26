@@ -1,8 +1,8 @@
 """Fill patterns: one registry, so a new pattern is one file and one import line here.
 
 A pattern is either "rows" (tatami rows, shaped by extra keyword arguments for `tatami()`) or
-"open" (lines laid over the shape, sewn in order). Settings the pattern needs beyond FillParams'
-own fields go in `params`: FillParams.from_dict reads and range-checks them into `extra`, and
+"open" (lines laid over the shape, sewn in order). One that sews in several threads (a blend) has
+`parts`. Settings the pattern needs beyond FillParams' own fields go in `params`: FillParams.from_dict reads and range-checks them into `extra`, and
 `FillParams.value(key)` reads either kind.
 
 A new pattern: `digitize/fills/<name>.py` that calls `register(...)`, plus one import line at the
@@ -33,6 +33,13 @@ class FillPattern:
     step_mm2: Callable | None = None  # (params) -> fabric area per stitch, for the MAX_STITCHES guard
     tatami_underlay: bool = True  # may it have the cross-hatch underlay?
     auto_underlay: Callable | None = None  # (level) -> list[str]; None = today's rule
+    # A pattern that sews in several threads: (pieces of the shape, params) -> [(records, warnings,
+    # thread slot)] in sewing order, each part's pieces and underlay included. Slot 0 is the
+    # shape's own thread, slot k its params["blend"][k - 1].
+    parts: Callable | None = None
+    # An open pattern that hides the fabric: it may have the cross-hatch underlay, and Edge pad
+    # widens it as it does rows.
+    covers: bool = False
 
 
 REGISTRY: dict[str, FillPattern] = {}

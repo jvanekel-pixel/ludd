@@ -901,7 +901,10 @@ def tatami(poly: Polygon, angle: float, spacing: float, stitch: float, extend: f
         rot = max(polygons(rot.buffer(0)) or [Polygon()], key=lambda g: g.area)
         if rot.is_empty:
             return []
-    ys = list(row_ys) if row_ys is not None else gradient_ys(rot.bounds[1], rot.bounds[3], spacing, sparse_to) if sparse_to else None
+    if row_ys is not None:
+        ys = list(row_ys)
+    else:
+        ys = gradient_ys(rot.bounds[1], rot.bounds[3], spacing, sparse_to) if sparse_to else None
     rows = _rows(rot, angle, spacing, extend, ys)
     miny = rot.bounds[1]
     shapely.prepare(rot)
@@ -1096,28 +1099,10 @@ def _ring_run(ring: Sequence[Point]) -> list[Point]:
     return resample(ring, TRAVEL_STITCH_MM, sharp_points(ring))
 
 
-def _fill_part(poly: Polygon, params: FillParams, end_here: bool = True) -> tuple[list[Rec], list[str]]:
-    """Underlay and top stitching for one piece of a fill. `end_here`: this piece is sewn last, so
-    it ends near the fill's end point (if one is set)."""
-    end_near = params.end_mm if end_here else None
-    warnings: list[str] = []
-    start = tuple(poly.exterior.coords[0])
-    if params.start_mm is not None:
-        # Begin at the edge nearest the chosen start (so the jump from the last piece is short).
-        near = poly.exterior.interpolate(poly.exterior.project(ShapelyPoint(params.start_mm)))
-        start = (near.x, near.y)
-    spec = fills.get(params.pattern)
-    open_pattern = spec.kind == "open"
-    top: list[Rec] = []
-    target = None
-    if open_pattern:
-        # Worked out first, so the edge run can end next to where the pattern starts: nothing
-        # covers an open pattern, so a long move to its start would show on top.
-        paths, warnings = spec.paths(poly, params, start)
-        if not paths:
-            raise DigitizeError(f"This shape is too small for a {params.pattern} fill; try a smaller size")
-        top = _sew_paths(paths, poly.buffer(0.3), start)
-        target = (top[0][0], top[0][1])
+def fill_underlay(poly: Polygon, params: FillParams, spec, start: Point, target: Point | None = None) -> list[Rec]:
+    """The underlay a fill piece asks for: an edge run and a cross-hatch. `start`: where the piece
+    begins; `target`: for a pattern worked out beforehand, where it starts, so the edge run ends
+    right by it."""
     out: list[Rec] = []
     if "edge" in params.underlay:
         rings = _edge_rings(poly)
@@ -1137,9 +1122,9 @@ def _fill_part(poly: Polygon, params: FillParams, end_here: bool = True) -> tupl
             elif target is None and params.start_mm is not None:
                 ring = _ring_from(ring, start)  # begin at the chosen start
             _append(out, stitch_run(_ring_run(ring)))
-    # Open patterns would show a cross-hatch underlay through them, and so would the sparse end of
-    # a gradient (which should fade out to bare fabric).
-    if "tatami" in params.underlay and spec.kind == "rows" and spec.tatami_underlay:
+    # Open patterns would show a cross-hatch underlay through them (unless they cover), and so
+    # would the sparse end of a gradient (which should fade out to bare fabric).
+    if "tatami" in params.underlay and (spec.kind == "rows" or spec.covers) and spec.tatami_underlay:
         for under in polygons(poly.buffer(-0.6)):
             if under.area < MIN_PART_MM2:
                 continue
@@ -1149,6 +1134,34 @@ def _fill_part(poly: Polygon, params: FillParams, end_here: bool = True) -> tupl
                 # Walk from the edge run to where the cross-hatch starts (not one long stitch).
                 out += travel(pos, (cross[0][0], cross[0][1]), poly)
             _append(out, cross)
+    return out
+
+
+def _fill_part(poly: Polygon, params: FillParams, end_here: bool = True) -> tuple[list[Rec], list[str]]:
+    """Underlay and top stitching for one piece of a fill. `end_here`: this piece is sewn last, so
+    it ends near the fill's end point (if one is set)."""
+    end_near = params.end_mm if end_here else None
+    warnings: list[str] = []
+    start = tuple(poly.exterior.coords[0])
+    if params.start_mm is not None:
+        # Begin at the edge nearest the chosen start (so the jump from the last piece is short).
+        near = poly.exterior.interpolate(poly.exterior.project(ShapelyPoint(params.start_mm)))
+        start = (near.x, near.y)
+    spec = fills.get(params.pattern)
+    open_pattern = spec.kind == "open"
+    top: list[Rec] = []
+    target = None
+    if open_pattern:
+        # Worked out first, so the edge run can end next to where the pattern starts: nothing
+        # covers an open pattern, so a long move to its start would show on top. A covering one
+        # is widened by the pull compensation, as rows are.
+        area = poly.buffer(params.pull_comp_mm / 2) if spec.covers else poly
+        paths, warnings = spec.paths(area, params, start)
+        if not paths:
+            raise DigitizeError(f"This shape is too small for a {params.pattern} fill; try a smaller size")
+        top = _sew_paths(paths, area.buffer(0.3), start)
+        target = (top[0][0], top[0][1])
+    out = fill_underlay(poly, params, spec, start, target)
     pos = (out[-1][0], out[-1][1]) if out else start
     if not open_pattern:
         top = tatami(poly, params.angle_deg, params.spacing_mm, params.stitch_mm, params.pull_comp_mm / 2, pos,
@@ -1180,39 +1193,81 @@ def _start_point(v: Any) -> tuple[float, float] | None:
     return (x, y) if math.isfinite(x) and math.isfinite(y) else None
 
 
+def join_pieces(out: list[Rec], recs: list[Rec]) -> list[Rec]:
+    """The stitches of one piece of a fill after those before it (an outline that crosses itself,
+    or a hole cutting the shape in two, gives several): lock off, move over, lock in."""
+    if out and recs:
+        return tie_off(out) + travel(out[-1][:2], recs[0][:2]) + tie_in(recs)
+    return out + recs
+
+
+def one_run(parts: Sequence[tuple[list[Rec], list[str], int]]) -> tuple[list[Rec], list[str]]:
+    """Parts as one list of records (a trim and a jump where the thread changes) and their
+    warnings, each said once."""
+    if len(parts) == 1:
+        return parts[0][0], parts[0][1]
+    out: list[Rec] = []
+    warnings: list[str] = []
+    for recs, said, _ in parts:
+        warnings += [w for w in said if w not in warnings]
+        if recs and out:
+            out += [(out[-1][0], out[-1][1], TRIM), (recs[0][0], recs[0][1], JUMP)]
+        out += recs
+    return out, warnings
+
+
 def fill(outline: Sequence, holes: Sequence[Sequence], params: FillParams) -> tuple[list[Rec], list[str]]:
+    """A fill's stitches as one list (see fill_in_parts for one per thread)."""
+    return one_run(fill_in_parts(outline, holes, params))
+
+
+def fill_in_parts(outline: Sequence, holes: Sequence[Sequence],
+                  params: FillParams) -> list[tuple[list[Rec], list[str], int]]:
+    """A fill's stitches, one entry per thread it sews in, in sewing order: (records, warnings,
+    thread slot). Only a pattern with parts of its own (a blend) gives more than one."""
     parts = fill_parts(outline, holes)
     warnings: list[str] = []
     area = sum(p.area for p in parts)
-    step = fills.get(params.pattern).step_mm2(params)
+    spec = fills.get(params.pattern)
+    step = spec.step_mm2(params)
     if area / step > MAX_STITCHES:
         raise DigitizeError(f"This fill would need about {area / step:,.0f} stitches, far more than any design. "
                             "Make it smaller or less dense.")
     if area < 4:
         warnings.append("This fill is very small; a satin or running stitch may sew more cleanly.")
-    out: list[Rec] = []
     if params.end_mm is not None and len(parts) > 1:
         # Several pieces (a hole cutting the shape in two): the one the end point is on goes last.
         end_pt = ShapelyPoint(params.end_mm)
         last = min(range(len(parts)), key=lambda k: parts[k].boundary.distance(end_pt))
         parts = [p for k, p in enumerate(parts) if k != last] + [parts[last]]
+    if spec.parts is not None:
+        threads = list(spec.parts(parts, params))
+        if threads and warnings:
+            recs, said, slot = threads[0]
+            threads[0] = (recs, [*warnings, *[w for w in said if w not in warnings]], slot)
+        return threads
+    out: list[Rec] = []
     for k, poly in enumerate(parts):
         recs, part_warnings = _fill_part(poly, params, end_here=k == len(parts) - 1)
         warnings += [w for w in part_warnings if w not in warnings]
-        if out and recs:
-            # Separate pieces (an outline that crosses itself, a hole cutting the shape in two):
-            # lock off, move to the next piece, lock in.
-            out = tie_off(out) + travel(out[-1][:2], recs[0][:2]) + tie_in(recs)
-        else:
-            out += recs
-    return out, warnings
+        out = join_pieces(out, recs)
+    return [(out, warnings, 0)]
 
 
 # ---------------------------------------------------------------- objects
 
 
 def generate(obj: dict[str, Any]) -> tuple[list[Rec], list[str]]:
-    """Stitches for one digitized object (geometry already in final position), with ties."""
+    """Stitches for one digitized object (geometry already in final position), with ties, as one
+    list of records (a trim and a jump where one with several colors changes thread)."""
+    return one_run(generate_parts(obj))
+
+
+def generate_parts(obj: dict[str, Any]) -> list[tuple[list[Rec], list[str], int]]:
+    """Stitches for one digitized object (geometry already in final position), with ties, one
+    entry per thread it sews in, in sewing order: (records, warnings, thread slot). Slot 0 is the
+    object's own thread, slot k the kth of a blend's other colors; every other object sews as one
+    part in slot 0."""
     kind = obj.get("kind")
     g = obj.get("geometry") or {}
     p = obj.get("params") or {}
@@ -1226,32 +1281,36 @@ def generate(obj: dict[str, Any]) -> tuple[list[Rec], list[str]]:
         nodes = g.get("nodes") or []
         if len(nodes) < 2:
             raise DigitizeError("A running stitch needs at least two points")
-        recs, warnings = running(nodes, RunParams.from_dict(p), bool(g.get("closed")), _start_point(p.get("start_mm"))), []
+        parts = [(running(nodes, RunParams.from_dict(p), bool(g.get("closed")), _start_point(p.get("start_mm"))), [], 0)]
     elif kind == "satin" and g.get("nodes") is not None:
         # A ribbon: a centre line and a width (what the Satin tool draws).
-        recs, warnings = satin_ribbon(g["nodes"], _finite(g, "width_mm", 3.0), SatinParams.from_dict(p), bool(g.get("closed")),
-                                      _start_point(p.get("start_mm")), _start_point(p.get("end_mm")))
+        parts = [(*satin_ribbon(g["nodes"], _finite(g, "width_mm", 3.0), SatinParams.from_dict(p), bool(g.get("closed")),
+                                _start_point(p.get("start_mm")), _start_point(p.get("end_mm"))), 0)]
     elif kind == "satin":
         # A column: two edges clicked rung by rung (older projects).
-        recs, warnings = satin(g.get("rail_a") or [], g.get("rail_b") or [], SatinParams.from_dict(p),
-                               _start_point(p.get("start_mm")), _start_point(p.get("end_mm")))
+        parts = [(*satin(g.get("rail_a") or [], g.get("rail_b") or [], SatinParams.from_dict(p),
+                         _start_point(p.get("start_mm")), _start_point(p.get("end_mm"))), 0)]
     elif kind == "fill":
-        recs, warnings = fill(g.get("outline") or [], g.get("holes") or [], FillParams.from_dict(p))
+        parts = fill_in_parts(g.get("outline") or [], g.get("holes") or [], FillParams.from_dict(p))
     elif kind == "applique":
         from .applique import AppliqueParams, applique
 
         # Applique ties each of its three parts itself (the machine cuts at each stop).
-        return applique(g.get("outline") or [], AppliqueParams.from_dict(p), g.get("holes") or [])
+        return [(*applique(g.get("outline") or [], AppliqueParams.from_dict(p), g.get("holes") or []), 0)]
     else:
         raise DigitizeError(f"Unknown object type: {kind}")
-    if sum(1 for r in recs if r[2] == STITCH) < 2:
-        warnings = [*warnings, "This is shorter than one stitch, so it sews as a single needle drop. "
-                               "Make it bigger or delete it."]
-    if p.get("tie_in", True):
-        recs = tie_in(recs)
-    if p.get("tie_off", True):
-        recs = tie_off(recs)
-    return recs, warnings
+    if sum(1 for recs, _, _ in parts for r in recs if r[2] == STITCH) < 2:
+        recs, warnings, slot = parts[0]
+        parts[0] = (recs, [*warnings, "This is shorter than one stitch, so it sews as a single needle drop. "
+                                      "Make it bigger or delete it."], slot)
+    out = []
+    for recs, warnings, slot in parts:
+        if p.get("tie_in", True):
+            recs = tie_in(recs)
+        if p.get("tie_off", True):
+            recs = tie_off(recs)
+        out.append((recs, warnings, slot))
+    return out
 
 
 def geometry_points(obj: dict[str, Any]) -> list[Point]:
@@ -1301,6 +1360,7 @@ def bounds(points: Sequence[Point]) -> tuple[float, float, float, float]:
 
 
 __all__ = [
-    "DigitizeError", "FillParams", "RunParams", "SatinParams", "fill", "fill_polygon", "generate",
+    "DigitizeError", "FillParams", "RunParams", "SatinParams", "fill", "fill_in_parts", "fill_polygon", "generate",
+    "generate_parts", "join_pieces", "one_run",
     "geometry_points", "ribbon_pairs", "running", "satin", "satin_from_pairs", "satin_pairs", "satin_ribbon", "tatami", "tie_in", "tie_off", "transform_geometry", "travel",
 ]
