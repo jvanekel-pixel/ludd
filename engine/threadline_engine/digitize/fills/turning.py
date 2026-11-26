@@ -1,11 +1,13 @@
 """Turning fills: a tatami fill with two or more angle lines, whose rows turn to follow each
 line where it lies. Tatami hands over here (stitches._fill_part).
 
-1. The lines are put in order along the principal axis of their middles.
+1. The lines are put in order along the principal axis of their middles. A line whose middle is
+   under 1 mm from an earlier one's is left out (there is no room to turn), and the fill says so.
 2. The guide: a smooth curve through each line's middle, running in that line's direction there
    (cubic Hermite), carried straight on past both ends beyond the shape.
 3. Rows: curves parallel to the guide, (k + 1/2) x spacing to either side (each guide point moved
-   along the guide's normal), as far as the shape reaches.
+   along the guide's normal, with points added until they are at most SAMPLE_MM apart), as far as
+   the furthest point of the outline (sampled every EDGE_STEP_MM).
 4. Each row is clipped to the shape grown by half the Edge pad; pieces under MIN_STITCH_MM go.
 5. Needle points every stitch length along each piece, shifted by the weave's offset for that
    row, measured from where the row crosses the guide's normal at the first line's middle (so a
@@ -14,7 +16,7 @@ line where it lies. Tatami hands over here (stitches._fill_part).
    groups inside the shape.
 7. Where the guide turns tighter than a row is far from it, the row would loop back across its
    neighbors. Only the parts still that far from the whole guide are kept (the rows then meet in a
-   crease, and the shape stays covered), and the fill says so.
+   crease), and where a cut part folded back more than FOLD_WARN_MM the fill says so.
 
 Written for LUDD from the Phase 6 spec (no code ported from other projects).
 """
@@ -27,13 +29,22 @@ from typing import Sequence
 
 import numpy as np
 import shapely
-from shapely.geometry import LineString, Point as ShapelyPoint
+from shapely.geometry import LineString
 
 SAMPLE_MM = 0.25  # the guide is worked out at points about this far apart
 SAG_MM = 0.04  # a stitch strays at most this far from its curved row
 LOOP_TOL_MM = 0.05  # a row point this much nearer the guide than its row is part of a loop
+EDGE_STEP_MM = 0.5  # how far apart the outline is sampled to find its furthest point from the guide
+SAME_MIDDLE_MM = 1.0  # lines with middles nearer than this leave no room to turn between them
+# Warn when a row cut away as a loop would have folded back more than this towards the guide
+# (about four rows deep). A 30-degree fan over 20 mm folds 1.0 mm in a 50 x 30 mm shape; a
+# 90-degree turn in 16 mm near the top of a 40 mm square, 2.5 mm. The length of row cut away
+# can't tell those apart: the gentle fan's crease is the longer of the two (28 mm of row to 19).
+FOLD_WARN_MM = 1.5
 TOO_SHARP = ("The stitch direction turns too sharply for this shape here. Move the angle lines further apart or "
              "make the turn gentler.")
+SAME_MIDDLE = ("Two angle lines have their middles in the same place, so the stitches follow the line drawn first "
+               "and leave the other out. Move one of them at least 1 mm away to use both.")
 
 
 def takes_over(params) -> bool:
@@ -46,13 +57,29 @@ def _r(v: float) -> float:
     return round(v, 6)
 
 
+def _kept_lines(params) -> list:
+    """The angle lines the rows follow: a line whose middle is under SAME_MIDDLE_MM from an
+    earlier line's (in the order drawn) gives no room to turn between them, so it is left out."""
+    kept: list = []
+    for a, b in params.angle_lines:
+        m = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
+        if all(_r(math.hypot(m[0] - k[0], m[1] - k[1])) >= SAME_MIDDLE_MM
+               for k in (((c[0] + d[0]) / 2, (c[1] + d[1]) / 2) for c, d in kept)):
+            kept.append((a, b))
+    return kept
+
+
 def mean_angle(params) -> float:
     """The rows' average direction, degrees 0 to 180: the cross-hatch underlay is sewn across it.
     Lines have no front or back, so 170 and 10 degrees average to 0."""
     if len(params.angle_lines) < 2:
         return params.angle_deg
+    lines = _kept_lines(params)
+    if len(lines) < 2:  # only the first line is followed
+        (a, b), = lines
+        return round(round(math.degrees(math.atan2(b[1] - a[1], b[0] - a[0])), 9) % 180, 9)
     s = c = 0.0
-    for a, b in params.angle_lines:
+    for a, b in lines:
         t = 2 * math.atan2(b[1] - a[1], b[0] - a[0])
         s, c = s + math.sin(t), c + math.cos(t)
     if round(s, 9) == 0 and round(c, 9) == 0:
@@ -68,8 +95,9 @@ def _unit(v) -> np.ndarray:
 def _ordered_lines(params) -> tuple[list[np.ndarray], list[np.ndarray]]:
     """The lines' middles and directions, in order along the principal axis of the middles, each
     direction turned to run on from the one before."""
-    mids = [np.array([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]) for a, b in params.angle_lines]
-    dirs = [_unit((b[0] - a[0], b[1] - a[1])) for a, b in params.angle_lines]
+    lines = _kept_lines(params)
+    mids = [np.array([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]) for a, b in lines]
+    dirs = [_unit((b[0] - a[0], b[1] - a[1])) for a, b in lines]
     centre = sum(mids) / len(mids)
     sxx = sum(float((m - centre)[0] ** 2) for m in mids)
     syy = sum(float((m - centre)[1] ** 2) for m in mids)
@@ -156,6 +184,26 @@ def _crossing(inside_pt: np.ndarray, outside_pt: np.ndarray, edge) -> np.ndarray
     return min(found, key=lambda q: (_r(float(np.hypot(*(q - inside_pt)))), _r(float(q[0])), _r(float(q[1]))))
 
 
+def _row(p: np.ndarray, normals: np.ndarray, s: np.ndarray, offset: float):
+    """The row `offset` from the guide, with points added until they are at most SAMPLE_MM apart
+    (on the outside of a bend the guide's own points spread out): (points, guide distance at each,
+    index of each guide point among them). Between two guide points the row point moves straight
+    and its normal turns evenly, so a row round a corner stays `offset` from it."""
+    q = p + normals * offset
+    d = np.hypot(*(q[1:] - q[:-1]).T)
+    m = np.maximum(1, np.ceil(np.round(d / SAMPLE_MM, 6))).astype(int)
+    first = np.concatenate([[0], np.cumsum(m)])  # where each guide point lands among the row's
+    if int(first[-1]) == len(m):  # no points to add
+        return q, s, first
+    seg = np.repeat(np.arange(len(m)), m)
+    t = ((np.arange(int(first[-1])) - first[:-1][seg]) / m[seg])[:, None]
+    nn = normals[seg] * (1 - t) + normals[seg + 1] * t
+    nn /= np.hypot(nn[:, 0], nn[:, 1])[:, None]
+    dense = np.vstack([p[seg] + (p[seg + 1] - p[seg]) * t + nn * offset, q[-1:]])
+    sd = np.concatenate([s[seg] + (s[seg + 1] - s[seg]) * t[:, 0], s[-1:]])
+    return dense, sd, first
+
+
 def _row_pieces(q: np.ndarray, inside: np.ndarray, edge, along: np.ndarray, from_stitches):
     """The pieces of a row inside the zone: (distance along the row where it starts, where it
     ends, guide distance at its start and end, the row's own points between) in order along it."""
@@ -197,33 +245,43 @@ def rows(poly, params, start, travel_within=None, end_near=None) -> tuple[list, 
     zone = poly.buffer(pad) if pad > 0 else poly
     shapely.prepare(zone)
     edge = zone.boundary
+    if len(_kept_lines(params)) < len(params.angle_lines):
+        said.append(SAME_MIDDLE)
     p, normals, s, ref = _guide_points(params, zone)
     guide_line = LineString(p)
-    far = max(guide_line.distance(ShapelyPoint(c)) for c in zone.exterior.coords) + spacing
+    # As far as the furthest point of the outline (the middle of an edge can be further than
+    # any corner), and of any hole's edge.
+    rings = [zone.exterior, *zone.interiors]
+    edge_pts = np.vstack([shapely.get_coordinates(shapely.segmentize(r, EDGE_STEP_MM)) for r in rings])
+    far = float(shapely.distance(guide_line, shapely.points(edge_pts)).max()) + spacing
     shapely.prepare(guide_line)  # the loop check below asks "within this distance?" of many points
 
     found: dict[int, list] = {}
-    too_sharp = False
+    row_s: dict[int, np.ndarray] = {}
+    too_sharp = False  # a loop cut away folds back more than FOLD_WARN_MM towards the guide
     for side in (1, -1):
         k = 0 if side > 0 else -1
         while True:
             offset = (k + 0.5) * spacing
             if abs(offset) > far:
                 break
-            q = p + normals * offset
+            q, sq, at_guide = _row(p, normals, s, offset)
             inside = shapely.contains_xy(zone, q[:, 0], q[:, 1])
             if inside.any():
                 # Cut away the loops: points nearer another part of the guide than this row is.
                 at = np.flatnonzero(inside)
                 short = shapely.dwithin(guide_line, shapely.points(q[at]), abs(offset) - LOOP_TOL_MM)
                 if short.any():
-                    too_sharp = True
+                    cut = at[short]
+                    if not too_sharp and abs(offset) > FOLD_WARN_MM:
+                        too_sharp = bool(shapely.dwithin(guide_line, shapely.points(q[cut]),
+                                                         _r(abs(offset) - FOLD_WARN_MM)).any())
                     inside = inside.copy()
-                    inside[at[short]] = False
+                    inside[cut] = False
                 if inside.any():
-                    dq = q[1:] - q[:-1]
-                    along = np.concatenate([[0.0], np.cumsum(np.hypot(*dq.T))])
-                    found[k] = _row_pieces(q, inside, edge, along - along[ref], st)
+                    along = np.concatenate([[0.0], np.cumsum(np.hypot(*(q[1:] - q[:-1]).T))])
+                    found[k] = _row_pieces(q, inside, edge, along - along[at_guide[ref]], st)
+                    row_s[k] = sq
             k += side
     if too_sharp:
         said.append(TOO_SHARP)
@@ -278,7 +336,7 @@ def rows(poly, params, start, travel_within=None, end_near=None) -> tuple[list, 
     pieces = {}
     for k in keys:
         for idx, (a0, a1, i, j, path) in enumerate(found[k]):
-            pieces[(k, idx)] = (float(s[i]), float(s[j]), needle_points(k, a0, a1, path))
+            pieces[(k, idx)] = (float(row_s[k][i]), float(row_s[k][j]), needle_points(k, a0, a1, path))
     unvisited = set(pieces)
     regions: list[list[tuple[int, int]]] = []
     while unvisited:
@@ -337,4 +395,4 @@ def rows(poly, params, start, travel_within=None, end_near=None) -> tuple[list, 
     return out, said
 
 
-__all__: Sequence[str] = ("TOO_SHARP", "guide", "mean_angle", "rows", "takes_over")
+__all__: Sequence[str] = ("SAME_MIDDLE", "TOO_SHARP","guide", "mean_angle", "rows", "takes_over")

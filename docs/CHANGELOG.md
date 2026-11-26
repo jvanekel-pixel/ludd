@@ -7,7 +7,7 @@
 - **Motif** fill (rows of a little pattern across the shape), **Maze** (one path that winds in and back out; a shape with a hole or many narrow parts sews as several mazes, and LUDD says so), **Ripple** (rings spreading from the middle) and **Mesh** (a net; set the cell size and crossing angle).
 - **My motifs** (Alt+Shift+M, the ⋯ menu, or under any Motif list): save a line you drew as a motif, use it on motif lines and motif fills, import and export motif files. A shape carries its own copy, so a project sews the same on a computer without it.
 - **Carved lines** (Shift+C): draw lines over a fill sewn in rows; every row drops a needle on them, so they show as grooves.
-- **Turning fills** (Shift+I): draw more than one direction line on a Tatami fill, and the rows turn smoothly to follow each. A turn too sharp for the shape leaves a crease, and LUDD says so.
+- **Turning fills** (Shift+I): draw more than one direction line on a Tatami fill, and the rows turn smoothly to follow each, out to every edge of the shape. A turn too sharp for the shape leaves a crease (the shape stays filled), and LUDD says so when the crease is deep. Two lines with their middles in the same place: the rows follow the first, and LUDD says so.
 - In Advanced: **Weave** (Standard, Brick, Twill, Smooth or Random needle points), **Feather** (ragged row ends on the left, right or both, to blend into what's beside them) and a **Hand-sewn look** slider for lines, satins and fills (small irregularities, the same every time).
 - Turning or mirroring a fill keeps its feathered side and a blend's colors where they were on the shape.
 - Nothing already in your designs sews differently.

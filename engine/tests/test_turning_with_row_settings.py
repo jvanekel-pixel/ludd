@@ -6,7 +6,7 @@ import pytest
 import invariants
 from snapshot_util import digest_recs_steady
 from steady_util import forget_stitches, nudge_trig
-from test_fill_turning import FAN_LINES, LEAF, LEAF_LINES, PANEL, _area, _fill, _line
+from test_fill_turning import CROSS, FAN_LINES, LEAF, LEAF_LINES, NOTCH, PANEL, _area, _fill, _line
 from threadline_engine.digitize import stitches
 from threadline_engine.digitize.fills import turning
 from threadline_engine.digitize.rows import carve
@@ -75,6 +75,7 @@ def test_a_line_that_bends_the_rows_back_on_themselves_still_fills_the_shape():
     recs, warnings = generate(obj)
     assert turning.TOO_SHARP in warnings
     assert invariants.coverage(recs, _area(obj), 0.4) >= 0.97
+    assert invariants.largest_bare_spot(recs, _area(obj), 0.5) <= 0.01
     invariants.assert_sane(recs, inside=_area(obj), tolerance_mm=0.3)
 
 
@@ -116,6 +117,8 @@ def test_a_turning_fills_underlay_and_rows_do_not_hang_on_the_last_digit_of_a_si
         "leaf": _fill(LEAF, LEAF_LINES, underlay=["edge", "tatami"], tie_in=True, tie_off=True),
         "panel_by_hand": _fill(PANEL, [_line(12, 15, -30), _line(38, 15, 30)], hand_pct=60, underlay=["tatami"]),
         "bent_back": _fill(RECTANGLE, BENT_BACK, underlay="auto"),  # rows cut where they loop
+        "edge_notch": NOTCH,  # rows as far as the middle of an edge
+        "same_middle": CROSS,  # one line left out
     }
     forget_stitches()
     plain = {name: digest_recs_steady(generate(obj)[0]) for name, obj in cases.items()}

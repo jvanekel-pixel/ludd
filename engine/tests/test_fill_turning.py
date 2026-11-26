@@ -189,6 +189,47 @@ def test_too_sharp_a_turn_warns_and_still_fills_most():
     invariants.assert_sane(recs, inside=_area(obj), tolerance_mm=0.4)
 
 
+SAME_MIDDLE = ("Two angle lines have their middles in the same place, so the stitches follow the line drawn first "
+               "and leave the other out. Move one of them at least 1 mm away to use both.")
+# The audit's two bare spots: rows stopped at the shape's furthest corner from the guide while the
+# middle of an edge was further (a notch at the top edge), and rows whose points spread out round
+# a sharp bend dropped whole stretches (a 192 mm² bare corner).
+NOTCH = _fill(PANEL, [_line(10, 15, 40), _line(40, 15, -40)])
+CROSS = _fill(SQUARE, [[[18, 20], [22, 20]], [[20, 18], [20, 22]]])
+BARE_CASES = {**CASES, "edge_notch": NOTCH, "same_middle": CROSS, "too_sharp": _fill(SQUARE, SHARP_LINES)}
+
+
+@pytest.mark.parametrize("name", sorted(BARE_CASES))
+def test_no_bare_spot(name):
+    """No point of the shape is more than 0.5 mm from thread (rows are 0.4 mm apart)."""
+    obj = BARE_CASES[name]
+    recs = generate(obj)[0]
+    assert invariants.largest_bare_spot(recs, _area(obj), 0.5) <= 0.01
+
+
+def test_two_lines_with_the_same_middle_follow_the_first():
+    recs, warnings = generate(CROSS)
+    assert SAME_MIDDLE in warnings and TOO_SHARP not in warnings
+    first = CROSS["params"]["angle_lines"][0]
+    assert max(_follows(recs, [first])) <= 5.0
+    assert turning.mean_angle(FillParams.from_dict(CROSS["params"])) == pytest.approx(0.0, abs=1e-6)
+    # Under 1 mm apart is the same middle; 1 mm apart, the rows turn between the two.
+    apart = _fill(SQUARE, [[[18, 20], [22, 20]], [[20.6, 18], [20.6, 22]]])
+    near = _fill(SQUARE, [[[18, 20], [22, 20]], [[21, 18], [21, 22]]])
+    assert SAME_MIDDLE in generate(apart)[1]
+    assert SAME_MIDDLE not in generate(near)[1]
+    assert invariants.largest_bare_spot(generate(near)[0], _area(near), 0.5) <= 0.01
+
+
+def test_a_gentle_turn_does_not_warn():
+    # 30 degrees over 20 mm: a few row points fold back in the top right corner and are cut (up to
+    # 1.0 mm deep), which is no reason to tell anyone to move the lines.
+    obj = _fill(PANEL, [_line(15, 15, 0), _line(35, 15, 30)])
+    recs, warnings = generate(obj)
+    assert TOO_SHARP not in warnings
+    assert invariants.largest_bare_spot(recs, _area(obj), 0.5) <= 0.01
+
+
 def test_lines_move_and_turn_with_the_shape(monkeypatch):
     """Turned, mirrored and resized with the handles, through the whole layout: the lines go with
     the shape, the rows still follow them and keep their spacing (a length in mm, not scaled)."""
