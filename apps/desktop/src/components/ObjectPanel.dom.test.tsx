@@ -172,6 +172,10 @@ describe("Phase 6: weave, feathered edges, the hand-sewn look and carved lines (
     expect(advanced(show(fill({ pattern: "wave" })))).toEqual(["Feather", "Hand-sewn look"]);
   });
 
+  it("a blend offers no cross-hatch underlay, which it never sews", () => {
+    expect(texts(show(fill({ pattern: "blend" })), '[aria-label="Underlay"] button')).toEqual(["Auto", "Edge"]);
+  });
+
   it("lines and satins have the Hand-sewn look; motif lines don't", () => {
     const run = showKind(shape("run", { nodes: OUTLINE }, { hand_pct: 40 }), "Line");
     expect(rowLabels(run)).toContain("Hand-sewn look");

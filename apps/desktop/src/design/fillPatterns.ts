@@ -33,6 +33,8 @@ export type FillPatternDef = {
   threads?: number;
   /** Settings set along with the pattern when it's chosen. */
   onChoose?: (o: ObjectItem) => Record<string, unknown>;
+  /** A rows pattern that never sews a cross-hatch underlay: the panel doesn't offer one. */
+  noCrossHatch?: boolean;
 };
 
 export const FILL_PATTERN_DEFS: FillPatternDef[] = [
@@ -99,6 +101,7 @@ export const FILL_PATTERN_DEFS: FillPatternDef[] = [
     fields: [],
     threads: 2,
     onChoose: blendDefaults,
+    noCrossHatch: true, // it would show through where a color thins out
   },
   {
     id: "motif",

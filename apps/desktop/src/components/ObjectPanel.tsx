@@ -353,7 +353,7 @@ export function ObjectSections({ item, info, sel }: { item: ObjectItem; info: La
         {(item.kind === "satin" || item.kind === "fill") && (
           <Sub id={`underlay-${item.kind}`} title="Underlay" summary={p.underlay == null ? "Auto" : (p.underlay as string[]).join(", ") || "None"}>
             <UnderlayButtons
-              kinds={open ? UNDERLAY_KINDS.fill.filter((k) => k.id !== "tatami") : UNDERLAY_KINDS[item.kind]}
+              kinds={open || fillDef?.noCrossHatch ? UNDERLAY_KINDS.fill.filter((k) => k.id !== "tatami") : UNDERLAY_KINDS[item.kind]}
               value={p.underlay as string[] | undefined}
               set={(v) => set({ underlay: v })}
             />
