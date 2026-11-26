@@ -326,6 +326,30 @@ def test_forced_gets_the_ripple_on_a_wave_fill():
         assert any(k == STITCH and abs(x - 10.0) < 1e-9 and abs(yy - bent) < 1e-9 for x, yy, k in recs), y
 
 
+def _row_ends(recs, y: float) -> tuple[float, float]:
+    xs = [x for x, yy, k in recs if k == STITCH and abs(yy - y) < 1e-9]
+    return min(xs), max(xs)
+
+
+def test_end_shift_moves_the_ends_and_splits_long_steps():
+    # Every other row pulled in 6 mm on the left: the steps between rows would be 6 mm long.
+    pulled = tatami(SQUARE_20, 0, 0.4, 3.5, 0.0, end_shift=lambda r, x0, x1: (x0 + 6 * (r % 2), x1))
+    for r in range(50):
+        assert _row_ends(pulled, 0.2 + 0.4 * r)[0] == pytest.approx(6 * (r % 2)), r
+    assert_sane(pulled, inside=SQUARE_20, max_stitch_mm=3.6, max_jumps=0)
+
+
+def test_end_shift_can_reach_past_the_shape_without_jumps():
+    out = tatami(SQUARE_20, 0, 0.4, 3.5, 0.0, end_shift=lambda r, x0, x1: (x0 - 0.6, x1 + 0.6))
+    assert _row_ends(out, 0.2) == (pytest.approx(-0.6), pytest.approx(20.6))
+    assert_sane(out, inside=SQUARE_20, tolerance_mm=0.61, max_jumps=0)
+
+
+def test_a_row_is_always_sewn_however_its_ends_move():
+    squashed = tatami(SQUARE_20, 0, 0.4, 3.5, 0.0, end_shift=lambda r, x0, x1: (x0 + 100, x1 - 100))
+    assert len(_row_heights(squashed)) == 50
+
+
 # ---------------------------------------------------------------- project features
 
 

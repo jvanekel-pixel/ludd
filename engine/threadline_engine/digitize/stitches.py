@@ -840,6 +840,16 @@ def _row_stitches(x0: float, x1: float, y: float, step: float, offset: float, fo
     return [(x, y) for x in xs]
 
 
+def _shifted_ends(end_shift: Callable[[int, float, float], tuple[float, float]], row: int, x0: float,
+                  x1: float) -> tuple[float, float]:
+    """A row's ends as `end_shift` moves them, never past each other: a row is always sewn."""
+    a, b = end_shift(row, x0, x1)
+    if b - a >= MIN_STITCH_MM:
+        return a, b
+    middle, half = (a + b) / 2, min(MIN_STITCH_MM, x1 - x0) / 2
+    return middle - half, middle + half
+
+
 FORCED_CLEAR_MM = 0.8  # grid penetrations this near a forced one are left out
 
 
@@ -861,7 +871,8 @@ def tatami(poly: Polygon, angle: float, spacing: float, stitch: float, extend: f
            sparse_to: float | None = None, wave: tuple[float, float] | None = None,
            end_near: Point | None = None, row_ys: Sequence[float] | None = None,
            offsets: Callable[[int], float] | None = None,
-           forced: Callable[..., Sequence[float]] | None = None) -> list[Rec]:
+           forced: Callable[..., Sequence[float]] | None = None,
+           end_shift: Callable[[int, float, float], tuple[float, float]] | None = None) -> list[Rec]:
     """Tatami fill of `poly`: serpentine rows grouped into regions, regions joined by travel.
     Travel runs inside `travel_within` (default `poly`), where later stitching covers it.
     `end_near`: finish as near this point as the rows allow (the region that can end nearest it
@@ -876,10 +887,13 @@ def tatami(poly: Polygon, angle: float, spacing: float, stitch: float, extend: f
     (the weave); without it, a third of a stitch more on each row. Wave keeps its own rule.
     `forced`: (y, x0, x1) -> places along the row (turned frame) that must be needle points, where
     carved lines cross it. On a wave fill it is also given `bend`, x -> the rippled row's height
-    there, so it can find the crossings on the ripple."""
+    there, so it can find the crossings on the ripple.
+    `end_shift`: (row, x0, x1) -> the row's new ends (feather, hand-sewn look). Which rows join
+    into one section still goes by the shape's own ends; a step between two rows longer than a
+    stitch is split. A row is always sewn, however far its ends are moved."""
     # With a hook, equally good choices are settled to a millionth of a mm, so the last digit of a
     # sine (not the same on every computer) can't decide which region is sewn next.
-    steady = row_ys is not None or offsets is not None or forced is not None
+    steady = row_ys is not None or offsets is not None or forced is not None or end_shift is not None
     rot = affinity.rotate(poly, -angle, origin=(0, 0))
     if not rot.is_valid:
         # A shape with a zero-width spike (an arm exactly twice the underlay inset) can turn
@@ -925,6 +939,8 @@ def tatami(poly: Polygon, angle: float, spacing: float, stitch: float, extend: f
         fwd = forward_first
         for r, i in region:
             x0, x1 = rows[r][i]
+            if end_shift is not None:
+                x0, x1 = _shifted_ends(end_shift, r, x0, x1)
             y = ys[r] if ys is not None else miny + spacing / 2 + r * spacing
             if wave:
                 # Every row gets the same needle positions (no brick stagger) and a stitch at least
@@ -945,6 +961,9 @@ def tatami(poly: Polygon, angle: float, spacing: float, stitch: float, extend: f
                 shift = (r % 3) * stitch / 3 if offsets is None else offsets(r) * stitch
                 row = _row_stitches(x0, x1, y, stitch, shift, fwd, random, r,
                                     () if forced is None else forced(y, x0, x1))
+            if end_shift is not None and pts and dist(pts[-1], row[0]) > stitch:
+                # Moved ends can leave a long step to the next row: split it.
+                pts += _subdivide([pts[-1], row[0]], stitch)[1:-1]
             pts += row
             fwd = not fwd
         return [to_world(p) for p in pts]
@@ -957,7 +976,12 @@ def tatami(poly: Polygon, angle: float, spacing: float, stitch: float, extend: f
 
     # Order regions greedily: next is whichever region has an end nearest the needle.
     # Rows can extend past the edge by `extend` (pull compensation); travel may go there too.
-    inside = Zone((travel_within or poly).buffer(extend + 0.05))
+    margin = extend + 0.05
+    if end_shift is not None:
+        # Ends moved outwards reach past the shape: travel from them may go as far.
+        margin += max((max(x0 - a, b - x1, 0.0) for r, segs in enumerate(rows) for x0, x1 in segs
+                       for a, b in [_shifted_ends(end_shift, r, x0, x1)]), default=0.0)
+    inside = Zone((travel_within or poly).buffer(margin))
     min_step = _min_step(min(spacing, sparse_to) if sparse_to else spacing)
     out: list[Rec] = []
     pos = start_near
