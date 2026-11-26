@@ -31,7 +31,8 @@ bar); Esc while dragging puts it back.
 (the shape goes back), an open menu or list, a value you were typing (the old one comes back), a
 half-drawn shape, the measuring tool, the drawing tool (back to Select), a selected point, the
 selection, playback. A single point placed with a drawing tool counts: Esc drops it, and the next
-Esc takes you back to Select.
+Esc takes you back to Select. While carving lines into a fill, Esc drops the line you're drawing,
+and the next one stops carving.
 
 ### The mouse pointer
 The pointer shows what a click or drag will do where it is:
@@ -56,7 +57,9 @@ so you can find a command and learn its key in one go:
 
 - **A shape**: Change thread…, Cut, Copy, Duplicate, Remove, Add points, Cut a hole, Set the stitch
   angle, Knife, Add a satin border, Outline / offset, Sew first / earlier / later / last, turn and
-  mirror, Center in the hoop, Repeat, Pin, Rename, Zoom to it and the Stitch Advisor.
+  mirror, Center in the hoop, Repeat, Pin, Rename, Zoom to it and the Stitch Advisor. **A fill**
+  also: Add another angle line, Carve lines into the fill, and Remove carved lines once it has some
+  (right-clicking a turning fill's purple line removes that line).
 - **Several shapes** (Shift+click them first): also Group, Merge, Cut out and Put the text on the line.
 - **Lettering**: also Change the words and One file per name. **A stitch file**: Edit stitches.
 - **A picture**: Auto-trace, Auto-digitize the whole picture, Pin / unpin (a pinned picture lets
@@ -314,7 +317,8 @@ Select the shape, then:
 - **Drag the purple dots** to set the stitch direction:
   - **A fill**: the purple line between them is the direction of the rows. Each dot slides round
     the outline; the angle in the panel follows (typing an angle there puts the line back across
-    the middle).
+    the middle). A turning fill shows a line with two dots for each direction instead (section 6,
+    Turning fills).
   - **A satin column or satin fill**: the purple dots, just past each end, are its two tips. Slide
     them round the outline and the satin is rebuilt to run from one to the other, its stitches
     straight across the shape between them (Shift+W still tries LUDD's own suggestions).
@@ -323,10 +327,10 @@ Select the shape, then:
     dots on each piece.
   - A **pinned** shape shows its outline only: its points and dots can't be moved until you unpin
     it. With several things selected the dots aren't shown.
-  - **Contour, Stipple, Cross-stitch and Spiral** fills end where their pattern does: the red dot
-    shows it but can't be moved. Stipple, Cross-stitch and Spiral also start where their pattern
-    does (a Spiral in the middle), wherever you drag the green dot. **Sew from the other end
-    (reverse)** on a fill clears a chosen end.
+  - **Contour, Stipple, Cross-stitch, Spiral, Motif, Maze, Ripple and Mesh** fills end where
+    their pattern does: the red dot shows it but can't be moved. Stipple, Cross-stitch, Spiral and
+    Ripple also start where their pattern does (a Spiral or Ripple in the middle), wherever you
+    drag the green dot. **Sew from the other end (reverse)** on a fill clears a chosen end.
 
 ### Tracing a picture
 1. **Picture** (Ctrl+I) adds a picture (up to 40 MB and about 120 megapixels). Drag it into place
@@ -589,14 +593,15 @@ and **Draw the angle**, and an applique's border, tack-down and cut file.
 
 ### Underlay and Advanced stitch settings (folds inside the section)
 **Underlay** holds the underlay buttons. **Advanced stitch settings** holds the exact spacing,
-length, random, edge pad, reverse, split and lock stitches, and **✨ Ask the Stitch Advisor** if
-the AI add-on is on. Only the settings that do something for the shape are shown (an applique
-has no lock-stitch boxes; Contour, Stipple, Cross-stitch and Spiral hide the row settings they
-don't use).
+length, random, edge pad, **Weave**, **Feather**, the **Hand-sewn look**, **Carve lines**,
+reverse, split and lock stitches, and **✨ Ask the Stitch Advisor** if the AI add-on is on. Only
+the settings that do something for the shape are shown (an applique has no lock-stitch boxes;
+open fill patterns, listed below, hide the row settings they don't use).
 
 **Your settings carry over.** Change a shape's density, length, underlay or any other stitch
 setting and the next shape of that kind starts with it: make a fill 0.6 mm and every new fill is
-0.6 mm until you change it again. (A fill's angle isn't carried over; it belongs to its shape.)
+0.6 mm until you change it again. (A fill's angle and angle lines aren't carried over; they
+belong to their shape.)
 **Use the standard settings for new fills** (at the end of Advanced) goes back to the standard
 ones; shapes already drawn keep theirs.
 
@@ -608,6 +613,9 @@ ones; shapes already drawn keep theirs.
 | **Angle** | ✓ | | | Direction of the rows (0–179°). **Draw the angle (I)** sets it with a line. |
 | **Length** | ✓ | | ✓ | Stitch length (up to 7 mm for fills). |
 | **Random** | ✓ | | | Moves needle points a little at random (0–50%) so no lines show across the fill. |
+| **Weave** | ✓ | | | How neighboring rows' needle points line up: Standard, Brick, Twill, Smooth or Random (Tatami, Gradient and Blend; below). |
+| **Feather** | ✓ | | | Ragged row ends on the left, right or both, for fills sewn in rows (below). |
+| **Hand-sewn look** | ✓ | ✓ | ✓ | Small irregularities, as if sewn by hand (fills sewn in rows; not motif lines; below). |
 | **Edge pad** | ✓ | ✓ | | Pull compensation: widens the shape because stitches pull the fabric in. **Auto** chooses from the fabric (and, for satins, the width). |
 | **Reverse** | ✓ | | | Sews the fill from the other end. |
 | **Split long stitches** | | ✓ | | Splits satin stitches longer than the length you set (underlay too, and the outer edge at sharp corners), so they can't snag. |
@@ -626,15 +634,140 @@ A fill's **Pattern** (in its section) changes how the area is stitched:
 | **Stipple** | One meandering line over every part of the shape, never crossing itself: the quilting look, great for backgrounds and applique. It says if a part is too narrow for the loop size. | **Loop size**. |
 | **Cross-stitch** | Little Xs on a square grid. Squares over about 5 mm get a needle point in the middle of each diagonal. | **Square** size. |
 | **Spiral** | One line that starts in the middle of the shape and winds out to its edge in rings. Where the shape cuts the rings short, LUDD sews the nearest piece next and joins them along the edge, never across the rings, so most shapes get a light outline (a circle hardly any). A satin border covers it on the outside edge. With Underlay on **Auto** it has none. Rings closer than 0.6 mm can pucker, and LUDD says so. | **Ring spacing**: how far apart the turns are (0.4 to 6 mm, normally 1.5). Stitch Length goes up to 4 mm. |
+| **Blend** | The shape's color fades into a second (and a third) across the rows. | Its other colors and **Balance** (below). |
+| **Motif** | Rows of a little pattern across the shape. | **Motif**, **Repeat**, **Height**, **Row gap**, **Shift alternate rows** and Angle (below). |
+| **Maze** | One path that winds into the shape and back out, never crossing itself. | **Path spacing** (0.8 to 6 mm, normally 2). |
+| **Ripple** | Rings spreading from the middle, like a drop in water. | **Ring spacing** (0.6 to 8 mm, normally 2). |
+| **Mesh** | A net of two sets of lines. | **Cell size** (1 to 10 mm, normally 3), **Crossing angle** (45 to 90°) and Angle. |
 
-Contour, Stipple, Cross-stitch and Spiral are open patterns: they skip the cross-hatch underlay (it
-would show through) and have no Angle, Random or Edge pad; Stipple, Cross-stitch and Spiral have no
-Density either. A Gradient also skips the cross-hatch (keeping its edge run), so it really fades out.
+Tatami, Gradient, Wave and Blend are **fills sewn in rows**. Contour, Stipple, Cross-stitch,
+Spiral, Motif, Maze, Ripple and Mesh are **open patterns**: they skip the cross-hatch underlay
+(it would show through) and have no Random or Edge pad. Only Motif and Mesh have an Angle, and
+only Contour has Density. A Gradient and a Blend skip the cross-hatch too, so they really fade;
+on **Auto**, Blend, Motif, Maze, Ripple and Mesh have no underlay at all. A project that uses any
+of the new patterns or settings below needs this version of LUDD or newer to open.
+
+### Blend
+**Pattern → Blend** fades the shape's color into another across the rows. Each color is its own
+rows, thinning where the next one thickens, so together they cover like one fill (Density is the
+coverage of both together).
+
+    =============   first color
+    =============
+    -------------
+    =============
+    -------------
+    -------------   second color
+
+Under Pattern: click the **Second color** to change it (it starts white, or navy on a light
+shape), **Add a color** (up to three; choose its color), **Swap the colors** to fade the other
+way, and **Balance** for which color takes more of the shape. The fade runs across the rows, so
+turn the **Angle** (or drag the purple dots) to point it. Each color sews in turn, with a thread
+change between them; Order & colors lists each one. Turning or mirroring the shape keeps every
+color on the same side of it. If a blend looks stripy, make it denser or set Weave to Smooth.
+
+### Motif fill and My motifs
+**Pattern → Motif** covers the shape with rows of a little pattern: Wave, Zigzag, Scallop,
+Blanket stitch, Leaves, or one of your own.
+
+    /\/\/\/\/\/\/\    Repeat: how long one repeat is
+      /\/\/\/\/\/\    Height and Row gap: how tall rows are, and the space between
+    /\/\/\/\/\/\/\    Shift alternate rows: moves every other row along
+
+**My motifs** (Alt+Shift+M, ⋯ → Motifs…, or **My motifs…** under the Motif list) shows the
+built-in motifs and yours. To make one, draw **one repeat** as a line from left to right, select
+it, open the window and choose **Save the selected line as a motif…**. The line's start and end
+become the repeat's start and end (at least 2 mm apart; the line can't be closed). Choose it under
+**Motif** on a motif line or a motif fill. **Import…** and **Export…** move motifs between
+computers; **Delete** removes one of yours. A shape keeps its own copy of the motif it uses, so a
+project sews the same anywhere, even if the motif isn't in that computer's list (Export it and
+Import it there to use it on new shapes).
+
+### Maze, ripple and mesh
+
+    Maze              Ripple            Mesh
+    +----------+        .------.        +--+--+--+
+    | +------+ |      .' .--.  '.       |  |  |  |
+    | | +--  | |     (  (    )   )      +--+--+--+
+    | | +----+ |      '. '--' .'        |  |  |  |
+    | +---------        '----'          +--+--+--+
+
+**Maze** is one path that winds in to the middle and back out between its own turns, never
+crossing itself; it starts near the green dot and ends beside it. A shape with a hole, or one
+pinched into many parts, is sewn as several mazes, and LUDD suggests Contour. **Ripple** spreads
+rings from the middle of the shape's widest part. **Mesh** crosses two sets of lines, square at
+a Crossing angle of 90° or slanted below it. Stitch Length goes up to 4 mm on all three.
+
+### Weave
+In Advanced, **Weave** sets how the needle points (o) of neighboring rows line up:
+
+    Standard         Brick            Twill
+    o-----o-----o    o-----o-----o    o-------o----
+    --o-----o----    ---o-----o---    --o-------o--
+    ----o-----o--    o-----o-----o    ----o-------o
+    o-----o-----o    ---o-----o---    ------o------
+
+Standard is the usual fill; Brick looks like brickwork; Twill shows fine diagonal lines; Smooth
+shows no lines; Random gives a matte surface. Wave keeps its own weave.
+
+### Carved lines
+Carved lines press a drawing into a fill sewn in rows: every row drops a needle exactly where it
+crosses a carved line, so the line shows as a groove.
+
+    ------\----------
+    -------\---------     the \ is the carved line: each row
+    --------\--------     has a needle point on it
+    ---------\-------
+
+Select the fill and press **Shift+C** (or Advanced → **Carve lines**, or right-click → Carve
+lines into the fill). Draw a line over it with the usual clicks; **Enter** finishes it. Draw
+more, or press **Esc** when you're done. The lines move and resize with the shape, never change
+its size, and their points can be dragged like a hole's while the fill is selected. **Remove
+carved lines** is in the panel's ⋯ menu and the right-click menu. A line that runs along the
+rows won't show (LUDD says so): turn the fill's Angle, or draw the line across the rows.
+
+### Feathered edges
+
+    ===============-
+    ===========          Feather → Right ends: each row stops short
+    ================     by a different amount, so the edge is ragged
+    ============
+
+In Advanced, **Feather** makes the row ends ragged on the left, the right or both, to blend a
+fill into what's beside it (fur, shading, or two fills feathered into each other). **Depth** (0.5
+to 6 mm, normally 2) is how far in the ends can reach. Left and right mean the ends of the rows as
+they run at 0° (the panel shows a picture); turning or mirroring the shape keeps the ragged side
+where it was. On Auto underlay a feathered fill has no edge run, which would show.
+
+### Hand-sewn look
+
+    ----- ------- ---- ------ -----      stitches a little uneven,
+    --- ------ ------- ---- ------       like sewing by hand
+
+The **Hand-sewn look** slider (Advanced, 0 to 100%) on lines, satins and fills sewn in rows makes
+stitches a little irregular: line stitches vary in length and wander a touch, satin edges and
+spacing vary, and a fill's row ends and needle points move. The same design always sews the same
+way. Motif lines don't have it.
+
+### Turning fills
+
+    \\\  |||  ///     two or more angle lines:
+     \\\ ||| ///      the rows turn smoothly to
+      \\\|||///       follow each one
+
+On a **Tatami** fill, press **Shift+I** (or **Add another line** under Angle, or right-click → Add
+another angle line) and click twice to draw a second direction line: the rows turn smoothly to
+follow each line where it lies, like the veins of a leaf. The fill's old direction becomes the
+first line. Drag a line's purple dots to move it, right-click a line to remove it, **I** to draw
+the first one again, or **Back to one angle** to keep only the first line's angle. If the turn is
+too sharp for the shape, the rows meet in a crease and LUDD says so: move the lines further apart
+or make the turn gentler. Other patterns don't use the lines, but they come back with Tatami.
 
 ### Motif lines
-A line's **Style → Motif** repeats a little pattern along it: **Wave**, **Zigzag**, **Scallop** or
-**Blanket stitch** (the applique edge stitch), with its **Repeat** length and **Width**. Use it for
-decorative borders, or round an applique with blanket stitch.
+A line's **Style → Motif** repeats a little pattern along it: **Wave**, **Zigzag**, **Scallop**,
+**Blanket stitch** (the applique edge stitch), **Leaves** or one of **My motifs** (above), with
+its **Repeat** length and **Width**. Use it for decorative borders, or round an applique with
+blanket stitch.
 
 ### Size and points
 Size (W, H), **Add points (K)** and **Add a hole (O)** for fills. Turn, mirror, duplicate,
@@ -1110,6 +1243,9 @@ Shortcuts are also shown in every menu and on every button's tooltip.
 | Cut the shapes on top out of the fill | Shift+O |
 | Turn a satin fill's stitches another way | Shift+W |
 | Set a fill's stitch angle with a line | I |
+| Draw another angle line, so the rows turn (turning fill) | Shift+I |
+| Carve lines into the selected fill | Shift+C |
+| Motifs window (My motifs) | Alt+Shift+M |
 | Remove the selected point | Delete |
 | Rectangle / circle / star / monogram | Ctrl+Alt+1 / 2 / 3 / M |
 

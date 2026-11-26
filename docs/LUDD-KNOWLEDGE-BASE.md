@@ -10,7 +10,7 @@ change, in the same commit as docs/CHANGELOG.md. Never edited by the help agent.
 | --- | --- |
 | Product | **LUDD** (formerly *Threadline*), free embroidery digitizing software |
 | Version described | **1.0.1** (in development; installers built from the working copy) |
-| Last updated | **2026-11-25** |
+| Last updated | **2026-11-26** |
 | Owner | One hobbyist user (the person asking questions), with a **Brother PE550D** (4" × 4" hoop) |
 | Source of truth, in order | 1. this file · 2. `docs/USER-MANUAL.md` · 3. `docs/CHANGELOG.md` · 4. the app's own Help (F1) |
 | Developer | Claude Code, in the LUDD repository chat. The help agent never changes code or files. |
@@ -54,7 +54,7 @@ change, in the same commit as docs/CHANGELOG.md. Never edited by the help agent.
 | Saves for machines (9 formats) | **PES** (Brother, primary), **JEF** (Janome), DST, EXP, PEC, TBF, U01, VP3, XXX. |
 | Can't open | Embrilliance working files (`.be`, `.bt`): they're a closed format. Open the PES/JEF Embrilliance saved, or recreate. See L-012. |
 | Project file | `.ludd`: everything embedded (shapes, lettering, placed designs, traced pictures, the lettering's fonts). Old `.thl` projects and `.tlfont` stitch fonts still open. |
-| Data folder (Windows) | `%APPDATA%\Ludd` (older installs: the old `Threadline` folder still works). Holds threads, settings, `fonts` (stitch fonts, including fonts made from letter files), `templates` (name templates), `recovery`, `project-files` (private copies of added pictures/designs; unused 90 days → deleted), `machines` (extra machine profiles). |
+| Data folder (Windows) | `%APPDATA%\Ludd` (older installs: the old `Threadline` folder still works). Holds threads, settings, `fonts` (stitch fonts, including fonts made from letter files), `templates` (name templates), `motifs` (My motifs), `recovery`, `project-files` (private copies of added pictures/designs; unused 90 days → deleted), `machines` (extra machine profiles). |
 | Installer location (developer builds) | `C:\Users\Copper Felix\HTML Stuffs\threadline\apps\desktop\src-tauri\target\release\bundle\nsis\LUDD_<version>_x64-setup.exe` |
 | Releases | GitHub `jvanekel-pixel/ludd` → Releases. Installers aren't code-signed yet (Windows SmartScreen / macOS Gatekeeper warning; see T-001). |
 | Shortcuts | Embrilliance's keys wherever Embrilliance has one. Every menu item and button tooltip shows its key. |
@@ -86,7 +86,15 @@ One line per common question. Status, then where to read more.
 | fill a shape with one shape-shifting satin (petals, leaves)? | YES (satin fill) | F-1308 |
 | satin columns that start/stop anywhere along them? | YES | F-701 |
 | fill patterns: gradient, wave, contour, stipple, cross-stitch, spiral? | YES | F-1305 |
-| a two-color gradient / color blend? | NO (one-color density gradient only) | L-001 |
+| a two-color gradient / color blend? | YES (the Blend pattern, up to three colors) | F-1310 |
+| motif, maze, ripple or net (mesh) fills? | YES | F-1311, F-1312 |
+| save a line I drew as my own motif? | YES (`Alt+Shift+M`) | F-1311 |
+| carve lines into a fill (emboss)? | YES (`Shift+C`), on fills sewn in rows | F-1313 |
+| make stitching look hand-sewn? | YES (a slider in Advanced) | F-1314 |
+| turn a fill's rows to follow several lines (multiple angles)? | YES, Tatami (`Shift+I`) | F-1315 |
+| ragged, feathered fill edges (fur, shading)? | YES (Feather in Advanced) | F-1316 |
+| change how a fill's needle points line up (brick, twill)? | YES (Weave in Advanced) | F-1303 |
+| allow for push at the ends of shapes (push compensation)? | NO (not built: waiting on a patent check) | L-044 |
 | cut holes in a fill, or cut shapes out of a fill? | YES | F-1202, F-1203 |
 | knife a shape in two / merge fills? | YES | F-1204 |
 | outline / offset around things? | YES | F-1205 |
@@ -197,7 +205,8 @@ One line per common question. Status, then where to read more.
   2026-11-24; before, Ctrl+Z threw the half-drawn shape away *and* undid the edit before it).
 - **Esc lets go of one thing per press, newest first**: a drag (it goes back), an open menu or list,
   a value being typed (old value back), a half-drawn shape (even one point), measuring, the drawing
-  tool (back to Select), a selected point, the selection, playback.
+  tool (back to Select), a selected point, the selection, playback. While carving lines (F-1313) it
+  drops the line being drawn first, then stops carving.
 - Note: the owner's physical Esc key was faulty once (remapped 2026-10-12). If "Esc does nothing",
   check the key first (T-006).
 
@@ -208,6 +217,8 @@ One line per common question. Status, then where to read more.
   stitch angle, Knife, Turn a satin fill another way (satins), Add a satin border, Outline/offset,
   Sew first/earlier/later/last, Rotate, Mirror, Center in the hoop, Repeat, Pin, Rename, Zoom to it,
   Stitch Advisor.
+- **A fill** also: Add another angle line (F-1315), Carve lines into the fill, and Remove carved
+  lines once it has some (F-1313). Right-clicking one of a turning fill's purple lines removes it.
 - **Several shapes**: also Group, Ungroup, Merge, Cut out, Put the text on the line.
 - **Lettering**: Change the words, One file per name, Break into shapes. **Stitch file**: Edit
   stitches.
@@ -413,8 +424,9 @@ magnet), and stays exactly where you let go.
 | Open running line | At its ends only: dragging a dot moves that end point; dropping it on the other end sews the line the other way round (L-004). |
 | Lettering | Each letter has its own small dots (F-1405). |
 | Applique, stitch files | No dots to move. |
-| Contour fills | Start movable; the red end dot shows but can't be moved (the pattern decides). |
-| Stipple / Cross-stitch / Spiral fills | The red end dot shows but can't be moved. The green dot can be dragged, but the pattern still starts at the same place (a Spiral always in the middle). |
+| Turning fill (F-1315) | Start movable; it finishes at the end of the row nearest the red dot. |
+| Contour, Motif, Maze and Mesh fills | Start movable (they begin near the green dot); the red end dot shows but can't be moved (the pattern decides). |
+| Stipple / Cross-stitch / Spiral / Ripple fills | The red end dot shows but can't be moved. The green dot can be dragged, but the pattern still starts at the same place (a Spiral or Ripple always in the middle). |
 - **Pinned** shapes show only their outline: points and dots can't be moved. With several things
   selected the dots aren't shown. A satin's start always lands on the satin (its nearest stitch).
 - Knife / Cut out pieces get fresh dots each. Moving a satin's purple tips or Shift+W drops its old
@@ -427,7 +439,9 @@ magnet), and stays exactly where you let go.
 ### F-702 Stitch direction (purple dots) — YES (added 2026-10-13)
 - **Fill**: two purple dots on the outline with a purple line between them = the direction of the
   rows. Drag either dot round the outline; the Angle setting follows. Typing an angle puts the line
-  back across the middle. Not shown for Contour, Stipple and Spiral patterns (they have no angle).
+  back across the middle. Not shown for Contour, Stipple, Spiral, Maze and Ripple patterns (they
+  have no angle). A turning fill shows a purple line with two dots for each of its angle lines
+  instead (F-1315).
 - **Satin column / satin fill**: the purple dots sit just past each end and are the satin's
   **tips**. Slide them round the outline; the satin is rebuilt to run from one to the other, with
   stitches straight across between them. Tips too close together → message, nothing changes.
@@ -579,9 +593,11 @@ shape.
 In view: thread, Stitch as, Style (lines), **Density** (Light/Normal/Dense + Lighter↔Denser slider
 with the number under it, e.g. "0.40 mm between rows · 2.5 rows per mm", + exact Spacing), fill
 **Angle** and Draw the angle, applique options. **Underlay** fold: underlay buttons. **Advanced
-stitch settings** fold: spacing, length, random, edge pad, reverse, split, lock stitches, Stitch
-Advisor. Settings carry over to the next shape of that kind (not a fill's angle); "Use the standard
-settings for new fills" resets.
+stitch settings** fold: spacing, length, random, edge pad, **Weave, Feather** (rows fills),
+**Hand-sewn look** (lines, satins, rows fills), **Carve lines** (rows fills), reverse, split, lock
+stitches, Stitch Advisor. Settings carry over to the next shape of that kind (not a fill's angle,
+angle lines, Reverse or which way a blend was turned); "Use the standard settings for new fills"
+resets.
 
 ### F-1303 Settings table — YES
 | Setting | Fill | Satin | Line |
@@ -591,6 +607,9 @@ settings for new fills" resets.
 | Angle (0–179°) | ✓ | – | – |
 | Length | ✓ (≤ 7 mm) | – | ✓ |
 | Random 0–50% | ✓ | – | – |
+| Weave: Standard · Brick · Twill · Smooth · Random (how neighboring rows' needle points line up) | Tatami, Gradient, Blend | – | – |
+| Feather: Off · Left ends · Right ends · Both, with Depth 0.5–6 mm (F-1316) | rows fills | – | – |
+| Hand-sewn look 0–100% (F-1314) | rows fills | ✓ | Single, Triple, Bean |
 | Edge pad (pull compensation, Auto from fabric) | ✓ | ✓ | – |
 | Reverse | ✓ | – | – |
 | Split long stitches | – | ✓ | – |
@@ -599,10 +618,17 @@ settings for new fills" resets.
 
 ### F-1305 Fill patterns — YES
 Tatami (standard rows) · **Gradient** (dense → sparse; one color; "Sparse end" spacing; Angle sets
-the fade direction) · **Wave** (height, length) · **Contour** (rings inward) · **Stipple** (one
-meandering never-crossing line; loop size) · **Cross-stitch** (square size) · **Spiral** (one line
-winding from the middle of the shape out to its edge, F-701). Contour/Stipple/Cross/Spiral skip the
-cross-hatch underlay; Gradient keeps only its edge run.
+the fade direction; for two or more colors use Blend) · **Wave** (height, length) · **Contour**
+(rings inward) · **Stipple** (one meandering never-crossing line; loop size) · **Cross-stitch**
+(square size) · **Spiral** (one line winding from the middle of the shape out to its edge, F-701) ·
+**Blend** (colors fading into each other, F-1310) · **Motif** (rows of a little pattern, F-1311) ·
+**Maze**, **Ripple**, **Mesh** (F-1312). **Rows fills** (sewn in rows: Tatami, Gradient, Wave,
+Blend) have Angle, Random, Edge pad, Feather, Hand-sewn look and carved lines (Weave: not on
+Wave). The others are **open patterns**: they skip the cross-hatch underlay and have no Random or
+Edge pad; of them only Motif and Mesh have an Angle. Gradient keeps only its edge run;
+**Blend, Motif, Maze, Ripple and Mesh have no underlay on Auto** (Edge can be chosen). A project
+using Blend, Motif, Maze, Ripple, Mesh, Weave, carved lines, Feather, the Hand-sewn look or a
+turning fill needs this version of LUDD or newer.
 
 **Spiral** settings: **Ring spacing** (how far apart the turns are) 0.4–6 mm, default 1.5; stitch
 **Length** up to 4 mm (the turns near the middle get shorter stitches). No Angle, Density, Random or
@@ -617,7 +643,8 @@ Spiral fill needs this version of LUDD or newer to open.
 
 ### F-1306 Line styles and motifs — YES
 Single, Triple (three passes), Bean (each stitch three times), **Motif**: Wave, Zigzag, Scallop,
-Blanket stitch, with Repeat length and Width.
+Blanket stitch, Leaves, or one of **your own** (My motifs, F-1311), with Repeat length and Width.
+The same motifs fill shapes with the Motif fill pattern.
 
 ### F-1307 Satin ribbons — YES
 Draw like a line along the middle; width 1–12 mm (new ones start at the last width); Ctrl+right-click
@@ -633,6 +660,103 @@ changes width with the shape (petals, leaves, swooshes; "Portrait of a Rose" sty
 tips and splits the outline into two sides. **Shift+W** (↻ Turn the stitches another way) cycles
 other tips; **purple dots** set the tips by hand (F-702). Wider than ~6.5 mm turns on Split long
 stitches. Shapes with holes stay fills (L-013).
+
+### F-1310 Blend — YES (added 2026-11-26)
+A fill's **Pattern → Blend**: the shape's color fades into a second (and a third) across the rows.
+Each color has its own rows, thinning where the next one thickens, so together they cover like one
+fill: **Density** is the combined coverage.
+- Under Pattern: the **Second color** (click it to change it; it starts white, or navy on a light
+  shape), **Add a color** (up to three; a new one starts white or navy, so choose its color),
+  **Remove** on the third, **Swap the colors** (the fade runs the other way) and **Balance** (which
+  color takes more of the shape).
+- The fade runs across the rows: turn the **Angle** or drag the purple dots to point it (L-040).
+  Angle, Random, Weave, Edge pad, Feather, the Hand-sewn look and carved lines all apply.
+- Sewn one color after the other (a thread change for each). Order & colors lists each color and
+  can change it, and Color sets keep them. A shape too small to fade sews in its first color.
+- Underlay on **Auto**: none. **Edge** can be chosen; there's no Cross-hatch (it would show).
+- Turning or mirroring the fill keeps each color on the same side of the shape.
+- Looks stripy: T-032.
+
+### F-1311 Motif fill and My motifs — YES (added 2026-11-26)
+- **Pattern → Motif** fills the shape with rows of a little pattern. **Motif** (Wave, Zigzag,
+  Scallop, Blanket stitch, Leaves, or one of yours), **Repeat** 1.5–20 mm (starts at 5),
+  **Height** 0.5–10 mm (4), **Row gap** 0–10 mm (0.5), **Shift alternate rows** 0–1 (0.5) and
+  **Angle**. Whole repeats are centered in each row; every other row is shifted; what falls outside
+  the shape is cut off (bits shorter than half a repeat are left out). Rows are sewn back and forth,
+  joined along the edge. An open pattern (F-1305). A motif so detailed that the fill would need
+  far more stitches than any design is refused with a message.
+- **The Motifs window** (`Alt+Shift+M`, ⋯ → **Motifs…**, or **My motifs…** under a Motif list):
+  the built-in motifs and yours, each drawn as two repeats.
+  - **Save the selected line as a motif…**: draw **one repeat** as a line from left to right,
+    select it, open the window, press the button, name it. The line's start and end become the
+    repeat's start and end, keeping your proportions. They must be at least 2 mm apart, the line
+    can't be closed, and it can have at most 200 points once its curves are counted.
+  - **Import…**, **Export…** (any motif, as a small `.json` file) and **Delete** (only yours).
+- Use a motif of yours on a **motif line** or a **motif fill** under **Motif**. LUDD sets the
+  Height (Width on a line) to your drawing's proportions, within the allowed sizes.
+- The shape keeps **its own copy**, so the project sews the same on any computer, even after you
+  delete the motif; the list then says "(kept in this shape, not in My motifs)" (T-033).
+- My motifs are kept in the data folder's `motifs` folder.
+
+### F-1312 Maze, ripple and mesh fills — YES (added 2026-11-26)
+All three are open patterns (F-1305), with stitch **Length** up to 4 mm.
+- **Maze**: one path that winds into the shape and back out between its own turns, never crossing
+  itself. **Path spacing** 0.8–6 mm (starts at 2). It starts near the green dot and ends beside it.
+  A shape with a hole, or one pinched into many parts, is sewn as separate mazes, with a note
+  suggesting Contour (L-043).
+- **Ripple**: rings spreading from the middle of the shape's widest part, like a drop in water.
+  **Ring spacing** 0.6–8 mm (2). The middle can't be moved in the app yet.
+- **Mesh**: a net of two sets of lines. **Cell size** 1–10 mm (3), **Crossing angle** 45–90° (90)
+  and **Angle**.
+
+### F-1313 Carved lines (emboss) — YES (added 2026-11-26)
+- Select a fill sewn in rows (Tatami, Gradient, Wave or Blend, turning fills too), then
+  `Shift+C`, **Advanced → Carve lines**, or right-click → **Carve lines into the fill**. Draw a
+  line over it with the same clicks as any line (F-502); **Enter**, right-click or double-click
+  finishes it (`Ctrl`+right-click closes it). Draw another, or press **Esc** when done (with points
+  placed, Esc drops that line first).
+- Every row drops a needle exactly where it crosses a carved line, so the line shows as a groove.
+- The lines move, turn, mirror and resize with the shape and never change its size; the Knife,
+  Cut out and Merge keep the lines that cross each piece. With the fill selected, their points can
+  be dragged and edited like a hole's (a line with fewer than 2 points is removed). **Remove carved
+  lines**: the panel's ⋯ menu or right-click.
+- A line running mostly along the rows won't show, and LUDD says so (T-031). On other patterns the
+  command says to choose a rows pattern (L-041).
+
+### F-1314 Hand-sewn look — YES (added 2026-11-26)
+**Advanced → Hand-sewn look**, 0–100%, on lines (Single, Triple, Bean; not motif lines), satins
+and rows fills. Small irregularities, as if sewn by hand; **the same design always sews the same
+way**. At 100%: a line's stitches vary up to ±30% in length and its needle points move up to
+0.25 mm sideways (its ends and sharp corners stay); a satin's stitch ends move up to 0.3 mm along
+the stitch and the spacing varies up to ±20%; a fill's row ends wander up to ±0.6 mm and its needle
+points move as Random 50% does (a higher Random stays).
+
+### F-1315 Turning fills (several angle lines) — YES, Tatami (added 2026-11-26)
+- Select a **Tatami** fill, press `Shift+I` (or **Add another line**, or right-click → **Add
+  another angle line**) and click twice to draw a line: the rows turn smoothly to follow each line
+  where it lies (a leaf whose stitches fan, a ribbon that bends). The fill's current direction
+  becomes the first line.
+- Each line has two purple dots: drag one to move it; **right-click a line** to remove it. `I`
+  redraws the first line. The Angle box says **Follows N lines**, with **Back to one angle** (it
+  keeps the first line's angle); the folded heading says "follows N lines".
+- Weave, Random, Edge pad, Feather, the Hand-sewn look, carved lines and underlay work on them
+  (the cross-hatch runs across the lines' average direction). The rows finish at the row end
+  nearest the red dot. The lines move, turn, mirror and resize with the shape.
+- Where the turn is too sharp for the shape, the rows would loop over each other; LUDD cuts them
+  where they would, so they meet in a crease, still covers the shape, and warns "The stitch
+  direction turns too sharply for this shape here. Move the angle lines further apart or make the
+  turn gentler." (L-042).
+- Another pattern keeps the lines but doesn't use them (it sews at its one angle, with the usual
+  purple dots); switch back to Tatami and they work again.
+
+### F-1316 Feathered edges — YES (added 2026-11-26)
+**Advanced → Feather** on a rows fill: **Off, Left ends, Right ends** or **Both**, with **Depth**
+0.5–6 mm (starts at 2). Each row's end on that side is pulled in by a different amount (a quarter
+to all of Depth), so the edge is ragged and blends into what's beside it (fur, shading, two fills
+feathered into each other). **Left and right are as the rows run at 0°** (the panel shows a small
+picture). Turning or mirroring the fill keeps the ragged side on the same side of the shape. With
+underlay on Auto there's no edge run (it would show), and the cross-hatch stays back from the
+ragged side. A very short row keeps at least 1 mm.
 
 ---
 
@@ -1047,7 +1171,7 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 
 | ID | What | Status | Workaround | Could it be built? |
 | --- | --- | --- | --- | --- |
-| L-001 | **Two-color gradient / color blend** (one color fading into another by interleaved rows) | NO | Gradient pattern fades one color to sparse; layer two Gradient fills at opposite angles by hand. | Yes: a "Blend" fill was offered and not yet requested. |
+| L-001 | **Two-color gradient / color blend** (one color fading into another by interleaved rows) | YES since 2026-11-26 (limit lifted; F-1310, up to three colors). The fade runs across the rows only (L-040) | — | Done. |
 | L-002 | **Fill with holes may show a travel line on top**: when holes split a tatami fill into regions, the needle can travel across rows already sewn. With **Don't sew what's hidden** on (F-1207) a lower fill can get such a line too (in the tests: about 19 mm across a square under a square, 35 mm under lettering). | Known weakness | Cut the fill into hole-free bands with cuts parallel to the rows (Knife), or use Contour/Stipple. | Yes (engine route planning). |
 | L-003 | **Multi-line text** in one lettering object | YES since 2026-11-25 (limit lifted; F-1410). A circle or a drawn line still takes one line (L-037) | — | Done. |
 | L-004 | **Open running line starting mid-line** | NO (ends only) | Split it with the Knife, or close it into a loop. | Possibly. |
@@ -1068,7 +1192,7 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | L-019 | **Stitch Advisor turning a fill into a satin** | NO | Stitch as → Satin yourself (makes a satin fill). | Yes. |
 | L-020 | **Resizing bought designs a lot** | PARTIAL: Rebuild remakes fills, satins and lines; anything else is stretched | **Rebuild stitches at this size** (F-1905), then check the density map; re-digitize what isn't rebuilt. | Partly (more patterns could be recognized). |
 | L-021 | **Fill end mid-way along an edge that runs with the rows** | PARTIAL | The rows finish at a row end; a short run along the last row (on top of it) takes the needle to the exact point. Usually invisible; on light fabric it can thicken that row slightly. Put the end near a corner, or turn the angle. | Yes (split the last row). |
-| L-022 | **End point on Contour / Stipple / Cross-stitch / Spiral fills** | NO | Their pattern decides where they end (the red dot shows it). | Possibly. |
+| L-022 | **End point on Contour / Stipple / Cross-stitch / Spiral / Motif / Maze / Ripple / Mesh fills** | NO | Their pattern decides where they end (the red dot shows it). | Possibly. |
 | L-023 | **Stitch Advisor changing a closed line to satin** | PARTIAL | It makes a satin border along the line; Stitch as → Satin makes a satin fill instead. | Yes. |
 | L-024 | **Memory guard for damaged or crafted .vp3 / .hus files** | NO | Only open stitch files you trust (LUDD is offline, so this only matters for files from strangers). A damaged one can make LUDD use a lot of memory and slow down; close LUDD from the task manager if so. | Yes, by reading files in a separate memory-limited process. |
 | L-025 | **A placed stitch file with edits doesn't pick up changes made to the original later** | By design (2026-11-24) | Add the changed file again and redo the edits (recolor, delete, stops). Without edits, a placed file follows the original. | Possibly (a "reload and keep what still fits" option). |
@@ -1081,6 +1205,11 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | L-036 | **BX fonts** (Embrilliance's package format) | BX: no; use the letter files that came with the font | Most sellers include PES or JEF letter files: Make a stitch font from letter files (F-1415). | Not planned (a closed format). |
 | L-037 | **Several lines on a circle or a drawn line** | NO: the first line only, with a warning | One text per line. | Possibly. |
 | L-038 | **Stitched fonts** (made from letter files): resize well only within 20% of their own size (past it LUDD rebuilds what it can, and the corner handles never rebuild), can't be broken into shapes, and take no shadow or outline | By design | Change the letter height rather than using the handles; check the preview. | Partly. |
+| L-040 | **A Blend fades across its rows only**, not along them (no round or two-way fades) | By design for now | Turn the Angle (or the purple dots) to point the fade. | Possibly. |
+| L-041 | **Carved lines show only where rows cross them**, and only on rows fills (Tatami, Gradient, Wave, Blend), not on open patterns | By design | Turn the Angle or the line so the rows cross it; change the pattern. | No. |
+| L-042 | **Turning fills are Tatami only.** There's no fixed limit on the turn (lines 60° apart are tested), but where it's too sharp for the shape the rows meet in a crease, with a warning | By design | Move the angle lines further apart or make the turn gentler; check the preview. | Partly (smoother sharp turns). |
+| L-043 | **Maze on a shape with a hole, or pinched into many parts**, sews as separate mazes (a note suggests Contour) | By design | Use Contour, or cut the shape into simpler pieces (Knife). | Possibly. |
+| L-044 | **Push compensation ("End trim")**: stitching pushes fabric out past a fill's first and last rows and a satin's ends, so shapes can sew longer than drawn; LUDD doesn't shorten them for you | NO (not built: it waits on a patent check the owner hasn't confirmed). Edge pad handles pull, the other direction | Draw satin ends, and fill edges that run along the rows, a little short on stretchy or lofty fabric. | Yes, if the check allows. |
 
 ---
 
@@ -1116,6 +1245,9 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | T-028 | "My letter files came in with the wrong letters" (or none) | LUDD couldn't tell from the file names | Type the right character in each box. If each letter comes in several formats (flagged as used twice), choose a folder with one format, or clear the extra boxes. A stray non-letter design in the folder can stop LUDD from spotting what the names share: take it out and choose the folder again. |
 | T-029 | "Letters don't sit on one line in my new font" (often the j) | The baseline is worked out from each letter's shape; a dotted j's dot makes it sit too low | In the dialog, click the letter and nudge it up or down before saving. For a saved font, make it again. |
 | T-030 | "Long names run off the design" | Some names are longer than the sample | In One file per name, tick **Shrink long names to fit** and set **Widest**. |
+| T-031 | "My carved line doesn't show" | It runs along the stitch rows (Check before stitching says so), or it's too short to cross enough of them | Turn the fill's **Angle** (or redraw the line) so the rows cross it (F-1313, L-041). |
+| T-032 | "My blend looks stripy" | The rows of each color are far apart where it thins out | Make it denser (smaller **Spacing**), or set **Weave** to **Smooth** (F-1310). |
+| T-033 | "My motif isn't on another computer" | A shape carries its own copy and sews the same, but **My motifs** is kept per computer | The list shows it as "(kept in this shape, not in My motifs)". To add it there: on the first computer, **Export…** it in the Motifs window; **Import…** it on the other (F-1311). |
 
 ---
 
@@ -1145,6 +1277,10 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | Stitch file | Finished machine file (PES, JEF…) | Stitch file | Stitch file |
 | Project | Editable working file | `.ludd` | `.be` (working file) |
 | Colorway | Color version of a design | Color sets | Colorways |
+| Blend / color fade | One color fading into another by interleaved rows | Fill pattern **Blend** (F-1310) | — |
+| Emboss / carving | Lines pressed into a fill by needle points | **Carve lines** (`Shift+C`, F-1313) | — |
+| Feathering | Ragged row ends that blend into the next shape | **Feather** (F-1316) | — |
+| Push compensation | Shortening a shape where stitching pushes it out | Not built (L-044) | — |
 
 ---
 
@@ -1154,6 +1290,7 @@ Use this to answer "did that change?" or "why is it different?". Full detail: `d
 
 | Date | Change |
 | --- | --- |
+| 2026-11-26 | **Fills and stitch quality** (nothing already in your designs sews differently): **Blend** fill, up to three colors (F-1310); **Motif** fill and **My motifs** (F-1311, `Alt+Shift+M`); **Maze, Ripple, Mesh** fills (F-1312); **Weave** (F-1303); **carved lines** (F-1313, `Shift+C`); **Hand-sewn look** (F-1314); **turning fills** (F-1315, `Shift+I`); **feathered edges** (F-1316). Lifts L-001. Push compensation is not built (L-044). |
 | 2026-11-25 | **Lettering and personalization**: several lines with alignment (F-1410), slant (F-1411), envelopes and stacked letters (F-1412), single letters (F-1413, `Alt+Shift+A`), True satin (F-1414), stitch fonts from letter files (F-1415, `Ctrl+Alt+F`), name lists and templates (F-1416, `Ctrl+Alt+P`), monogram styles and frames (F-1417), shadow and outline (F-1418), placement guides (F-1419, `Alt+Shift+G`). Installed-font letters that sew under 6 mm tall (resizing counts) now sew without underlay (F-1420). The lettering panel's Advanced fold is now **More options**. Lifts L-003 and L-005; L-014 is now PARTIAL. |
 | 2026-11-25 | **Repair bought designs** (a stitch file with no repair sews as before): **Repair this design** (F-1902, `Ctrl+Alt+D`, with before and after numbers and Show on the design); **Remove tiny stitches** and **Thin out dense spots** (F-1903); **Limit density for this fabric** (F-1904); **Rebuild stitches at this size** (F-1905); **Fix it** on three checks; insert stitches and jumps and lock a jump (F-1906); needle path view (F-407); **Don't sew what's hidden under shapes on top** for drawn shapes (F-1207). Removing hidden stitches under another stitch file is not built (L-030). |
 | 2026-11-24 | **Spiral fill and more shapes** (nothing already sewn changes): a new **Spiral** fill pattern (F-1305; the thread joining its pieces follows the edge, L-026); the Shapes menu adds a rounded rectangle, oval, triangle, polygon and heart (`Ctrl+Alt+4`–`8`, F-501). Behind the scenes, the stitch engine and panel were split into smaller parts, and `python scripts/check.py` runs every check. Also corrected: Stipple and Cross-stitch don't move their start with the green dot (F-701). |
