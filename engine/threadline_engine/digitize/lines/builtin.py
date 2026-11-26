@@ -10,7 +10,7 @@ import math
 
 from ..paths import resample
 from ..patterns import motif_points
-from . import LineStyle, register, register_motif
+from . import LineStyle, register, register_motif, sewn_unit
 
 
 def _line(nodes, params, closed, start):
@@ -48,8 +48,10 @@ def _bean(nodes, params, closed=False, start=None):
 
 
 def _motif(nodes, params, closed=False, start=None):
-    # The motif's corners are the needle points; long sides are split to the stitch length.
-    pts = motif_points(nodes, params.motif, params.motif_mm, params.motif_width_mm, closed)
+    # The motif's corners are the needle points; long sides are split to the stitch length. A motif
+    # of your own that the line carries (params.motif_unit) is sewn instead of the named one.
+    pts = motif_points(nodes, params.motif, params.motif_mm, params.motif_width_mm, closed,
+                       unit=sewn_unit(params.motif_unit, params.motif_mm, params.motif_width_mm))
     return resample(pts, max(params.stitch_mm, 1.0), list(range(len(pts))))
 
 
