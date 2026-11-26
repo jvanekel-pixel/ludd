@@ -82,19 +82,91 @@ def test_two_parts_in_two_threads():
     assert [b.sources for b in r.blocks] == [[(0, 0)], [(0, 1)]]
 
 
-def _one_color_rows():
-    return _row_heights(generate({**_blend(), "params": {**_blend()["params"], "pattern": "tatami", "blend": []}})[0])
+def _plain(obj):
+    """The same object as a one-color tatami fill."""
+    return {**obj, "params": {**obj["params"], "pattern": "tatami", "blend": []}}
 
 
-def test_combined_density_is_even(capsys):
-    """Done-when 2: both colors' rows together, band by band, as many as one color's would be."""
-    plain = _bands(_one_color_rows())
-    rows = _rows_by_part(_blend())
-    both = _bands(rows[0] + rows[1])
+def _one_color_rows(obj=None, axis=1):
+    return _row_heights(generate(_plain(obj or _blend()))[0], axis)
+
+
+DENSITY_CASES = {"two colors": {}, "three colors": {"others": (BLUE, GOLD)},
+                 "balance +0.8": {"blend_balance": 0.8}, "balance -0.8": {"blend_balance": -0.8}}
+
+
+@pytest.mark.parametrize("spacing", [0.4, 0.8, 1.5, 3.0])
+@pytest.mark.parametrize("case", sorted(DENSITY_CASES))
+def test_combined_density_is_even(case, spacing, capsys):
+    """Done-when 2: all the colors' rows together, band by band, as many as one color's would be;
+    and no two neighbouring rows (of any colors) closer or further apart than the spacing allows:
+    no pairs piled up, no stripes of bare fabric. The colors are all sewn, with no warning."""
+    obj = _blend(spacing_mm=spacing, **DENSITY_CASES[case])
+    plain_rows = _one_color_rows(obj)
+    plain = _bands(plain_rows)
+    parts = generate_parts(obj)
+    rows = [_row_heights(recs) for recs, _, _ in parts]
+    together = sorted(y for ys in rows for y in ys)
+    both = _bands(together)
     worst = max(abs(b - p) / p for b, p in zip(both, plain))
+    gaps = [(b - a) / spacing for a, b in zip(together, together[1:])]
     with capsys.disabled():
-        print(f"\nblend rows per band {both}, one color {plain}, worst {worst:.1%}")
+        print(f"\nblend {case} at {spacing} mm: rows per band {both}, one color {plain}, worst {worst:.1%}, "
+              f"gaps {min(gaps):.3f} to {max(gaps):.3f} x spacing, rows per color {[len(ys) for ys in rows]}")
     assert worst <= 0.15, (both, plain)
+    assert 0.8 <= min(gaps) and max(gaps) <= 1.2, (min(gaps), max(gaps))
+    assert together == plain_rows  # exactly the one-color fill's rows
+    assert [slot for _, _, slot in parts] == list(range(len(rows))) and all(rows)
+    assert not any(w.startswith("This shape has too few rows") for _, said, _ in parts for w in said)
+
+
+def test_no_bare_band_at_a_wide_spacing():
+    """A 40 mm square at 2.5 mm: all 16 rows of a one-color fill are sewn, shared by the two
+    colors, with no band of bare fabric between them."""
+    obj = _blend(spacing_mm=2.5)
+    rows = _rows_by_part(obj)
+    together = sorted(rows[0] + rows[1])
+    assert len(together) == 16 and together == _one_color_rows(obj)
+    assert max(b - a for a, b in zip(together, together[1:])) == pytest.approx(2.5)
+    assert together[0] == pytest.approx(1.25) and SIDE - together[-1] == pytest.approx(1.25)
+    assert all(_bands(together)) and len(rows[0]) >= 2 and len(rows[1]) >= 2
+
+
+@pytest.mark.parametrize("extra", [{}, {"weave": "twill"}, {"carve": True}, {"feather": "both"},
+                                   {"hand_pct": 100}, {"reverse": True}, {"others": (BLUE, GOLD), "spacing_mm": 1.5}])
+def test_rows_are_the_one_color_fills_rows(extra, monkeypatch):
+    """Every row of a one-color fill, and no other, in a shape of two pieces (each piece's rows
+    start half a row in from its own edge) and in a square with a hole; with each of the rows
+    settings and Reverse. The rows are read where tatami() lays them out (both shapes start at the
+    origin, so the blend's move to the origin changes nothing)."""
+    seen = []
+    original = stitches._rows
+
+    def spy(poly, angle, spacing, extend, ys=None):
+        rows = original(poly, angle, spacing, extend, ys)
+        if ys is None:  # a one-color fill: tatami's own heights, half a row in, then a spacing apart
+            ys, y = [], poly.bounds[1] + spacing / 2
+            while y < poly.bounds[3]:
+                ys.append(y)
+                y += spacing
+        seen.extend(round(y, 9) for y, segs in zip(ys, rows) if segs)
+        return rows
+
+    monkeypatch.setattr(stitches, "_rows", spy)
+    extra = dict(extra)
+    carve = extra.pop("carve", False)
+    for obj in (_blend(BOWTIE, angle_deg=90, **extra), _blend(holes=[HOLE], **extra)):
+        if carve:
+            obj["geometry"]["carve"] = [_nodes([(3, 10), (27, 20)])]
+        seen.clear()
+        forget_stitches()  # nothing from a cache: every row is laid out here
+        parts = generate_parts(obj)
+        together = sorted(seen)
+        seen.clear()
+        forget_stitches()
+        generate(_plain(obj))
+        assert together == sorted(seen) and len(together) >= 15, extra
+        assert len(parts) == 1 + len(obj["params"]["blend"])
 
 
 @pytest.mark.parametrize("scale", [0.6, 2.0])
@@ -189,6 +261,9 @@ def test_rows_never_coincide():
             assert c0 == c1 or y1 - y0 >= 0.14, (colors, balance, spacing, size, flip, y0, y1)
         for ys in rows:
             assert ys == sorted(ys) and all(-7.0 < y < -7.0 + size for y in ys)
+        # Together, exactly a one-color fill's rows (or, too thin for one, a row across the middle).
+        plain = blend.plain_rows(-7.0, -7.0 + size, spacing) or [-7.0 + size / 2]
+        assert sorted(y for ys in rows for y in ys) == plain
     rows = _rows_by_part(_blend())
     tagged = sorted((y, c) for c, ys in enumerate(rows) for y in ys)
     assert all(c0 == c1 or y1 - y0 >= 0.14 for (y0, c0), (y1, c1) in zip(tagged, tagged[1:]))
@@ -215,23 +290,64 @@ def test_no_lone_rows():
         assert all(min(abs(y - z) for z in ys if z != y) <= 4.0 for y in ys)
 
 
-def test_a_lone_row_is_dropped():
-    """At a wide spacing the first rows of the second color lie far apart: those more than 4 mm
-    from any other are left out rather than sewn as a lone thread."""
-    params = FillParams.from_dict({"pattern": "blend", "spacing_mm": 1.0, "blend": [dict(BLUE)]})
-    second = blend.row_heights(0.0, 40.0, params, 2)[1]
-    assert second[0] > blend.fade_heights(0.0, 40.0, params, 2)[1][0]
+def test_a_color_keeps_its_turn_for_two_rows():
+    """Where a color's rows are far apart (the thin end of its fade), a row more than 4 mm from its
+    color's last one (or its color's first) is never sewn alone: the next row is its color too.
+    The other color is not starved: all the one-color fill's rows are still sewn."""
+    held = 0
+    for spacing in (1.0, 1.5, 2.5, 3.0):
+        for colors in (2, 3):
+            params = FillParams.from_dict({"pattern": "blend", "spacing_mm": spacing, "blend": [dict(BLUE)] * (colors - 1)})
+            ys = blend.plain_rows(0.0, 40.0, spacing)
+            owners = blend.assign(ys, params, colors, 0.0, 40.0)
+            last = {}
+            for i, (y, c) in enumerate(zip(ys, owners)):
+                if c not in last or y - last[c] > blend.LONE_MM + 1e-9:
+                    assert i + 1 < len(ys) and owners[i + 1] == c, (spacing, colors, i, owners)
+                    held += c != owners[i - 1] if i else 1
+                last[c] = y
+            assert set(owners) == set(range(colors)), (spacing, colors, owners)
+    assert held >= 10
+
+
+def test_too_few_rows_says_so():
+    """A shape with too few rows for every color sews the colors it can, and says which one it
+    left out and what to do; one with enough rows says nothing."""
+    small = _blend(_nodes([(0, 0), (20, 0), (20, 10), (0, 10)]), spacing_mm=3.0)
+    parts = generate_parts(small)
+    assert [slot for _, _, slot in parts] == [0]
+    assert blend.too_few([1]) in parts[0][1]
+    assert blend.too_few([1]) == ("This shape has too few rows to blend all its colors, so the second color is "
+                                  "not sewn. Make the shape bigger or lower the spacing (a smaller number) to "
+                                  "fit more rows.")
+    assert "the second color and the third color" in blend.too_few([1, 2])
+    assert not any(w.startswith("This shape has too few rows") for w in generate_parts(_blend(spacing_mm=3.0))[0][1])
+
+
+def test_ties_go_to_the_lower_thread_slot():
+    """Equal tallies (equal weights, from the first row) give the row to the color in the lower
+    thread slot, so the same design sews the same on every computer."""
+    params = FillParams.from_dict({"pattern": "blend", "spacing_mm": 0.4, "blend": [dict(BLUE)]})
+    assert blend.assign([5.0, 5.2, 5.4, 5.6], params, 2, 0.0, 10.0)[0] == 0  # weights 1/2 and 1/2
+    flipped = FillParams.from_dict({"pattern": "blend", "spacing_mm": 0.4, "blend": [dict(BLUE)], "blend_flip": True})
+    assert blend.assign([5.0, 5.2, 5.4, 5.6], flipped, 2, 0.0, 10.0)[0] == 0
+    assert blend._whole_weights(0.5, 1.0, 2) == [500000, 500000]
+    assert all(sum(blend._whole_weights(t / 97, g, n)) == 1_000_000 for t in range(98) for g in (0.5, 1, 2) for n in (2, 3, 4))
 
 
 def test_swap_reverses():
     """Swapping the colors (as the panel does: the threads in the other order, the balance
-    negated) mirrors the blend: at balance 0 each thread's rows are the mirror image of where they
-    were; with a balance each color keeps the share of the shape it had."""
+    negated) mirrors the blend: at balance 0 each thread's rows, band by band, are the mirror image
+    of where they were (rows are given out lowest first, so row by row they can differ by a few);
+    together they are still every row of the fill. With a balance each color keeps the share of the
+    shape it had."""
     ab, ba = _rows_by_part(_blend()), _rows_by_part({**_blend(others=(RED,)), "thread": dict(BLUE)})
     for ours, theirs in ((ab[0], ba[1]), (ab[1], ba[0])):
-        # Rows moved apart from another color's (by up to 0.15 mm) move up, whichever way the fade runs.
-        assert all(min(abs(SIDE - y - z) for z in theirs) <= 0.16 for y in ours)
+        mirrored = sorted(round(SIDE - y, 4) for y in ours)
+        assert _bands(mirrored, bands=10) == _bands(theirs, bands=10)
+        assert len(set(mirrored) ^ set(theirs)) <= 10  # rows off their mirror image (of 100)
         assert abs(len(ours) - len(theirs)) <= 1
+    assert sorted(ba[0] + ba[1]) == sorted(ab[0] + ab[1])
     tilted = _rows_by_part(_blend(blend_balance=0.6))
     swapped = _rows_by_part({**_blend(others=(RED,), blend_balance=-0.6), "thread": dict(BLUE)})
     assert abs(len(tilted[0]) - len(swapped[1])) <= 1 and abs(len(tilted[1]) - len(swapped[0])) <= 1

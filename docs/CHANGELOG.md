@@ -3,7 +3,7 @@
 ## Next (unreleased)
 
 ### Phase 6: fills and stitch quality (2026-11-26)
-- **Blend** fill: the shape's color fades into a second (and a third) across the rows. Add a color, swap them, and set the **Balance**; each color sews in turn.
+- **Blend** fill: the shape's color fades into a second (and a third) across the rows. Add a color, swap them, and set the **Balance**; each color sews in turn. The rows are a one-color fill's evenly spaced rows, each given to one of the colors, so the fade is as dense as a plain fill at any Spacing (a thinning color sews at least two rows side by side); when a shape has too few rows for every color, a warning says which color is left out.
 - **Motif** fill (rows of a little pattern across the shape), **Maze** (one path that winds in and back out; a shape with a hole or many narrow parts sews as several mazes, and LUDD says so), **Ripple** (rings spreading from the middle) and **Mesh** (a net; set the cell size and crossing angle).
 - **My motifs** (Alt+Shift+M, the ⋯ menu, or under any Motif list): save a line you drew as a motif, use it on motif lines and motif fills, import and export motif files. A shape carries its own copy, so a project sews the same on a computer without it.
 - **Carved lines** (Shift+C): draw lines over a fill sewn in rows; every row drops a needle on them, so they show as grooves.
