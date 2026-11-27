@@ -5,7 +5,7 @@ import json
 import math
 
 import pytest
-from shapely.geometry import LineString, box
+from shapely.geometry import LineString, Point as ShapelyPoint, box
 
 import invariants
 from snapshot_util import SNAPSHOT_DIR, check, digest_recs_steady
@@ -175,6 +175,39 @@ def test_snapshots_do_not_hang_on_the_last_digit_of_a_sine(seed, monkeypatch):
         forget_stitches()
 
 
+# The audit's shapes and settings: triangle locks landed up to 0.49 mm outside these fills.
+FILL_SHAPES = {
+    "square": [c(0, 0), c(30, 0), c(30, 30), c(0, 30)],
+    "star": [c(20 + r * math.cos(-math.pi / 2 + math.pi * k / 5), 20 + r * math.sin(-math.pi / 2 + math.pi * k / 5))
+             for k, r in enumerate([20, 9] * 5)],
+    "circle": [c(15 + 15 * math.cos(2 * math.pi * i / 40), 15 + 15 * math.sin(2 * math.pi * i / 40)) for i in range(40)],
+    "thin": [c(0, 0), c(30, 0), c(30, 1.2), c(0, 1.2)],
+}
+FILL_SETTINGS = [{}, {"pattern": "blackwork"}, {"weave": "brick"}, {"angle_deg": 0}, {"angle_deg": 90},
+                 {"start_mm": [0, 0], "end_mm": [30, 30]}, {"start_mm": [30, 0], "end_mm": [0, 30]},
+                 {"start_mm": [15, 0]}, {"underlay": []}, {"pull_comp_mm": 0}]
+
+
+@pytest.mark.parametrize("name", list(FILL_SHAPES))
+def test_triangle_locks_stay_by_their_fill(name):
+    shape = fill_parts(FILL_SHAPES[name], [])[0]
+    triangles = 0
+    for settings in FILL_SETTINGS:
+        try:
+            recs = generate({"kind": "fill", "geometry": {"outline": FILL_SHAPES[name]},
+                             "params": {"tie_style": "triangle", **settings}})[0]
+        except DigitizeError:
+            continue  # too thin for this pattern
+        sewn = [r[:2] for r in recs if r[2] == STITCH]
+        for end in (sewn[:4], sewn[::-1][:4]):  # the lock at each end
+            assert max(shape.distance(ShapelyPoint(p)) for p in end) <= 0.105, (settings, end)
+            a, far, side = end[0], end[1], end[2]
+            ux, uy = far[0] - a[0], far[1] - a[1]
+            across = abs(ux * (side[1] - a[1]) - uy * (side[0] - a[0])) / math.hypot(ux, uy)
+            triangles += abs(across - ties.TRIANGLE_ACROSS_MM) < 0.01
+    assert triangles >= len(FILL_SETTINGS)  # most ends still sew the triangle
+
+
 def _area(obj):
     g = obj["geometry"]
     if obj["kind"] == "run":
@@ -187,8 +220,10 @@ def _area(obj):
 @pytest.mark.parametrize("name", sorted(SNAPSHOT_CASES))
 def test_snapshot_cases_pass_the_invariants(name):
     obj = SNAPSHOT_CASES[name]
-    # A triangle lock steps 0.52 mm to one side of the stitching.
-    invariants.assert_sane(generate(obj)[0], inside=_area(obj), tolerance_mm=0.55, max_jumps=0, max_trims=0)
+    # On a line or satin a triangle lock steps 0.52 mm to one side; on a fill it stays by the
+    # outline (the rows themselves reach 0.1 mm past it, for pull compensation).
+    reach = 0.105 if obj["kind"] == "fill" else 0.55
+    invariants.assert_sane(generate(obj)[0], inside=_area(obj), tolerance_mm=reach, max_jumps=0, max_trims=0)
     invariants.assert_deterministic(lambda: generate(obj)[0])
     if obj["kind"] != "fill":  # a tatami fill's needle grid is the hoop's, with any lock
         invariants.assert_moves_with_shape(obj, 3.3, -8.1)

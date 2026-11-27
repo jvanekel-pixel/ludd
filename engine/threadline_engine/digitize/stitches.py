@@ -1496,12 +1496,15 @@ def generate_parts(obj: dict[str, Any]) -> list[tuple[list[Rec], list[str], int]
         recs, warnings, slot = parts[0]
         parts[0] = (recs, [*warnings, "This is shorter than one stitch, so it sews as a single needle drop. "
                                       "Make it bigger or delete it."], slot)
+    # A fill's triangle locks turn to stay by its outline.
+    shape = (shapely.union_all(fill_parts(g.get("outline") or [], g.get("holes") or []))
+             if kind == "fill" and locks == "triangle" else None)
     out = []
     for recs, warnings, slot in parts:
         if p.get("tie_in", True):
-            recs = ties.tie_in(recs, locks)
+            recs = ties.tie_in(recs, locks, shape)
         if p.get("tie_off", True):
-            recs = ties.tie_off(recs, locks)
+            recs = ties.tie_off(recs, locks, shape)
         out.append((recs, warnings, slot))
     return out
 
