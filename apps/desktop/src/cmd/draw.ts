@@ -1,4 +1,5 @@
 /** Drawing tools: freehand drawing and stitch presets. */
+import "../canvas/freehandTool"; // the canvas side of freehand drawing
 import { registerCommands } from "../commands";
 import { toggleFreehand } from "../feat/freehand";
 import { openPresets } from "../feat/presets";
