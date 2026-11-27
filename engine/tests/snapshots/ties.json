@@ -1,0 +1,65 @@
+{
+ "fill_backtack": {
+  "jumps": 0,
+  "records": 264,
+  "sha1": "957a8b522b95cff12024a3774adf98642e07f1a7",
+  "stitches": 264,
+  "trims": 0
+ },
+ "fill_standard": {
+  "jumps": 0,
+  "records": 260,
+  "sha1": "5f498ba46be88da7b4646db96341f50c4a350329",
+  "stitches": 260,
+  "trims": 0
+ },
+ "fill_triangle": {
+  "jumps": 0,
+  "records": 262,
+  "sha1": "4e5f6f8676771edc2880c7b78157382c88746cc0",
+  "stitches": 262,
+  "trims": 0
+ },
+ "run_backtack": {
+  "jumps": 0,
+  "records": 13,
+  "sha1": "5e0607c256d0aa47159af13c163032633d4d6c40",
+  "stitches": 13,
+  "trims": 0
+ },
+ "run_standard": {
+  "jumps": 0,
+  "records": 9,
+  "sha1": "b8b6d3cf39486bda92b41fb6413925a6ee61b8b8",
+  "stitches": 9,
+  "trims": 0
+ },
+ "run_triangle": {
+  "jumps": 0,
+  "records": 11,
+  "sha1": "1e4b3427e2dd19996e941c9680f1c135cd8062c2",
+  "stitches": 11,
+  "trims": 0
+ },
+ "satin_backtack": {
+  "jumps": 0,
+  "records": 127,
+  "sha1": "9c4a9c3a4f7a7af3faca02feaeaad081243602a8",
+  "stitches": 127,
+  "trims": 0
+ },
+ "satin_standard": {
+  "jumps": 0,
+  "records": 123,
+  "sha1": "61472c4d29ce895ffbaf5cad2055555b7bc07e29",
+  "stitches": 123,
+  "trims": 0
+ },
+ "satin_triangle": {
+  "jumps": 0,
+  "records": 125,
+  "sha1": "4624ab4031148ab97b2915d89d49d7a1587d9aab",
+  "stitches": 125,
+  "trims": 0
+ }
+}

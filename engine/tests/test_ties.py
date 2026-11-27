@@ -147,11 +147,14 @@ def _case(obj, style, nodes_at=(7, 11)):
     for key in ("nodes", "outline"):
         if g.get(key):
             g[key] = [[x + dx, y + dy, k] for x, y, k in g[key]]
-    return {**obj, "geometry": g, "params": {"tie_style": style}}
+    return {**obj, "geometry": g, "params": {**obj["params"], "tie_style": style}}
 
 
+# A brick weave: plain tatami's choices can turn on the last digit of a sine, which isn't the same
+# on every computer; with any row setting it settles them (Phase 6), and the locks don't care.
 SNAPSHOT_CASES = {f"{name}_{style}": _case(obj, style)
-                  for name, obj in [("run", LINE), ("satin", SATIN), ("fill", FILL)] for style in STYLES}
+                  for name, obj in [("run", LINE), ("satin", SATIN), ("fill", _with(FILL, weave="brick"))]
+                  for style in STYLES}
 
 
 @pytest.mark.parametrize("name", sorted(SNAPSHOT_CASES))

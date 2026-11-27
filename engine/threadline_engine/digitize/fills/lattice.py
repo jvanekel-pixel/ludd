@@ -143,13 +143,18 @@ def _crossings(segments: list[Segment]) -> list[list[tuple[float, Point]]]:
         t = (q[:, 0] * s[:, 1] - q[:, 1] * s[:, 0]) / denom
         u = (q[:, 0] * r[:, 1] - q[:, 1] * r[:, 0]) / denom
     li, lj = np.hypot(r[:, 0], r[:, 1]), np.hypot(s[:, 0], s[:, 1])
-    meet = (np.abs(denom) > 1e-9) & (t * li >= -SAME_POINT_MM) & ((1 - t) * li >= -SAME_POINT_MM) \
-        & (u * lj >= -SAME_POINT_MM) & ((1 - u) * lj >= -SAME_POINT_MM)
-    for k in np.flatnonzero(meet):
+    with np.errstate(invalid="ignore"):
+        meet = (np.abs(denom) > 1e-9) & (t * li >= -SAME_POINT_MM) & ((1 - t) * li >= -SAME_POINT_MM) \
+            & (u * lj >= -SAME_POINT_MM) & ((1 - u) * lj >= -SAME_POINT_MM)
+        # Only a meeting part way along one of the two cuts anything (a lattice's lines meet at ends).
+        part_way_i = (t * li > SAME_POINT_MM) & ((1 - t) * li > SAME_POINT_MM)
+        part_way_j = (u * lj > SAME_POINT_MM) & ((1 - u) * lj > SAME_POINT_MM)
+    for k in np.flatnonzero(meet & (part_way_i | part_way_j)):
         p = (float(a[i[k], 0] + t[k] * r[k, 0]), float(a[i[k], 1] + t[k] * r[k, 1]))
-        for index, along, length in ((int(i[k]), float(t[k]), float(li[k])), (int(j[k]), float(u[k]), float(lj[k]))):
-            if along * length > SAME_POINT_MM and (1 - along) * length > SAME_POINT_MM:
-                cuts[index].append((along, p))
+        if part_way_i[k]:
+            cuts[i[k]].append((float(t[k]), p))
+        if part_way_j[k]:
+            cuts[j[k]].append((float(u[k]), p))
     return [sorted(c) for c in cuts]
 
 
@@ -158,25 +163,36 @@ class _Nodes:
 
     def __init__(self):
         self.at: list[Point] = []
+        self._exact: dict[Point, int] = {}
         self._cells: dict[tuple[int, int], list[int]] = {}
 
     def __call__(self, p: Point) -> int:
+        found = self._exact.get(p)  # a lattice's shared ends are the very same numbers
+        if found is not None:
+            return found
         step = 2 * SAME_POINT_MM
         i, j = math.floor(p[0] / step), math.floor(p[1] / step)
         for di in (-1, 0, 1):
             for dj in (-1, 0, 1):
                 for k in self._cells.get((i + di, j + dj), ()):
                     if dist(p, self.at[k]) <= SAME_POINT_MM:
+                        self._exact[p] = k
                         return k
-        self.at.append((float(p[0]), float(p[1])))
+        self.at.append(p)
         self._cells.setdefault((i, j), []).append(len(self.at) - 1)
+        self._exact[p] = len(self.at) - 1
         return len(self.at) - 1
 
 
-def _graph(segments: Sequence[Segment]) -> tuple[list[Point], dict[int, list[int]]]:
-    """The segments as a graph: its nodes (every end and crossing) and each node's neighbors, in a
-    fixed order (upper first, then left). A stretch given twice is one."""
-    ordered = sorted((tuple(sorted(s, key=_order)) for s in segments), key=lambda s: (_order(s[0]), _order(s[1])))
+def _graph(segments: Sequence[Segment]) -> tuple[list[Point], list[tuple[float, float]], dict[int, list[int]]]:
+    """The segments as a graph: its nodes (every end and crossing), each node's place in the fixed
+    order (upper first, then left) and its neighbors in that order. A stretch given twice is one."""
+    turned = []
+    for a, b in segments:
+        a, b = (float(a[0]), float(a[1])), (float(b[0]), float(b[1]))
+        ka, kb = _order(a), _order(b)
+        turned.append((ka, kb, a, b) if ka <= kb else (kb, ka, b, a))
+    ordered = [(a, b) for _, _, a, b in sorted(turned)]
     nodes = _Nodes()
     ends = [(nodes(p), nodes(q)) for p, q in ordered]  # (ends first, so a crossing on an end is that node)
     links: dict[int, set[int]] = {}
@@ -186,20 +202,28 @@ def _graph(segments: Sequence[Segment]) -> tuple[list[Point], dict[int, list[int
             if here != there:
                 links.setdefault(here, set()).add(there)
                 links.setdefault(there, set()).add(here)
-    return nodes.at, {k: sorted(v, key=lambda n: _order(nodes.at[n])) for k, v in links.items()}
+    keys = [_order(p) for p in nodes.at]
+    return nodes.at, keys, {k: sorted(v, key=keys.__getitem__) for k, v in links.items()}
 
 
-def _steps(a: Point, b: Point, stitch_mm: float) -> list[Point]:
-    """The needle points from `a` (not included) to `b`: stitches at most `stitch_mm`, in the same
-    holes whichever way the stretch is sewn."""
-    low, high = sorted((a, b), key=_order)
-    length = dist(low, high)
-    n = max(1, min(math.ceil(length / stitch_mm - 1e-9), math.floor(length / SHORTEST_STEP_MM + 1e-9)))
-    inner = [(low[0] + (high[0] - low[0]) * k / n, low[1] + (high[1] - low[1]) * k / n) for k in range(1, n)]
-    return [*(inner if a == low else inner[::-1]), b]
+class _Stretches:
+    """The needle points along a stretch between two nodes: stitches at most `stitch_mm`, in the
+    same holes whichever way it is sewn."""
+
+    def __init__(self, at: list[Point], keys: list[tuple[float, float]], stitch_mm: float):
+        self.at, self.keys, self.stitch_mm = at, keys, stitch_mm
+
+    def __call__(self, a: int, b: int) -> list[Point]:
+        """From node `a` (not included) to node `b`."""
+        low, high = (a, b) if self.keys[a] <= self.keys[b] else (b, a)
+        (x0, y0), (x1, y1) = self.at[low], self.at[high]
+        length = math.hypot(x1 - x0, y1 - y0)
+        n = max(1, min(math.ceil(length / self.stitch_mm - 1e-9), math.floor(length / SHORTEST_STEP_MM + 1e-9)))
+        inner = [(x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n) for k in range(1, n)]
+        return [*(inner if a == low else inner[::-1]), self.at[b]]
 
 
-def _walk(root: int, links: dict[int, list[int]], at: list[Point], stitch_mm: float) -> list[Point]:
+def _walk(root: int, links: dict[int, list[int]], at: list[Point], stretch: _Stretches) -> list[Point]:
     """One connected piece, depth first from `root`: out along each stretch and back."""
     path = [at[root]]
     seen = {root}
@@ -208,13 +232,13 @@ def _walk(root: int, links: dict[int, list[int]], at: list[Point], stitch_mm: fl
     while stack:
         here, ahead = stack[-1]
         for there in ahead:
-            stretch = (min(here, there), max(here, there))
-            if stretch in sewn:
+            pair = (here, there) if here < there else (there, here)
+            if pair in sewn:
                 continue
-            sewn.add(stretch)
-            path += _steps(at[here], at[there], stitch_mm)
+            sewn.add(pair)
+            path += stretch(here, there)
             if there in seen:
-                path += _steps(at[there], at[here], stitch_mm)  # a way round: straight back
+                path += stretch(there, here)  # a way round: straight back
                 continue
             seen.add(there)
             stack.append((there, iter(links[there])))
@@ -222,7 +246,7 @@ def _walk(root: int, links: dict[int, list[int]], at: list[Point], stitch_mm: fl
         else:
             stack.pop()
             if stack:
-                path += _steps(at[here], at[stack[-1][0]], stitch_mm)
+                path += stretch(here, stack[-1][0])
     return path
 
 
@@ -230,12 +254,13 @@ def double_run_paths(segments: Sequence[Segment], stitch_mm: float, start: Point
     """The segments sewn as double runs, one path for each connected piece, each ending where it
     began. The piece nearest `start` is sewn first, from its node nearest it; then each time the
     nearest piece, from its nearest node (of equally near nodes, the upper, then the left)."""
-    at, links = _graph(segments)
+    at, keys, links = _graph(segments)
     if not links:
         return []
+    stretch = _Stretches(at, keys, stitch_mm)
     ids = np.array(sorted(links))
     xy = np.array([at[k] for k in ids])
-    upper, left = np.round(xy[:, 1], 6), np.round(xy[:, 0], 6)
+    upper, left = np.array([keys[k][0] for k in ids]), np.array([keys[k][1] for k in ids])
     waiting = np.ones(len(ids), dtype=bool)
     place = {int(k): i for i, k in enumerate(ids)}
     here = start
@@ -245,7 +270,7 @@ def double_run_paths(segments: Sequence[Segment], stitch_mm: float, start: Point
         away[~waiting] = np.inf
         near = np.flatnonzero(away == away.min())
         first = near[np.lexsort((left[near], upper[near]))[0]]
-        path = _walk(int(ids[first]), links, at, stitch_mm)
+        path = _walk(int(ids[first]), links, at, stretch)
         reached, to_see = {int(ids[first])}, [int(ids[first])]
         while to_see:
             for n in links[to_see.pop()]:

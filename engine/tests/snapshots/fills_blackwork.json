@@ -1,0 +1,30 @@
+{
+ "crossed_40": {
+  "jumps": 0,
+  "records": 1605,
+  "sha1": "c9318ff484f45dd44ccae159c61203d3c875b446",
+  "stitches": 1605,
+  "trims": 0
+ },
+ "diamonds_40": {
+  "jumps": 0,
+  "records": 493,
+  "sha1": "22e8eabfd83e5b6973935ee0d0c4777367d41434",
+  "stitches": 493,
+  "trims": 0
+ },
+ "grid_donut": {
+  "jumps": 0,
+  "records": 509,
+  "sha1": "2fa0e831eda0a078241d425da54078107feabd6f",
+  "stitches": 509,
+  "trims": 0
+ },
+ "honeycomb_40": {
+  "jumps": 0,
+  "records": 477,
+  "sha1": "9ffa0fd11259058ffafd2a61195a74c2a118b6eb",
+  "stitches": 477,
+  "trims": 0
+ }
+}
