@@ -10,6 +10,7 @@ vi.mock("pixi.js", () => import("../canvas/fakePixi"));
 
 import { COMMANDS, currentLayout, whenIdle } from "../actions";
 import "../cmd";
+import { Graphics } from "pixi.js"; // the fake one, mocked above
 import { mountCanvas, type TestCanvas } from "../canvas/testCanvas";
 import { drawOverlays } from "../canvas/hooks";
 import { strokeBeingDrawn } from "../canvas/freehandTool";
@@ -277,6 +278,31 @@ describe("freehand drawing", () => {
     canvas.click([0, 0]);
     const clicked = pen()!.a[pen()!.a.length - 1];
     expect(Math.hypot(clicked[0], clicked[1])).toBeGreaterThan(5);
+  });
+
+  it("after a stroke, the pen's preview line reaches to where the button was let go", async () => {
+    await setUp();
+    await drawWith("run");
+    // Record what the canvas draws: each moveTo starts a path.
+    const paths: Pt[][] = [];
+    const moved = vi.spyOn(Graphics.prototype, "moveTo").mockImplementation(function (this: Graphics, ...p: unknown[]) {
+      paths.push([[p[0] as number, p[1] as number]]);
+      return this;
+    });
+    const lined = vi.spyOn(Graphics.prototype, "lineTo").mockImplementation(function (this: Graphics, ...p: unknown[]) {
+      paths.at(-1)?.push([p[0] as number, p[1] as number]);
+      return this;
+    });
+    const stroke = along((t) => [-15 * Math.cos(Math.PI * t), -15 * Math.sin(Math.PI * t)], 60);
+    await act(async () => canvas.stroke(stroke));
+    await settle();
+    const [x, y] = pen()!.a[0];
+    // The pen's line, as drawn last, starts at its first point and ends at the preview's end.
+    const drawn = paths.filter((path) => Math.hypot(path[0][0] - x, path[0][1] - y) < 0.01).at(-1)!;
+    const released = canvas.onScreen(stroke.at(-1)!);
+    expect(Math.hypot(drawn.at(-1)![0] - released[0], drawn.at(-1)![1] - released[1])).toBeLessThan(1);
+    moved.mockRestore();
+    lined.mockRestore();
   });
 
   it("the wheel still zooms with freehand on", async () => {

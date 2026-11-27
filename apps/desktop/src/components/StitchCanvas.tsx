@@ -2112,6 +2112,13 @@ export function StitchCanvas() {
       // Another pointer coming up doesn't end (or drop) this drag.
       if (drag && e.pointerId !== dragPointer) return;
       if (scene && runCanvasTool("up", e, hookCtx(scene))) return;
+      // A tool that drew its own stroke (freehand) kept the pointer's moves from the canvas: the
+      // pen's preview line reaches to where the button was let go, not where it was last seen.
+      if (scene && !drag && useStore.getState().pen) {
+        const [sx, sy] = local(e);
+        cursorMm = snapped(scene, toWorld(scene, sx, sy), e);
+        drawOverlay(scene);
+      }
       if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
       el.classList.remove("panning");
       releaseEsc?.();
