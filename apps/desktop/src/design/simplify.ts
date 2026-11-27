@@ -131,7 +131,9 @@ class Fit {
     let kept = 0;
     for (let i = 1; i < last; i++) {
       if (dist(this.ref[i], this.ref[kept]) < SAME_SAMPLE_MM) continue;
-      if (this.cum[last] - this.cum[i] < endGap || dist(this.ref[i], this.ref[last]) < SAME_SAMPLE_MM) continue;
+      // None right by the end (a shaking hand lifting the pen); the same spot earlier on is fine.
+      const left = this.cum[last] - this.cum[i];
+      if (left < endGap || (left < CORNER_REACH_MM && dist(this.ref[i], this.ref[last]) < SAME_SAMPLE_MM)) continue;
       this.spot[i] = true;
       kept = i;
     }
@@ -367,28 +369,32 @@ class Fit {
     while (from > 0 && this.cum[lo] - this.cum[from] < CORNER_REACH_MM) from--;
     let to = hi;
     while (to < this.ref.length - 1 && this.cum[to] - this.cum[hi] < CORNER_REACH_MM) to++;
-    // Every point of the curve, not just the ones drawn: a stretch of it is sure to be within the
-    // limit when its two ends' distances plus its length allow no further; else it's halved.
+    // Every point of the curve, not only the ones drawn: a piece whose two ends are both within
+    // the limit of one straight stretch of the stroke is within it all along (the distance to a
+    // segment is convex); any other piece is halved and each half checked.
     hint = from;
-    const off = (p: Pt): number => {
+    type Spot = { p: Pt; segment: number };
+    const off = (p: Pt): Spot => {
       const found = nearestFrom(p, this.ref, from, to, hint, this.limit);
       hint = found.segment;
       if (found.d > worst.err) worst = { err: found.d, at: found.index };
-      return found.d;
+      return { p, segment: found.segment };
     };
-    const between = (a: Pt, da: number, b: Pt, db: number): void => {
-      const length = dist(a, b);
-      if (worst.err > stop || (da + db + length) / 2 <= this.limit || length < FINEST_MM) return;
-      const mid: Pt = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-      const dm = off(mid);
-      between(a, da, mid, dm);
-      between(mid, dm, b, db);
+    /** The furthest either end of a piece is from stretch `s` of the stroke. */
+    const reach = (a: Pt, b: Pt, s: number) => Math.max(distToSegment(a, this.ref[s], this.ref[s + 1]), distToSegment(b, this.ref[s], this.ref[s + 1]));
+    const between = (a: Spot, b: Spot): void => {
+      const enough = Math.max(this.limit, worst.err);
+      if (worst.err > stop || reach(a.p, b.p, a.segment) <= enough || (a.segment !== b.segment && reach(a.p, b.p, b.segment) <= enough)) return;
+      if (dist(a.p, b.p) < FINEST_MM) return;
+      const mid = off([(a.p[0] + b.p[0]) / 2, (a.p[1] + b.p[1]) / 2]);
+      between(a, mid);
+      between(mid, b);
     };
-    if (worst.err <= stop) {
+    if (worst.err <= stop && to > from) {
       let last = off(curve[0]);
       for (let c = 1; c < curve.length && worst.err <= stop; c++) {
         const here = off(curve[c]);
-        between(curve[c - 1], last, curve[c], here);
+        between(last, here);
         last = here;
       }
     }
