@@ -74,6 +74,13 @@ class _Steadied:
         self.threadlist = pattern.threadlist
 
 
+def digest_recs_steady(recs) -> dict:
+    """digest_recs for suites where a point can land exactly on a rounding step (see
+    digest_pattern_steady): each coordinate is first rounded to a millionth of a mm, so every
+    computer rounds the same number to 0.001 mm. New suites of generate() records use this."""
+    return digest_recs([(round(x, 6), round(y, 6), k) for x, y, k in recs])
+
+
 def digest_pattern_steady(pattern) -> dict:
     """digest_pattern for suites where a stitch can land exactly on a rounding step, such as the
     middle of a row between two points that are whole thousandths of a mm. There the last digit of

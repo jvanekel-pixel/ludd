@@ -411,7 +411,7 @@ def test_qa_long_paths_save_and_open(tmp_path, files):
     # A folder as long as Windows allows, and a short name: the save's temp file name is longer
     # than the 259-character limit even though the project's own name isn't.
     folder = tmp_path
-    while len(str(folder)) < 245 - 41:
+    while 245 - len(str(folder)) > 42:  # leaves the last name 1 to 41 letters, never none
         folder = folder / ("d" * 40)
     folder = folder / ("e" * (245 - len(str(folder)) - 1))
     folder.mkdir(parents=True)

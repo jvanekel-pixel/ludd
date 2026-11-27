@@ -154,16 +154,24 @@ export type SatinColumn = { rail_a: PathNode[]; rail_b: PathNode[] };
 /** A satin ribbon: a centre line and a width (what the Satin tool draws). */
 export type SatinRibbon = { nodes: PathNode[]; width_mm: number; closed?: boolean };
 export type SatinGeometry = SatinColumn | SatinRibbon;
-export type FillGeometry = { outline: PathNode[]; holes?: PathNode[][] };
+/** `carve` (fills only): lines carved into the fill, which every row drops a needle on, so they show
+ *  as grooves. Open paths; they never change the shape's size. */
+export type FillGeometry = { outline: PathNode[]; holes?: PathNode[][]; carve?: PathNode[][] };
 
 export type Motif = "wave" | "zigzag" | "scallop" | "blanket" | "leaf";
+/** A built-in motif, or one of your own (its repeat travels with the shape in `motif_unit`). */
+export type MotifId = Motif | `user:${string}`;
 export type RunParams = {
   style?: "single" | "triple" | "bean" | "motif";
   stitch_mm?: number;
   /** style "motif": the pattern repeated along the line, how long each repeat is and how wide. */
-  motif?: Motif;
+  motif?: MotifId;
   motif_mm?: number;
   motif_width_mm?: number;
+  /** One repeat of your own motif: [along 0..1, across] (same scale both ways). */
+  motif_unit?: [number, number][];
+  /** "Hand-sewn look", 0 to 100%: stitches a little irregular, the same way every time. */
+  hand_pct?: number;
   tie_in?: boolean;
   tie_off?: boolean;
 };
@@ -171,10 +179,30 @@ export type SatinParams = {
   spacing_mm?: number;
   pull_comp_mm?: number;
   underlay?: ("center" | "edge" | "zigzag")[];
+  /** "Hand-sewn look", 0 to 100%. */
+  hand_pct?: number;
+  /** Push compensation ("End trim"), not built yet. */
+  push_comp_mm?: number;
   tie_in?: boolean;
   tie_off?: boolean;
 };
-export type FillPattern = "tatami" | "gradient" | "wave" | "contour" | "stipple" | "cross" | "spiral";
+export type FillPattern =
+  | "tatami"
+  | "gradient"
+  | "wave"
+  | "contour"
+  | "stipple"
+  | "cross"
+  | "spiral"
+  | "blend"
+  | "motif"
+  | "maze"
+  | "ripple"
+  | "mesh";
+/** How the needle points of neighboring rows line up. */
+export type Weave = "standard" | "brick" | "twill" | "smooth" | "random";
+/** Which row ends are feathered: left and right are as the rows run at angle 0. */
+export type Feather = "none" | "left" | "right" | "both";
 export type FillParams = {
   pattern?: FillPattern;
   /** gradient: row spacing at the sparse end. */
@@ -184,6 +212,36 @@ export type FillParams = {
   stipple_mm?: number;
   cross_mm?: number;
   spiral_mm?: number;
+  /** Push compensation ("End trim"), not built yet. */
+  push_comp_mm?: number;
+  weave?: Weave;
+  feather?: Feather;
+  /** How far in a feathered row end can be pulled, 0.5 to 6 mm (2). */
+  feather_mm?: number;
+  /** "Hand-sewn look", 0 to 100%. */
+  hand_pct?: number;
+  /** blend: the colors after the shape's own, one to three. */
+  blend?: Thread[];
+  /** blend: -1 to 1 (0): which color takes more of the shape. */
+  blend_balance?: number;
+  /** blend: the colors run the other way across the rows (set when turning or mirroring the shape
+   *  turns its rows round, so the colors stay where they were on it). */
+  blend_flip?: boolean;
+  /** Turning fills: two or more direction lines the rows follow (mm, like the shape's points). */
+  angle_lines?: [[number, number], [number, number]][];
+  /** motif fill: which motif, its repeat, height, row gap and the shift of every other row. */
+  motif?: MotifId;
+  motif_mm?: number;
+  motif_width_mm?: number;
+  motif_gap_mm?: number;
+  motif_stagger?: number;
+  motif_unit?: [number, number][];
+  maze_mm?: number;
+  ripple_mm?: number;
+  /** ripple: where the rings spread from (mm, like the shape's points); unset, the middle. */
+  ripple_center?: [number, number];
+  mesh_mm?: number;
+  mesh_cross_deg?: number;
   angle_deg?: number;
   /** Where its purple direction dots were left (they set angle_deg). */
   angle_line?: [[number, number], [number, number]];
@@ -338,6 +396,8 @@ export type Layout = {
   knockdown?: { enabled: boolean; margin_mm: number; /** Its thread (one matching the fabric). */ thread?: Thread };
   /** Moves between same-thread shapes run under later stitching where they can (fewer jumps and trims). */
   travel_under?: boolean;
+  /** "Allow for push at the ends", not built yet. */
+  push_comp?: boolean;
   /** "Don't sew what's hidden under shapes on top" (drawn fills), and how far under their edge
    *  to keep sewing. */
   remove_overlap?: { enabled: boolean; keep_mm: number };

@@ -11,11 +11,15 @@ from pathlib import Path
 
 import pyembroidery as pe
 import pytest
+from shapely.geometry import Polygon
 
-from threadline_engine import layout, project
+from invariants import assert_sane
+from threadline_engine import layout, project, shapeops
 from threadline_engine.digitize import fills, lines
 from threadline_engine.digitize.fills import FillPattern, Param
-from threadline_engine.digitize.stitches import DigitizeError, FillParams
+from threadline_engine.digitize.patterns import motif_points
+from threadline_engine.digitize.stitches import (STITCH, DigitizeError, FillParams, generate, generate_parts,
+                                                 geometry_points, tatami, transform_geometry)
 from threadline_engine.layout import passes
 from threadline_engine.methods import dispatcher
 
@@ -241,6 +245,85 @@ def test_registered_pattern_params_are_range_checked():
         fills.REGISTRY.pop("test_throwaway", None)
 
 
+# ---------------------------------------------------------------- parts: one per thread (Phase 6)
+
+
+def test_one_part_objects_are_unchanged():
+    from test_digitize import SNAPSHOT_CASES
+
+    for name, obj in SNAPSHOT_CASES.items():
+        parts = generate_parts(obj)
+        assert [slot for _, _, slot in parts] == [0], name
+        assert (parts[0][0], parts[0][1]) == generate(obj), name
+
+
+def _two_parts(pieces, params):
+    """A throwaway pattern: rows across in the shape's thread, then rows down in a second one."""
+    return [(tatami(pieces[0], 0, 1.0, 3.5, 0.0), [], 0), (tatami(pieces[0], 90, 1.0, 3.5, 0.0), ["Second part."], 1)]
+
+
+@pytest.fixture
+def throwaway_pattern():
+    added = []
+
+    def add(spec):
+        fills.register(spec)
+        added.append(spec.name)
+
+    yield add
+    for name in added:
+        fills.REGISTRY.pop(name, None)
+    layout._object_cache.clear()
+
+
+def _thread(color):
+    return {"color": color, "name": color, "catalog": "", "brand": ""}
+
+
+OUTLINE = [[0, 0, "c"], [20, 0, "c"], [20, 20, "c"], [0, 20, "c"]]
+
+
+def test_threads_k_overrides_slot_k(throwaway_pattern):
+    throwaway_pattern(FillPattern("test_two_parts", "rows", parts=_two_parts, rows=lambda p: {},
+                                  step_mm2=lambda p: p.spacing_mm * p.stitch_mm))
+    item = {"id": "a", "kind": "fill", "geometry": {"outline": OUTLINE}, "thread": _thread("#cc0000"),
+            "params": {"pattern": "test_two_parts", "blend": [_thread("#0000cc")]}}
+    r = layout.render({"items": [item]})
+    assert [b.thread["color"] for b in r.blocks] == ["#cc0000", "#0000cc"]
+    assert [b.sources for b in r.blocks] == [[(0, 0)], [(0, 1)]]
+    sources = [rec[4] for b in r.blocks for rec in b.recs if rec[4] >= 0]
+    assert sources == sorted(set(sources))  # numbered through both parts, none twice
+    assert any("Second part." in w["message"] for w in r.warnings)
+    green = layout.render({"items": [{**item, "threads": [None, _thread("#00cc00")]}]})
+    assert [b.thread["color"] for b in green.blocks] == ["#cc0000", "#00cc00"]
+    assert [b.original["color"] for b in green.blocks] == ["#cc0000", "#0000cc"]
+    both = layout.render({"items": [{**item, "threads": [_thread("#222222"), _thread("#00cc00")]}]})
+    assert [b.thread["color"] for b in both.blocks] == ["#222222", "#00cc00"]
+    # As one list of records (generate), the thread change is a trim and a jump.
+    recs, warnings = generate(item)
+    assert warnings == ["Second part."] and sum(1 for *_, k in recs if k == pe.TRIM) == 1
+
+
+def test_a_covering_open_pattern_may_have_cross_hatch_and_edge_pad(throwaway_pattern):
+    asked = []
+
+    def lines_across(poly, params, pos):
+        asked.append(poly.bounds)
+        x0, y0, x1, y1 = poly.bounds
+        return [[(x0, y), (x1, y)] for y in (y0 + 1, (y0 + y1) / 2, y1 - 1)], []
+
+    throwaway_pattern(FillPattern("test_cover", "open", paths=lines_across, covers=True,
+                                  step_mm2=lambda p: 1.0))
+    throwaway_pattern(FillPattern("test_open", "open", paths=lines_across, step_mm2=lambda p: 1.0))
+    obj = {"kind": "fill", "geometry": {"outline": OUTLINE},
+           "params": {"pattern": "test_cover", "pull_comp_mm": 1.0, "underlay": ["tatami"]}}
+    covering = generate(obj)[0]
+    plain = generate({**obj, "params": {**obj["params"], "pattern": "test_open"}})[0]
+    assert asked[0] == pytest.approx((-0.5, -0.5, 20.5, 20.5))  # widened by the pull compensation
+    assert asked[1] == pytest.approx((0, 0, 20, 20))
+    assert len(covering) > len(plain)  # the cross-hatch
+
+
 # ---------------------------------------------------------------- line styles
 
 
@@ -255,8 +338,185 @@ def test_line_styles_and_motifs_registered():
 
 def test_rpc_method_list_matches_the_manifest():
     names = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert len(names) == 66
+    assert len(names) == 71
     assert sorted(dispatcher._methods) == names
+
+
+# ---------------------------------------------------------------- tatami's row hooks (Phase 6)
+
+
+SQUARE_20 = Polygon([(0, 0), (20, 0), (20, 20), (0, 20)])
+
+
+def _row_heights(recs) -> list[float]:
+    return sorted({round(y, 6) for _, y, k in recs if k == STITCH})
+
+
+def test_row_ys_places_the_rows():
+    heights = [1.0, 2.5, 6.0, 6.4, 8.9]
+    recs = tatami(SQUARE_20, 0, 0.4, 3.5, 0.0, row_ys=heights)
+    assert _row_heights(recs) == heights
+    assert_sane(recs, inside=SQUARE_20)
+    assert tatami(SQUARE_20, 0, 0.4, 3.5, 0.0, row_ys=[]) == []
+
+
+def test_rows_far_apart_are_joined_by_travel_not_one_long_stitch():
+    recs = tatami(SQUARE_20, 0, 0.4, 3.5, 0.0, row_ys=[1.0, 1.4, 19.0, 19.4])
+    assert_sane(recs, inside=SQUARE_20, max_jumps=0)
+    assert {1.0, 1.4, 19.0, 19.4} <= set(_row_heights(recs))
+
+
+def _inner_points(recs, y: float, stitch: float = 3.5) -> list[float]:
+    """The needle points inside a row at height y, as fractions of a stitch past the grid's origin."""
+    xs = sorted(x for x, yy, k in recs if k == STITCH and abs(yy - y) < 1e-9)
+    return [round((x / stitch) % 1, 6) % 1 for x in xs[1:-1]]
+
+
+def test_offsets_shift_each_rows_needle_points():
+    shifts = [0.0, 0.5, 0.25]
+    recs = tatami(SQUARE_20, 0, 0.4, 3.5, 0.0, offsets=lambda r: shifts[r % 3])
+    for r in range(6):
+        assert set(_inner_points(recs, 0.2 + 0.4 * r)) == {shifts[r % 3]}, r
+    # The standard weave, written out, is what tatami does without the hook.
+    plain = tatami(SQUARE_20, 45, 0.4, 3.5, 0.1)
+    written = tatami(SQUARE_20, 45, 0.4, 3.5, 0.1, offsets=lambda r: (r % 3) / 3)
+    assert [(round(x, 6), round(y, 6), k) for x, y, k in written] == [(round(x, 6), round(y, 6), k) for x, y, k in plain]
+
+
+def test_forced_points_are_needle_points_that_nothing_crowds():
+    recs = tatami(SQUARE_20, 0, 0.4, 3.5, 0.0, forced=lambda y, x0, x1: [7.0, 7.1, 0.1, 25.0])
+    for r in range(50):
+        xs = sorted(x for x, y, k in recs if k == STITCH and abs(y - (0.2 + 0.4 * r)) < 1e-9)
+        # 7.0 is taken; 7.1 (crowding it), 0.1 (at the end) and 25 (off the row) are not.
+        assert any(abs(x - 7.0) < 1e-9 for x in xs), r
+        assert [x for x in xs if abs(x - 7.0) < 0.8] == [pytest.approx(7.0)], r
+        assert max(b - a for a, b in zip(xs, xs[1:])) <= 3.5 + 1e-9, r
+    assert_sane(recs, inside=SQUARE_20)
+
+
+def test_forced_gets_the_ripple_on_a_wave_fill():
+    asked = []
+
+    def at_ten(y, x0, x1, bend=None):
+        asked.append((y, bend(10.0)))
+        return [10.0]
+
+    recs = tatami(SQUARE_20, 0, 0.4, 3.5, 0.0, wave=(1.5, 8.0), forced=at_ten)
+    # Every row has a needle at x = 10, where its ripple is.
+    for y, bent in asked:
+        assert any(k == STITCH and abs(x - 10.0) < 1e-9 and abs(yy - bent) < 1e-9 for x, yy, k in recs), y
+
+
+def _row_ends(recs, y: float) -> tuple[float, float]:
+    xs = [x for x, yy, k in recs if k == STITCH and abs(yy - y) < 1e-9]
+    return min(xs), max(xs)
+
+
+def test_end_shift_moves_the_ends_and_splits_long_steps():
+    # Every other row pulled in 6 mm on the left: the steps between rows would be 6 mm long.
+    pulled = tatami(SQUARE_20, 0, 0.4, 3.5, 0.0, end_shift=lambda r, x0, x1: (x0 + 6 * (r % 2), x1))
+    for r in range(50):
+        assert _row_ends(pulled, 0.2 + 0.4 * r)[0] == pytest.approx(6 * (r % 2)), r
+    assert_sane(pulled, inside=SQUARE_20, max_stitch_mm=3.6, max_jumps=0)
+
+
+def test_end_shift_can_reach_past_the_shape_without_jumps():
+    out = tatami(SQUARE_20, 0, 0.4, 3.5, 0.0, end_shift=lambda r, x0, x1: (x0 - 0.6, x1 + 0.6))
+    assert _row_ends(out, 0.2) == (pytest.approx(-0.6), pytest.approx(20.6))
+    assert_sane(out, inside=SQUARE_20, tolerance_mm=0.61, max_jumps=0)
+
+
+def test_a_row_is_always_sewn_however_its_ends_move():
+    squashed = tatami(SQUARE_20, 0, 0.4, 3.5, 0.0, end_shift=lambda r, x0, x1: (x0 + 100, x1 - 100))
+    assert len(_row_heights(squashed)) == 50
+
+
+# ---------------------------------------------------------------- Phase 6 contracts
+
+
+SHAPE = {"kind": "fill", "geometry": {"outline": OUTLINE, "carve": [[[-30, 5, "c"], [40, 6, "c"]]]},
+         "params": {"angle_lines": [[[2, 2], [4, 2]], [[10, 8], [12, 8]]], "ripple_center": [5, 5]}}
+
+
+def test_carve_angle_lines_and_ripple_center_move_with_the_shape_but_give_it_no_size():
+    moved = transform_geometry(SHAPE, layout.Transform.from_dict({"x": 3, "y": 4}), (10, 10))
+    assert moved["geometry"]["carve"] == [[[-27, 9, "c"], [43, 10, "c"]]]
+    assert moved["params"]["angle_lines"] == [[[5, 6], [7, 6]], [[13, 12], [15, 12]]]
+    assert moved["params"]["ripple_center"] == [8, 9]
+    xs = [x for x, _ in geometry_points(SHAPE)]
+    assert (min(xs), max(xs)) == (0, 20)
+
+
+def test_settings_say_what_is_wrong_in_their_own_units():
+    with pytest.raises(DigitizeError, match="^Balance must be between -1 and 1$"):
+        FillParams.from_dict({"pattern": "blend", "blend_balance": 2})
+    with pytest.raises(DigitizeError, match="^Crossing angle must be between 45 and 90°$"):
+        FillParams.from_dict({"pattern": "mesh", "mesh_cross_deg": 20})
+    with pytest.raises(DigitizeError, match="^Path spacing must be between 0.8 and 6 mm$"):
+        FillParams.from_dict({"pattern": "maze", "maze_mm": 9})
+    for bad, message in (({"weave": "basket"}, "Unknown weave: basket"), ({"feather": "top"}, "Unknown feathered side: top"),
+                         ({"feather_mm": 7}, "Feather depth must be between 0.5 and 6 mm"),
+                         ({"hand_pct": 101}, "The hand-sewn look must be between 0 and 100%"),
+                         ({"blend": [{}, {}, {}, {}]}, "A blend takes up to four colors"),
+                         ({"angle_lines": [[[0, 0], [1, "a"]]]}, "An angle line has a point that isn't a number")):
+        with pytest.raises(DigitizeError, match=f"^{message}$"):
+            FillParams.from_dict(bad)
+    # A line too short to give a direction is left out.
+    p = FillParams.from_dict({"angle_lines": [[[0, 0], [10, 0]], [[1, 1], [1.2, 1]], [[0, 5], [5, 10]]]})
+    assert p.angle_lines == (((0.0, 0.0), (10.0, 0.0)), ((0.0, 5.0), (5.0, 10.0)))
+
+
+def test_weave_offsets_follow_the_table():
+    from threadline_engine.digitize.rows import weave
+
+    assert weave.offsets_for("standard") is None
+    for name, want in (("brick", [0, 1 / 2, 0]), ("twill", [0, 1 / 4, 1 / 2, 3 / 4, 0]),
+                       ("smooth", [0, 2 / 5, 4 / 5, 1 / 5, 3 / 5, 0])):
+        assert [weave.offsets_for(name)(r) for r in range(len(want))] == pytest.approx(want), name
+    scatter = [weave.offsets_for("random")(r) for r in range(200)]
+    assert all(0 <= v < 1 for v in scatter) and len({round(v, 3) for v in scatter}) > 150
+
+
+def test_a_motif_of_your_own_can_be_given_to_motif_points():
+    nodes = [[0, 0, "c"], [10, 0, "c"]]
+    assert motif_points(nodes, "wave", 5, 4, unit=[(0, 0), (0.5, 0.5), (1, 0)]) == [
+        (0, 0), (2.5, 2.0), (5.0, 0.0), (7.5, 2.0), (10.0, 0.0)]
+
+
+def test_a_cut_cut_out_or_merged_fill_keeps_its_carved_lines():
+    carved = {"kind": "fill", "geometry": {"outline": OUTLINE, "carve": [[[2, 10, "c"], [18, 10, "c"]]]}, "params": {}}
+    pieces = shapeops.split(carved, (10, -5), (10, 25))["geometries"]
+    assert [p["carve"] for p in pieces] == [carved["geometry"]["carve"]] * 2  # the line crosses both
+    below = shapeops.split(carved, (-5, 15), (25, 15))["geometries"]
+    assert sorted("carve" in p for p in below) == [False, True]
+    hole = {"kind": "fill", "geometry": {"outline": [[12, 12, "c"], [16, 12, "c"], [16, 16, "c"], [12, 16, "c"]]}}
+    assert shapeops.cut_out(carved, [hole])["geometries"][0]["carve"] == carved["geometry"]["carve"]
+    other = {"kind": "fill", "geometry": {"outline": [[15, 0, "c"], [35, 0, "c"], [35, 20, "c"], [15, 20, "c"]],
+                                          "carve": [[[25, 5, "c"], [33, 5, "c"]]]}}
+    assert len(shapeops.merge([carved, other])["geometry"]["carve"]) == 2
+
+
+def test_phase_6_features_are_found_by_the_field_that_turns_them_on():
+    def used(it):
+        return project._features({"items": [it]}) - {"fill_patterns", "motif_lines"}
+
+    fill = lambda **p: {"kind": "fill", "params": p, "geometry": {}}  # noqa: E731
+    assert used(fill(weave="brick")) == {"fill_weave"}
+    assert used(fill(weave="standard", feather="none", hand_pct=0)) == set()
+    assert used({"kind": "fill", "params": {}, "geometry": {"carve": [[[0, 0, "c"], [1, 1, "c"]]]}}) == {"fill_carve"}
+    assert used(fill(feather="left")) == {"fill_feather"}
+    assert used({"kind": "run", "params": {"hand_pct": 40}}) == {"hand_look"}
+    assert used(fill(pattern="blend")) == {"fill_blend"}
+    line = [[0, 0], [5, 0]]
+    assert used(fill(angle_lines=[line, line])) == {"fill_turning"}
+    assert used(fill(angle_lines=[line])) == set() == used(fill(pattern="stipple", angle_lines=[line, line]))
+    for pattern in ("motif", "maze", "ripple", "mesh"):
+        assert used(fill(pattern=pattern)) == {f"fill_{pattern}"}
+    own = {"motif": "user:heart", "motif_unit": [[0, 0], [1, 0]]}
+    assert used({"kind": "run", "params": {"style": "motif", **own}}) == {"user_motifs"}
+    assert used(fill(pattern="motif", **own)) == {"fill_motif", "user_motifs"}
+    assert used(fill(**own)) == set()  # left over from another pattern: not sewn
+    assert "push_comp" not in project.KNOWN_FEATURES  # not built: a project that has it is refused
 
 
 # ---------------------------------------------------------------- project features

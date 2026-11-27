@@ -101,6 +101,7 @@ export function Toolbar() {
           { id: "file.samples" },
           { id: "file.picture" },
           { id: "threads.charts", label: "My threads & charts…" },
+          { id: "motif.library" },
           { id: "file.print" },
           { id: "text.placement" },
           { id: "file.browse" },

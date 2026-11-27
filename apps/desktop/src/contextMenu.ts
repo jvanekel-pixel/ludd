@@ -8,6 +8,7 @@ import { create } from "zustand";
 import type { MenuItem } from "./components/Menu";
 import { command } from "./actions";
 import type { LayoutItem } from "./design/types";
+import { removeCarves } from "./feat/carve";
 import { useStore } from "./store";
 
 /** A row-only item (not a command): a label and what it does. */
@@ -74,6 +75,7 @@ export function itemMenu(item: LayoutItem | undefined, several: boolean): Contex
     SEP,
     ...(shape && !several ? [c("draw.continue", "Add points")] : []),
     ...(fill ? [c("object.hole"), c("object.angle")] : []),
+    ...(kind === "fill" && !several ? [c("object.addAngle"), c("object.carve"), ...carveItems(item)] : []),
     ...(fill && several ? [c("object.cutOut")] : []),
     ...(shape ? [c("tool.knife")] : []),
     ...(kind === "satin" ? [c("satin.otherWay")] : []),
@@ -89,6 +91,13 @@ export function itemMenu(item: LayoutItem | undefined, several: boolean): Contex
     c("view.zoomSelected"),
     ...(shape ? [c("ai.advisor")] : []),
   ];
+}
+
+/** "Remove carved lines", for a fill that has some. */
+export function carveItems(item: LayoutItem | undefined): LocalItem[] {
+  if (item?.kind !== "fill" || !item.geometry?.carve?.length) return [];
+  const id = item.id;
+  return [{ label: "Remove carved lines", run: () => removeCarves(id) }];
 }
 
 /** The menu for a picture to trace. */

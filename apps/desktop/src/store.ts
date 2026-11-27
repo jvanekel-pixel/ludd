@@ -79,7 +79,7 @@ export type TraceModel = { installed: boolean; runtime: boolean; size_mb: number
 export type NodeRef = { id: string; list: string | number; index: number };
 
 /** A shape being drawn: clicks so far. A satin's clicks alternate between its two sides. */
-export type Pen = { kind: ObjectKind; a: PathNode[]; b: PathNode[]; replaceId?: string; /** Drawing a hole in this fill (O). */ holeFor?: string; /** The tool to go back to once the hole is done. */ holeBack?: Tool; /** The line goes all the way round (a satin fitted round an edge). */ closed?: boolean };
+export type Pen = { kind: ObjectKind; a: PathNode[]; b: PathNode[]; replaceId?: string; /** Drawing a hole in this fill (O). */ holeFor?: string; /** The tool to go back to once the hole is done. */ holeBack?: Tool; /** Carving lines into this fill (Shift+C). */ carveFor?: string; /** The tool to go back to once carving is done. */ carveBack?: Tool; /** The line goes all the way round (a satin fitted round an edge). */ closed?: boolean };
 
 type State = {
   engineStatus: EngineStatus;
@@ -206,8 +206,9 @@ type State = {
   lastTool: Exclude<Tool, "select">;
   /** Measuring tool (M): the points clicked, in mm. */
   ruler: [number, number][] | null;
-  /** Inclination tool (I): drawing a line to set a fill's stitch angle. */
-  angleFor: { id: string; points: [number, number][] } | null;
+  /** Inclination tool (I): drawing a line to set a fill's stitch angle, or (`add`, Shift+I) one
+   *  more line for its rows to follow. */
+  angleFor: { id: string; points: [number, number][]; add?: boolean } | null;
   charts: ChartSummary[];
   /** Installed fonts (loaded the first time lettering is used). */
   fonts: FontInfo[] | null;
@@ -279,7 +280,7 @@ type Actions = {
   setSpaceDown: (down: boolean) => void;
   toggleView: (key: "showPoints" | "showStitches" | "showPictures" | "crosshair") => void;
   setRuler: (r: [number, number][] | null) => void;
-  setAngleFor: (a: { id: string; points: [number, number][] } | null) => void;
+  setAngleFor: (a: { id: string; points: [number, number][]; add?: boolean } | null) => void;
   setCharts: (c: ChartSummary[]) => void;
   setFonts: (f: FontInfo[]) => void;
   setFabrics: (f: Fabric[]) => void;

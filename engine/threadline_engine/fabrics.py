@@ -17,42 +17,44 @@ DEFAULT_FABRIC = "woven"
 
 # density: >1 sews rows closer together, <1 further apart (spacing is divided by it).
 # underlay: how much foundation stitching goes under satins and fills: light | normal | heavy.
+# push_comp_mm: how much shorter ends would be drawn for push ("End trim"); nothing reads it yet
+# (push compensation isn't built).
 FABRICS: list[dict[str, Any]] = [
     {
         "id": "woven", "name": "Cotton or other woven", "examples": "Quilting cotton, shirts, tote bags, linen",
-        "density": 1.0, "pull_comp_mm": 0.2, "underlay": "normal",
+        "density": 1.0, "pull_comp_mm": 0.2, "underlay": "normal", "push_comp_mm": 0.2,
         "stabilizer": "Medium tear-away", "topping": None,
     },
     {
         "id": "denim", "name": "Denim or canvas", "examples": "Jeans, jackets, heavy bags",
-        "density": 1.0, "pull_comp_mm": 0.15, "underlay": "light",
+        "density": 1.0, "pull_comp_mm": 0.15, "underlay": "light", "push_comp_mm": 0.15,
         "stabilizer": "Medium tear-away", "topping": None,
     },
     {
         "id": "knit", "name": "T-shirt knit", "examples": "T-shirts, jersey, polo shirts",
-        "density": 0.9, "pull_comp_mm": 0.35, "underlay": "heavy",
+        "density": 0.9, "pull_comp_mm": 0.35, "underlay": "heavy", "push_comp_mm": 0.3,
         "stabilizer": "No-show mesh cut-away, fused or sprayed to the back", "topping": None,
     },
     {
         "id": "fleece", "name": "Fleece or sweatshirt", "examples": "Hoodies, sweatshirts, blankets",
-        "density": 0.95, "pull_comp_mm": 0.35, "underlay": "heavy",
+        "density": 0.95, "pull_comp_mm": 0.35, "underlay": "heavy", "push_comp_mm": 0.3,
         "stabilizer": "Cut-away", "topping": "Water-soluble topping, so stitches sit on top of the pile",
         "knockdown": True,
     },
     {
         "id": "towel", "name": "Towel or terry", "examples": "Towels, bathrobes, bibs",
-        "density": 1.1, "pull_comp_mm": 0.3, "underlay": "heavy",
+        "density": 1.1, "pull_comp_mm": 0.3, "underlay": "heavy", "push_comp_mm": 0.3,
         "stabilizer": "Tear-away or wash-away", "topping": "Water-soluble topping, so stitches don't sink into the loops",
         "knockdown": True,
     },
     {
         "id": "stretch", "name": "Stretchy sportswear", "examples": "Leggings, performance shirts, swimwear",
-        "density": 0.85, "pull_comp_mm": 0.4, "underlay": "heavy",
+        "density": 0.85, "pull_comp_mm": 0.4, "underlay": "heavy", "push_comp_mm": 0.35,
         "stabilizer": "Two layers of no-show mesh cut-away", "topping": None,
     },
     {
         "id": "felt", "name": "Felt", "examples": "Craft felt, patches, ornaments",
-        "density": 0.9, "pull_comp_mm": 0.1, "underlay": "light",
+        "density": 0.9, "pull_comp_mm": 0.1, "underlay": "light", "push_comp_mm": 0.1,
         "stabilizer": "Tear-away, or none for thick felt", "topping": None,
     },
 ]

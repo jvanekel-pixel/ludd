@@ -78,6 +78,12 @@ The user is testing on the machine once the software is about 95% done (decided 
 | Phase 5 | **One letter moved and recolored** | A name with one letter raised, turned and in a second color | The color change is clean; no long thread between letters |
 | Phase 5 | **Monogram in a scallop frame** | Three letters, Classic, scallop circle | Frame round and evenly scalloped; letters centered |
 | Phase 5 | **Shadow and outline** | "WOW" 25 mm with a 0.8 mm shadow; the same with a 1.5 mm satin outline | Shadow shows only at the edge, no lump under letters; outline evenly spaced round the word |
+| Phase 6 | **Blend** | A 50 × 30 mm rectangle, red into yellow; the same with three colors; the two-color one again at Spacing 2.5 mm | An even fade with no stripes or bare fabric; not stiffer than a plain fill; at 2.5 mm the rows as even as a plain fill at 2.5 mm, with no bare band |
+| Phase 6 | **Weave** | The same square in Standard, Brick, Twill and Smooth | Each looks as named; Smooth shows no lines |
+| Phase 6 | **Carved lines** | A 40 mm fill with a carved star and a carved wavy line | Grooves clear and unbroken; no loose stitches beside them |
+| Phase 6 | **Feather and hand-sewn** | Two fills feathered into each other; a line, satin and fill at 60% hand-sewn | Soft join with no gap; the hand-sewn pieces look deliberately irregular, nothing loose |
+| Phase 6 | **Motif fill, maze, ripple, mesh** | A 40 mm circle in each | Each lies flat; the maze has no crossing; mesh cells are even |
+| Phase 6 | **Turning fill** | A leaf with two angle lines 50° apart; a rectangle with a second line turned sharply | Stitches fan smoothly; no bunching inside the turn, no gaps outside it or along the edges; the sharp turn's crease holds; note where a thin line of thread shows across finished rows, and how much it bothers (L-002) |
 
 ## Log
 

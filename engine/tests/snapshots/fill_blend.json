@@ -1,0 +1,30 @@
+{
+ "balance_0_6": {
+  "jumps": 1,
+  "records": 1435,
+  "sha1": "c9bf237ee611e06dbd44dd38636ec6fb7333e4d2",
+  "stitches": 1433,
+  "trims": 1
+ },
+ "blend_twill": {
+  "jumps": 1,
+  "records": 1432,
+  "sha1": "bdd7b40403d36a1dad2921991458548dda11056a",
+  "stitches": 1430,
+  "trims": 1
+ },
+ "three_colors": {
+  "jumps": 2,
+  "records": 1411,
+  "sha1": "2059cc3225ed489c7d512e43accc134b8de9000e",
+  "stitches": 1407,
+  "trims": 2
+ },
+ "two_colors": {
+  "jumps": 1,
+  "records": 1464,
+  "sha1": "fdc29b0567dc293d10fbee7139c9727f74a52e0e",
+  "stitches": 1462,
+  "trims": 1
+ }
+}

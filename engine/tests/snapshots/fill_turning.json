@@ -1,0 +1,23 @@
+{
+ "fan_60": {
+  "jumps": 0,
+  "records": 1834,
+  "sha1": "0adbe5f3754a3db22c80aecd10ebeaa14ce9d214",
+  "stitches": 1834,
+  "trims": 0
+ },
+ "leaf_two_lines": {
+  "jumps": 0,
+  "records": 1491,
+  "sha1": "db0e90321e8446d6ea21e1f4d7888d2dba9566e0",
+  "stitches": 1491,
+  "trims": 0
+ },
+ "ribbon_three_lines": {
+  "jumps": 0,
+  "records": 978,
+  "sha1": "e7b13cfb143ca23ab0437bfe4deff9328287bb4b",
+  "stitches": 978,
+  "trims": 0
+ }
+}

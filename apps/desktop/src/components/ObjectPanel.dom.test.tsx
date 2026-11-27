@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("@tauri-apps/plugin-dialog", () => ({ save: async () => null, open: async () => null, message: async () => "Cancel" }));
 vi.mock("@tauri-apps/api/path", () => ({ resolveResource: async (p: string) => p }));
 
+import "../cmd"; // registers the commands the panel's buttons run (object.carve)
 import { newDoc } from "../design/layout";
 import type { Design, Doc, ObjectItem } from "../design/types";
 import { savePrefs } from "../prefs";
@@ -38,8 +39,14 @@ afterEach(() => {
 
 /** The panel with this fill selected and the folds in its section open; returns that section. */
 function show(item: ObjectItem): HTMLElement {
+  return showKind(item, "Fill");
+}
+
+/** The panel with this shape selected and its section's folds open; returns the section titled `title`. */
+function showKind(item: ObjectItem, title: string): HTMLElement {
   unmount();
-  savePrefs({ sections: { "object@fill": true, "sub:underlay-fill": true, "sub:advanced-fill": true } });
+  const k = item.kind;
+  savePrefs({ sections: { [`object@${k}`]: true, [`sub:underlay-${k}`]: true, [`sub:advanced-${k}`]: true } });
   const d = newDoc();
   const doc: Doc = { layout: { ...d.layout, items: [item] }, images: [] };
   const design: Design = {
@@ -57,7 +64,7 @@ function show(item: ObjectItem): HTMLElement {
   document.body.append(host);
   root = createRoot(host);
   act(() => root!.render(<InfoPanel />));
-  return host.querySelector<HTMLElement>('section[aria-label="Fill"]')!;
+  return host.querySelector<HTMLElement>(`section[aria-label="${title}"]`)!;
 }
 
 const texts = (el: Element, selector: string) => [...el.querySelectorAll(selector)].map((x) => x.textContent);
@@ -66,9 +73,10 @@ const rowLabels = (el: Element) => texts(el, ".acc-label");
 /** Each pattern's rows, top to bottom, as the panel showed them before the move
  *  ("" is a row with only a button: Draw the angle, Add a satin border). */
 const ROWS: Record<string, string[]> = {
-  tatami: ["Stitch as", "Density", "Spacing", "Pattern", "Angle", "", "", "Length", "Random", "Edge pad"],
-  gradient: ["Stitch as", "Density", "Spacing", "Pattern", "Sparse end", "Angle", "", "", "Length", "Random", "Edge pad"],
-  wave: ["Stitch as", "Density", "Spacing", "Pattern", "Wave height", "Wave length", "Angle", "", "", "Length", "Random", "Edge pad"],
+  // Phase 6 (Track A) adds Weave, Feather and Hand-sewn look to Advanced, after Edge pad.
+  tatami: ["Stitch as", "Density", "Spacing", "Pattern", "Angle", "", "", "Length", "Random", "Edge pad", "Weave", "Feather", "Hand-sewn look"],
+  gradient: ["Stitch as", "Density", "Spacing", "Pattern", "Sparse end", "Angle", "", "", "Length", "Random", "Edge pad", "Weave", "Feather", "Hand-sewn look"],
+  wave: ["Stitch as", "Density", "Spacing", "Pattern", "Wave height", "Wave length", "Angle", "", "", "Length", "Random", "Edge pad", "Feather", "Hand-sewn look"],
   contour: ["Stitch as", "Density", "Spacing", "Pattern", "", "Length"],
   stipple: ["Stitch as", "Pattern", "Loop size", "", "Length"],
   cross: ["Stitch as", "Pattern", "Square", ""],
@@ -125,5 +133,58 @@ describe("shape settings after the panel split", () => {
     expect(objectSummary(fill({ pattern: "wave", spacing_mm: 0.33, angle_deg: 30.4 }))).toBe("Dense · 30°");
     expect(objectSummary(shape("run", { nodes: OUTLINE }))).toBe("Single · 2.5 mm");
     expect(objectSummary(shape("applique", { outline: OUTLINE }))).toBe("3 mm border");
+  });
+
+  it("a turning fill's heading says it follows its lines; another pattern keeps its angle", () => {
+    const lines = [[[0, 0], [10, 0]], [[0, 5], [10, 9]]];
+    expect(objectSummary(fill({ angle_lines: lines }))).toBe("Normal · follows 2 lines");
+    expect(objectSummary(fill({ angle_lines: [[[0, 2], [10, 2]], [[5, 0], [5, 4]]] }))).toBe("Normal · follows 1 of 2 lines");
+    expect(objectSummary(fill({ pattern: "gradient", angle_lines: lines }))).toBe("Normal · 45°");
+  });
+});
+
+describe("Phase 6: weave, feathered edges, the hand-sewn look and carved lines (Track A)", () => {
+  const advanced = (section: HTMLElement) => rowLabels(section).slice(rowLabels(section).indexOf("Edge pad") + 1);
+
+  it("Weave, Feather and Hand-sewn look appear under Advanced for a tatami fill and not for stipple", () => {
+    const tatami = show(fill());
+    expect(advanced(tatami)).toEqual(["Weave", "Feather", "Hand-sewn look"]);
+    expect(texts(tatami, 'select[aria-label="Weave"] option')).toEqual(["Standard", "Brick", "Twill", "Smooth", "Random"]);
+    expect(texts(tatami, '[aria-label="Feather"] button')).toEqual(["Off", "Left ends", "Right ends", "Both"]);
+    expect(tatami.querySelector('input[aria-label="Hand-sewn look"]')).not.toBeNull();
+    expect(texts(tatami, "button")).toContain("Carve lines (Shift+C)");
+    // Off: no Depth, no picture.
+    expect(tatami.querySelector(".feather-picture")).toBeNull();
+
+    const stipple = show(fill({ pattern: "stipple" }));
+    for (const label of ["Weave", "Feather", "Hand-sewn look", "Depth"]) expect(rowLabels(stipple)).not.toContain(label);
+    expect(stipple.querySelector('input[aria-label="Hand-sewn look"]')).toBeNull();
+    expect(texts(stipple, "button")).not.toContain("Carve lines (Shift+C)");
+  });
+
+  it("a feathered fill shows Depth and which side is which", () => {
+    const section = show(fill({ feather: "left", feather_mm: 3 }));
+    expect(advanced(section)).toEqual(["Weave", "Feather", "Depth", "Hand-sewn look"]);
+    expect(section.querySelector('[aria-label="Feather"] button[aria-pressed="true"]')?.textContent).toBe("Left ends");
+    expect(section.querySelector(".feather-picture")?.getAttribute("aria-label")).toMatch(/Left and right/);
+  });
+
+  it("wave: Feather and Hand-sewn look, no Weave (its rows copy each other)", () => {
+    expect(advanced(show(fill({ pattern: "wave" })))).toEqual(["Feather", "Hand-sewn look"]);
+  });
+
+  it("a blend offers no cross-hatch underlay, which it never sews", () => {
+    expect(texts(show(fill({ pattern: "blend" })), '[aria-label="Underlay"] button')).toEqual(["Auto", "Edge"]);
+  });
+
+  it("lines and satins have the Hand-sewn look; motif lines don't", () => {
+    const run = showKind(shape("run", { nodes: OUTLINE }, { hand_pct: 40 }), "Line");
+    expect(rowLabels(run)).toContain("Hand-sewn look");
+    expect(run.querySelector<HTMLInputElement>('input[aria-label="Hand-sewn look"]')?.value).toBe("40");
+    for (const label of ["Weave", "Feather"]) expect(rowLabels(run)).not.toContain(label);
+    expect(rowLabels(showKind(shape("run", { nodes: OUTLINE }, { style: "motif" }), "Line"))).not.toContain("Hand-sewn look");
+    const satin = showKind(shape("satin", { nodes: [[0, 0, "c"], [10, 0, "c"]], width_mm: 3 }), "Satin");
+    expect(rowLabels(satin)).toContain("Hand-sewn look");
+    expect(rowLabels(satin)).not.toContain("Weave");
   });
 });

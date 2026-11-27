@@ -875,3 +875,14 @@ def test_steady_digest_ignores_the_last_digit_on_a_rounding_step():
     steady = {snapshot_util.digest_pattern_steady(Pattern(x))["sha1"] for x in near}
     assert len(plain) == 2 and len(steady) == 1
     assert snapshot_util.digest_pattern_steady(Pattern(step + 0.02))["sha1"] not in steady
+
+
+def test_steady_record_digest_ignores_the_last_digit_on_a_rounding_step():
+    """The same for generate() records, which the digests round to 0.001 mm."""
+    stitch = snapshot_util.STITCH
+    step = 34.1245
+    near = [math.nextafter(step, -math.inf), step, math.nextafter(step, math.inf)]
+    assert len({snapshot_util.digest_recs([(x, 0.0, stitch)])["sha1"] for x in near}) == 2
+    steady = {snapshot_util.digest_recs_steady([(x, 0.0, stitch)])["sha1"] for x in near}
+    assert len(steady) == 1
+    assert snapshot_util.digest_recs_steady([(step + 0.002, 0.0, stitch)])["sha1"] not in steady

@@ -33,16 +33,16 @@
     "monthlyCapUsd": 0,
     "spentThisMonthUsd": 0
   },
-  "phase": 6,
+  "phase": 7,
   "status": "active",
-  "nextAction": "Phase 6 (fills and stitch quality) in a fresh session once Phase 5 is merged: answer its spec's Owner decisions first",
-  "blockedOnHuman": "Answer the Phase 6 spec's Owner decisions",
-  "lastSessionAt": "2026-11-26T06:40:00Z",
+  "nextAction": "Phase 7 (lines, sequencing and drawing tools) in a fresh session once Phase 6 is merged: answer its spec's Owner decisions first",
+  "blockedOnHuman": "Answer the Phase 7 spec's Owner decisions",
+  "lastSessionAt": "2026-11-27T01:28:00Z",
   "health": {
     "tests": "passing",
     "build": "passing",
-    "lastAuditedPhase": 5,
-    "lastAuditedAt": "2026-11-26T06:40:00Z"
+    "lastAuditedPhase": 6,
+    "lastAuditedAt": "2026-11-27T01:28:00Z"
   },
   "deploy": {
     "target": "local",

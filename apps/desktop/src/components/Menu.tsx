@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { command } from "../actions";
 import { formatShortcut } from "../commands";
+import type { LocalItem } from "../contextMenu";
 import { holdEscape } from "../escape";
 import { useStore } from "../store";
 
@@ -9,7 +10,7 @@ export type MenuItem = { id: string; label?: string; checked?: boolean } | "sepa
 /** A "⋯" button with a dropdown of commands, each showing its shortcut. */
 /** A menu button and its list. `side`: the list pops out to the right of the button (for the
  *  tool rail), placed against the window so a narrow, scrolling bar can't cut it off. */
-export function Menu({ items, label = "More", trigger, className, side }: { items: MenuItem[]; label?: string; trigger?: ReactNode; className?: string; side?: "right" }) {
+export function Menu({ items, label = "More", trigger, className, side }: { items: (MenuItem | LocalItem)[]; label?: string; trigger?: ReactNode; className?: string; side?: "right" }) {
   const [open, setOpen] = useState(false);
   const [at, setAt] = useState<{ left: number; top: number } | null>(null);
   const root = useRef<HTMLDivElement>(null);
@@ -60,6 +61,24 @@ export function Menu({ items, label = "More", trigger, className, side }: { item
         <ul role="menu" className={`menu-list${side === "right" ? " pop-right" : ""}`} style={side === "right" && at ? { position: "fixed", left: at.left, top: at.top, right: "auto" } : undefined}>
           {items.map((item, i) => {
             if (item === "separator") return <li key={i} role="separator" />;
+            if ("run" in item)
+              // An item of this menu only, not a command: no shortcut.
+              return (
+                <li key={item.label} role="none">
+                  <button
+                    role="menuitem"
+                    disabled={item.enabled === false}
+                    title={item.hint}
+                    onClick={() => {
+                      setOpen(false);
+                      item.run();
+                    }}
+                  >
+                    <span className="check-mark" aria-hidden />
+                    <span className="label">{item.label}</span>
+                  </button>
+                </li>
+              );
             const cmd = command(item.id);
             const enabled = cmd.enabled ? cmd.enabled() : true;
             return (

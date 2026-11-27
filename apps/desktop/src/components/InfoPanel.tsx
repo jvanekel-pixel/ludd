@@ -31,7 +31,7 @@ import { selectHoop, selectImages, selectLayout, selectMachine, useStore } from 
 import { Section, Sub, Row, type SelKind } from "./Accordion";
 import { Menu } from "./Menu";
 import { OverlapOptions } from "./OverlapOptions";
-import { itemMenu, openContextMenu, pictureMenu } from "../contextMenu";
+import { carveItems, itemMenu, openContextMenu, pictureMenu } from "../contextMenu";
 import { AdvisorPanel } from "./AIPanels";
 import { Cmd, fmtLen, fromUnits, NumberField, toUnits } from "./controls";
 import { FileSections } from "./FilePanel";
@@ -911,6 +911,7 @@ function Inspector({ sel, name, kind, pinned, img }: { sel: SelKind; name: strin
             { id: "object.offset", label: "Outline / offset…" },
             { id: "tool.knife", label: "Knife: cut in two" },
             { id: "object.hole", label: "Cut a hole (draw round it)" },
+            ...carveItems(layout?.items.find((x) => x.id === selectedId)),
             { id: "edit.stitches", label: "Edit stitches" },
             "separator",
             { id: "arrange.delete" },

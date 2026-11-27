@@ -3,6 +3,7 @@
  * proposals and Help. Nothing here changes the design unless the user accepts a proposal.
  */
 import { commit, currentDoc, currentLayout, fail, info } from "./actions";
+import { withoutDeadCrossHatch } from "./design/fillPatterns";
 import { updateObject } from "./design/layout";
 import { isRibbon, type Layout, type ObjectItem, type PathNode } from "./design/types";
 import { useStore } from "./store";
@@ -180,7 +181,7 @@ export function withChange(o: ObjectItem, c: AdviceChange): ObjectItem {
   if (out.kind === "fill" && c.angle_deg !== undefined) p.angle_deg = c.angle_deg;
   if ((out.kind === "fill" || out.kind === "satin") && c.density) p.spacing_mm = DENSITY_SPACING[c.density];
   if ((out.kind === "fill" || out.kind === "satin") && c.underlay) p.underlay = [...UNDERLAY[out.kind][c.underlay]];
-  return { ...out, params: p } as ObjectItem;
+  return { ...out, params: withoutDeadCrossHatch(p) } as ObjectItem;
 }
 
 /** Put the advised shapes in the suggested order, in the places they took before. Pure, for tests. */

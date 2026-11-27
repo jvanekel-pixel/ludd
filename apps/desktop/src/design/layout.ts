@@ -16,6 +16,7 @@ import {
 } from "./types";
 import { isObject, type PathNode } from "./types";
 import { nodeBounds } from "./paths";
+import { turnsRows } from "./fillPatterns";
 
 export const IDENTITY: Transform = { x: 0, y: 0, rotate: 0, scale_x: 1, scale_y: 1, flip_x: false, flip_y: false };
 
@@ -129,28 +130,37 @@ export function updateTransform(layout: Layout, id: string, patch: Partial<Trans
 // their points (so node editing always works on what you see). Stitch files keep a transform,
 // because their stitches can only be moved, not regenerated.
 
-/** All point lists of a drawn object. */
-export function objectNodeLists(o: ObjectItem): PathNode[][] {
+/** The point lists that give a drawn object its size: its outline, line or sides, and holes. Not a
+ *  fill's carved lines, which never change its size. */
+export function shapeNodeLists(o: ObjectItem): PathNode[][] {
   if (o.kind === "run") return [o.geometry.nodes];
   if (o.kind === "satin") return "nodes" in o.geometry ? [o.geometry.nodes] : [o.geometry.rail_a, o.geometry.rail_b];
   return [o.geometry.outline, ...(o.geometry.holes ?? [])];
 }
 
+/** All point lists of a drawn object, carved lines too. */
+export function objectNodeLists(o: ObjectItem): PathNode[][] {
+  const carve = o.kind === "fill" || o.kind === "applique" ? (o.geometry.carve ?? []) : [];
+  return [...shapeNodeLists(o), ...carve];
+}
+
 export function objectCenter(o: ObjectItem): [number, number] {
-  const b = nodeBounds(objectNodeLists(o));
+  const b = nodeBounds(shapeNodeLists(o));
   return b ? [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] : [0, 0];
 }
 
 /** Apply `fn` to every point of a drawn object, and to the points kept in its settings (where it
- *  starts and ends, its direction dots), so they move, turn and resize with it. */
+ *  starts and ends, its direction dots and angle lines, a ripple's middle), so they move, turn and
+ *  resize with it. */
 export function mapObjectNodes(o: ObjectItem, fn: (x: number, y: number) => [number, number]): ObjectItem {
   const moved = mapObjectPoints(o, fn);
   const p = moved.params as Record<string, unknown>;
   const pt = (v: unknown) => (Array.isArray(v) && v.length >= 2 && typeof v[0] === "number" && typeof v[1] === "number" ? (fn(v[0], v[1]).map(round2) as [number, number]) : undefined);
   const patch: Record<string, unknown> = {};
-  for (const k of ["start_mm", "end_mm"]) if (pt(p[k])) patch[k] = pt(p[k]);
-  const line = p.angle_line as [number, number][] | undefined;
-  if (Array.isArray(line) && line.length === 2 && pt(line[0]) && pt(line[1])) patch.angle_line = [pt(line[0]), pt(line[1])];
+  for (const k of ["start_mm", "end_mm", "ripple_center"]) if (pt(p[k])) patch[k] = pt(p[k]);
+  const pair = (v: unknown) => (Array.isArray(v) && v.length === 2 && pt(v[0]) && pt(v[1]) ? [pt(v[0]), pt(v[1])] : undefined);
+  if (pair(p.angle_line)) patch.angle_line = pair(p.angle_line);
+  if (Array.isArray(p.angle_lines)) patch.angle_lines = p.angle_lines.map((l) => pair(l) ?? l);
   return Object.keys(patch).length ? ({ ...moved, params: { ...moved.params, ...patch } } as ObjectItem) : moved;
 }
 
@@ -161,14 +171,25 @@ function mapObjectPoints(o: ObjectItem, fn: (x: number, y: number) => [number, n
     return "nodes" in o.geometry
       ? { ...o, geometry: { ...o.geometry, nodes: m(o.geometry.nodes) } }
       : { ...o, geometry: { rail_a: m(o.geometry.rail_a), rail_b: m(o.geometry.rail_b) } };
-  return { ...o, geometry: { outline: m(o.geometry.outline), holes: o.geometry.holes?.map(m) } };
+  const carve = o.geometry.carve;
+  return { ...o, geometry: { outline: m(o.geometry.outline), holes: o.geometry.holes?.map(m), ...(carve ? { carve: carve.map(m) } : {}) } };
 }
 
-/** A fill with its stitch angle changed (kept in 0..179°); other objects as they are. */
-function withFillAngle(o: ObjectItem, f: (deg: number) => number): ObjectItem {
+/** A fill turned or mirrored: its stitch angle changed (kept in 0..179°); other objects as they are.
+ *  `f` gives the rows' new direction before it is wrapped. When that comes out an odd number of half
+ *  turns round, the rows' left and right ends have changed places; the end the rows stack towards
+ *  does too, except in a mirror image, where it changes places only when they don't. A feathered
+ *  side and a blend's two ends are changed over to match, so both stay where they were on the shape.
+ *  (A turning fill's rows run along its angle lines, which move with the shape: its feathered side
+ *  stays as it is.) */
+function withFillAngle(o: ObjectItem, f: (deg: number) => number, mirrored = false): ObjectItem {
   if (o.kind !== "fill") return o;
-  const a = f(o.params.angle_deg ?? 45);
-  return { ...o, params: { ...o.params, angle_deg: Math.round((((a % 180) + 180) % 180) * 100) / 100 } };
+  const raw = f(o.params.angle_deg ?? 45);
+  const params = { ...o.params, angle_deg: Math.round((((raw % 180) + 180) % 180) * 100) / 100 };
+  const turned = Math.abs(Math.floor(raw / 180)) % 2 === 1;
+  if (turned && !turnsRows(params) && (params.feather === "left" || params.feather === "right")) params.feather = params.feather === "left" ? "right" : "left";
+  if (turned !== mirrored && params.pattern === "blend") params.blend_flip = !params.blend_flip;
+  return { ...o, params };
 }
 
 function onItem(layout: Layout, id: string, file: (it: LayoutItem) => LayoutItem, obj: (o: ObjectItem) => ObjectItem): Layout {
@@ -216,10 +237,12 @@ export function mirror(layout: Layout, id: string, axis: "x" | "y"): Layout {
     },
     (o) => {
       const [cx, cy] = objectCenter(o);
-      // A mirrored fill's rows mirror too.
+      // A mirrored fill's rows mirror too. (Mirrored left to right, rows running at a degrees run
+      // at 180 - a; top to bottom, at -a.)
       return withFillAngle(
         mapObjectNodes(o, (x, y) => (axis === "x" ? [2 * cx - x, y] : [x, 2 * cy - y])),
-        (ang) => -ang,
+        (ang) => (axis === "x" ? 180 - ang : -ang),
+        true,
       );
     },
   );

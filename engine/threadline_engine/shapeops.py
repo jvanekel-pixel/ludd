@@ -214,6 +214,18 @@ def _path(obj: dict[str, Any]) -> list[Point]:
     return poly
 
 
+def _carve_for(piece: Polygon, shapes: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """The carved lines of `shapes` (as shown) that cross a piece of fill, as its geometry keeps
+    them, so a cut, trimmed or merged fill keeps its grooves."""
+    kept = []
+    for shape in shapes:
+        for line in (shape.get("geometry") or {}).get("carve") or []:
+            pts, _ = flatten(line, False)
+            if len(pts) >= 2 and LineString(pts).intersects(piece):
+                kept.append(line)
+    return {"carve": kept} if kept else {}
+
+
 def split(obj: dict[str, Any], a: Point, b: Point, spacing: float = 3.0) -> dict[str, Any]:
     """Cut a shape along the line from a to b (extended across the whole shape).
     Returns {"geometries": [geometry, ...]} in the shape's own kind, biggest first."""
@@ -234,7 +246,9 @@ def split(obj: dict[str, Any], a: Point, b: Point, spacing: float = 3.0) -> dict
             parts += pieces
         if not cut:
             raise ShapeError("The cut doesn't cross the shape")
-        return {"geometries": [_poly_nodes(p, spacing) for p in sorted(parts, key=lambda g: -g.area)]}
+        carved = [obj] if kind == "fill" else []
+        return {"geometries": [{**_poly_nodes(p, spacing), **_carve_for(p, carved)}
+                               for p in sorted(parts, key=lambda g: -g.area)]}
     if kind in ("run", "satin") and "nodes" in (obj.get("geometry") or {}):
         path = _path(obj)
         if len(path) < 2:
@@ -287,7 +301,8 @@ def cut_out(target: dict[str, Any], cutters: list[dict[str, Any]], spacing: floa
     fill's kind, biggest first (a cut right across leaves several pieces)."""
     if target.get("kind") not in ("fill", "applique"):
         raise ShapeError("Select a fill (or applique) to cut out of, and the shapes to cut with")
-    poly = unary_union(_fill_parts(_world(target)))
+    shown = _world(target)
+    poly = unary_union(_fill_parts(shown))
     areas = [a for a in (_cutter(c) for c in cutters) if a is not None and not a.is_empty]
     if not areas:
         raise ShapeError("Select the shapes to cut out too: fills, closed lines or satins placed over the fill")
@@ -298,16 +313,20 @@ def cut_out(target: dict[str, Any], cutters: list[dict[str, Any]], spacing: floa
     parts = [p for p in _parts(rest) if p.area >= 1.0]
     if not parts:
         raise ShapeError("That would cut away the whole fill")
-    return {"geometries": [_poly_nodes(p, spacing) for p in sorted(parts, key=lambda g: -g.area)]}
+    carved = [shown] if target.get("kind") == "fill" else []
+    return {"geometries": [{**_poly_nodes(p, spacing), **_carve_for(p, carved)}
+                           for p in sorted(parts, key=lambda g: -g.area)]}
 
 
 def merge(objs: list[dict[str, Any]], spacing: float = 3.0) -> dict[str, Any]:
     """Join fills that touch or overlap into one fill. Returns {"geometry": ...}."""
     polys = []
+    shown = []
     for o in objs:
         if o.get("kind") not in ("fill", "applique"):
             raise ShapeError("Only fills (and appliques) can be merged")
-        polys += _fill_parts(_world(o))
+        shown.append(_world(o))
+        polys += _fill_parts(shown[-1])
     if len(objs) < 2:
         raise ShapeError("Select two or more fills to merge")
     joined = unary_union([p.buffer(0.05) for p in polys]).buffer(-0.05)
@@ -316,7 +335,8 @@ def merge(objs: list[dict[str, Any]], spacing: float = 3.0) -> dict[str, Any]:
         raise ShapeError("These shapes don't touch, so they can't become one shape. Move them together first.")
     if len(_parts(joined.buffer(-0.1))) > 1:
         raise ShapeError("These shapes only touch at a corner. Move them so they overlap a little first.")
-    return {"geometry": _poly_nodes(parts[0], spacing)}
+    carved = [s for s in shown if s.get("kind") == "fill"]
+    return {"geometry": {**_poly_nodes(parts[0], spacing), **_carve_for(parts[0], carved)}}
 
 
 __all__ = ["ShapeError", "cut_out", "merge", "offset", "split", "to_nodes"]

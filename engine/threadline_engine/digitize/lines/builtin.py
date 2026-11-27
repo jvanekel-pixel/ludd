@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import math
 
-from ..paths import resample
+from ..paths import cumulative, flatten, resample
 from ..patterns import motif_points
-from . import LineStyle, register, register_motif
+from . import MAX_LINE_STITCHES, MOTIF_UNITS, LineStyle, motif_stitches, register, register_motif, sewn_unit
 
 
 def _line(nodes, params, closed, start):
@@ -47,10 +47,33 @@ def _bean(nodes, params, closed=False, start=None):
     return out
 
 
+def _refuse_too_many(nodes, params, closed, unit, stitch: float) -> None:
+    """Refused before any of it is worked out: a very busy motif of your own, or a hand-made motif
+    file, could otherwise make millions of stitches and freeze LUDD."""
+    from ..stitches import DigitizeError
+
+    shape = unit if unit is not None else MOTIF_UNITS.get(params.motif)
+    poly, _ = flatten(nodes, closed)
+    if closed and poly:
+        poly = poly + [poly[0]]
+    if shape is None or len(poly) < 2:
+        return  # (motif_points refuses an unknown motif itself)
+    total = cumulative(poly)[-1]
+    repeats = max(1, round(total / params.motif_mm))  # as motif_points lays them
+    stitches = motif_stitches(shape, repeats, total / repeats, params.motif_width_mm, stitch)
+    if stitches > MAX_LINE_STITCHES:
+        raise DigitizeError(f"This line would need about {stitches:,.0f} stitches, far more than any design. "
+                            "Make the motif longer or simpler.")
+
+
 def _motif(nodes, params, closed=False, start=None):
-    # The motif's corners are the needle points; long sides are split to the stitch length.
-    pts = motif_points(nodes, params.motif, params.motif_mm, params.motif_width_mm, closed)
-    return resample(pts, max(params.stitch_mm, 1.0), list(range(len(pts))))
+    # The motif's corners are the needle points; long sides are split to the stitch length. A motif
+    # of your own that the line carries (params.motif_unit) is sewn instead of the named one.
+    unit = sewn_unit(params.motif_unit, params.motif_mm, params.motif_width_mm)
+    stitch = max(params.stitch_mm, 1.0)
+    _refuse_too_many(nodes, params, closed, unit, stitch)
+    pts = motif_points(nodes, params.motif, params.motif_mm, params.motif_width_mm, closed, unit=unit)
+    return resample(pts, stitch, list(range(len(pts))))
 
 
 register(LineStyle("single", points=_single))

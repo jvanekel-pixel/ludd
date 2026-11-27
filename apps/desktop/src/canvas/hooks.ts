@@ -20,6 +20,8 @@ export type CanvasTool = {
   down?(p: [number, number], e: PointerEvent, ctx: CanvasCtx): boolean;
   move?(p: [number, number], e: PointerEvent, ctx: CanvasCtx): boolean;
   up?(p: [number, number], e: PointerEvent, ctx: CanvasCtx): boolean;
+  /** A right-click, before the canvas opens its own menu. True: handled (the tool opened one). */
+  menu?(p: [number, number], e: MouseEvent, ctx: CanvasCtx): boolean;
 };
 
 /** Somewhere new points snap to: the snapped point within `radiusMm` of `p`, or null. */
@@ -59,6 +61,12 @@ export function activeCanvasTool(): CanvasTool | undefined {
 export function runCanvasTool(kind: "down" | "move" | "up", e: PointerEvent, ctx: CanvasCtx): boolean {
   const tool = activeCanvasTool();
   return !!tool?.[kind] && tool[kind](ctx.toMm(e), e, ctx);
+}
+
+/** Offer a right-click to the active tool; true if it handled it. */
+export function runCanvasMenu(e: MouseEvent, ctx: CanvasCtx): boolean {
+  const tool = activeCanvasTool();
+  return !!tool?.menu && tool.menu(ctx.toMm(e), e, ctx);
 }
 
 /** The first snap source with somewhere to snap `p` to. */

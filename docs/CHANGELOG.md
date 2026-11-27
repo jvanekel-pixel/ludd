@@ -2,6 +2,18 @@
 
 ## Next (unreleased)
 
+### Phase 6: fills and stitch quality (2026-11-26)
+- **Blend** fill: the shape's color fades into a second (and a third) across the rows. Add a color, swap them, and set the **Balance**; each color sews in turn. The rows are a one-color fill's evenly spaced rows, each given to one of the colors, so the fade is as dense as a plain fill at any Spacing (a thinning color sews at least two rows side by side); every color is sewn when there are at least two rows per color, and with fewer a warning says which color is left out.
+- **Motif** fill (rows of a little pattern across the shape), **Maze** (one path that winds in and back out; a shape with a hole or many narrow parts sews as several mazes, and LUDD says so), **Ripple** (rings spreading from the middle) and **Mesh** (a net; set the cell size and crossing angle).
+- **My motifs** (Alt+Shift+M, the ⋯ menu, or under any Motif list): save a line you drew as a motif, use it on motif lines and motif fills, import and export motif files. A shape carries its own copy, so a project sews the same on a computer without it. A motif too busy to sew (a line of more than about 60,000 stitches) is refused with a message.
+- **Carved lines** (Shift+C): draw lines over a fill sewn in rows; every row drops a needle on them, so they show as grooves.
+- **Turning fills** (Shift+I): draw more than one direction line on a Tatami fill, and the rows turn smoothly to follow each, out to every edge of the shape. A turn too sharp for the shape leaves a crease (the shape stays filled), and LUDD says so when the crease is deep. Two lines with their middles in the same place: the rows follow the first, and LUDD says so.
+- In Advanced: **Weave** (Standard, Brick, Twill, Smooth or Random needle points), **Feather** (ragged row ends on the left, right or both, to blend into what's beside them) and a **Hand-sewn look** slider for lines, satins and fills (small irregularities, the same every time).
+- Turning or mirroring a fill keeps its feathered side and a blend's colors where they were on the shape.
+- Nothing already in your designs sews differently.
+- Projects that use any of these say so, and an older LUDD asks you to update instead of sewing them wrong.
+- Not built: push compensation ("End trim"), which waits on a patent check.
+
 ### Phase 5: lettering and personalization (2026-11-25)
 - **Several lines of text**: Enter starts a new line (Ctrl+Enter or clicking away finishes). Align them left, center or right and set the line spacing. On an arch the lines curve together; a circle or a drawn line takes the first line only. The lettering panel's **Advanced** fold is now **More options**.
 - **Slant** letters up to 30° either way.
