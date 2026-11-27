@@ -36,6 +36,43 @@ def tiny_png(path: Path, size: int = 40) -> None:
     path.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b""))
 
 
+def tiny_svg(path: Path) -> None:
+    """A 20 mm drawing with one filled 16 mm square."""
+    path.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="20mm" height="20mm" viewBox="0 0 20 20">'
+                    '<rect x="2" y="2" width="16" height="16" fill="#cc0000"/></svg>', encoding="utf-8")
+
+
+def tiny_dxf(path: Path) -> None:
+    """A millimeter DXF with one 20 mm line, in the plain text form."""
+    pairs = [(0, "SECTION"), (2, "HEADER"), (9, "$INSUNITS"), (70, 4), (0, "ENDSEC"),
+             (0, "SECTION"), (2, "ENTITIES"), (0, "LINE"), (8, "0"), (10, 0.0), (20, 0.0), (11, 20.0), (21, 0.0),
+             (0, "ENDSEC"), (0, "EOF")]
+    path.write_text("".join(f"{code}\n{value}\n" for code, value in pairs), encoding="ascii")
+
+
+def tiny_pdf(path: Path) -> None:
+    """A one-page PDF with a filled square and a 4 pt stroked line."""
+    content = b"0.8 0 0 rg 20 20 100 100 re f 0 0 0.8 RG 4 w 30 160 m 170 160 l S"
+    objects = [b"<</Type/Catalog/Pages 2 0 R>>", b"<</Type/Pages/Kids[3 0 R]/Count 1>>",
+               b"<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]/Contents 4 0 R>>",
+               b"<</Length %d>>\nstream\n%s\nendstream" % (len(content), content)]
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for n, body in enumerate(objects, 1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n%s\nendobj\n" % (n, body)
+    start = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objects) + 1)
+    out += b"".join(b"%010d 00000 n \n" % o for o in offsets)
+    out += b"trailer\n<</Size %d/Root 1 0 R>>\nstartxref\n%d\n%%%%EOF\n" % (len(objects) + 1, start)
+    path.write_bytes(bytes(out))
+
+
+#: One file for each library that reads artwork, and the shapes it has to come out as.
+ARTWORK = (("smoke.svg", tiny_svg, "svgelements", ["fill"]), ("smoke.dxf", tiny_dxf, "ezdxf", ["run"]),
+           ("smoke.pdf", tiny_pdf, "pypdfium2", ["fill", "satin"]))
+
+
 class Engine:
     def __init__(self, command: list[str], data_dir: str) -> None:
         env = dict(os.environ, THREADLINE_DATA_DIR=data_dir)
@@ -111,6 +148,15 @@ def smoke(command: list[str]) -> None:
             ort = eng.call("ai.trace_model")["runtime"]
             assert ort or intel_mac, "ONNX Runtime doesn't load in this engine (AI tracing would be unavailable)"
             print(f"smoke: ONNX Runtime {'loads' if ort else 'left out (Intel Mac)'}")
+            # The artwork libraries must be in the bundle and read a real file.
+            for name, make, library, kinds in ARTWORK:
+                art = Path(tmp) / name
+                make(art)
+                got = eng.call("art.preview", path=str(art), options={})
+                found = sorted(s["kind"] for s in got["shapes"])
+                assert found == kinds, f"art.preview ({library}) read {found} from {name}, not {kinds}"
+                width, height = got["size_mm"]
+                print(f"smoke: {library} ok ({name}: {', '.join(found)}, {width:.1f} x {height:.1f} mm)")
             # Stops by itself (the packaged engine then deletes its unpacked files).
             assert eng.call("engine.shutdown") is True
             code = eng.p.wait(timeout=30)

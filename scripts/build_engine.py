@@ -6,6 +6,7 @@ Run from the repo root:  uv run --project engine python scripts/build_engine.py
 
 from __future__ import annotations
 
+import json
 import os
 import platform
 import shutil
@@ -37,9 +38,21 @@ def target_triple() -> str:
 DROP_BINARIES = ("opencv_videoio_ffmpeg",)
 
 
+def pyinstaller_env(work: Path) -> dict[str, str]:
+    """The environment PyInstaller runs in. It imports ezdxf (artwork import) while it works out
+    the bundle, and ezdxf's first import reads every font on the computer and writes a cache into
+    the home folder. An empty cache of its own, in the build folder, keeps it from doing either."""
+    cache = work / "no-fonts"
+    (cache / "ezdxf").mkdir(parents=True, exist_ok=True)
+    (cache / "ezdxf" / "font_manager_cache.json").write_text(json.dumps({"version": 2, "font-faces": []}),
+                                                             encoding="utf-8")
+    return {**os.environ, "XDG_CACHE_HOME": str(cache), "XDG_CONFIG_HOME": str(cache)}
+
+
 def main() -> None:
     work = ENGINE / "build"
     work.mkdir(exist_ok=True)
+    env = pyinstaller_env(work)
     # Write the spec first, so unused libraries can be left out before bundling.
     subprocess.run(
         [
@@ -53,6 +66,7 @@ def main() -> None:
             str(ENGINE / "entry.py"),
         ],
         check=True,
+        env=env,
     )
     spec = work / f"{NAME}.spec"
     text = spec.read_text(encoding="utf-8")
@@ -69,6 +83,7 @@ def main() -> None:
             str(spec),
         ],
         check=True,
+        env=env,
     )
     exe = ".exe" if sys.platform == "win32" else ""
     OUT.mkdir(parents=True, exist_ok=True)

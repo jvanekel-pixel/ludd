@@ -26,6 +26,35 @@ def test_notices_cover_the_engine_libraries_but_not_test_tools():
     assert "pytest" not in names and "threadline-engine" not in names
 
 
+def test_notices_carry_every_licence_in_a_wheels_licenses_folder():
+    """pypdfium2 names PDFium's licences, and those of the libraries inside it, after the licence
+    ("LICENSES/Apache-2.0.txt"), so they must be taken whatever they are called."""
+    import importlib.metadata as md
+
+    dist = md.distribution("pypdfium2")
+    shipped = [str(f).replace("\\", "/") for f in dist.files or [] if ".dist-info/licenses/" in str(f).replace("\\", "/")]
+    taken = {name for name, _ in make_notices.licence_files(dist)}
+    assert len(shipped) > 20 and set(shipped) <= taken
+
+
+def test_the_build_keeps_ezdxf_from_reading_this_computers_fonts(tmp_path):
+    """PyInstaller imports ezdxf while it builds; an empty font cache of the right version keeps
+    that first import from reading every font and writing a cache into the home folder."""
+    import importlib.util
+    import json
+    import re
+
+    import build_engine
+
+    env = build_engine.pyinstaller_env(tmp_path)
+    cache = json.loads((Path(env["XDG_CACHE_HOME"]) / "ezdxf" / "font_manager_cache.json").read_text("utf-8"))
+    # The version ezdxf accepts, read from its source: importing ezdxf here would do what this prevents.
+    source = Path(importlib.util.find_spec("ezdxf").origin).parent / "fonts" / "font_manager.py"
+    version = int(re.search(r"^CURRENT_CACHE_VERSION = (\d+)", source.read_text("utf-8"), re.M).group(1))
+    assert cache == {"version": version, "font-faces": []}
+    assert Path(env["XDG_CONFIG_HOME"]).is_relative_to(tmp_path)
+
+
 def test_notices_text_keeps_each_licence_once():
     n = make_notices.Notices()
     n.add("a 1", "MIT", [("LICENSE", "Permission is hereby granted")])
