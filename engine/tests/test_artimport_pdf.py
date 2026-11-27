@@ -148,6 +148,19 @@ def test_pdf_colors_dashes_and_what_is_left_out(tmp_path):
     assert counts(result) == {"picture": 1, "text": 1, "shading": 1, "dash": 1}
 
 
+def test_pdf_clips_that_cut_a_shape_are_counted(tmp_path):
+    """Many programs clip every page to a box that holds everything: only a clip that cuts counts."""
+    form = first_extra()
+    objects = (stream("0 0 50 50 re f", "/Type /XObject /Subtype /Form /BBox [0 0 30 30]"),)  # cut by its BBox
+    content = ("q 0 0 200 100 re W n 10 10 20 20 re f Q\n"  # a box round the whole page: nothing cut
+               "q 60 20 20 20 re W n 60 20 40 40 re f Q\n"  # a smaller box: cut
+               "q 120 50 m 150 90 l 180 50 l h W n 110 40 80 55 re f Q\n"  # a triangle: cut
+               "q 1 0 0 1 20 50 cm /F Do Q")
+    result = preview(pdf_file(tmp_path, document(content, resources=f"/XObject << /F {form} 0 R >>", extra=objects)))
+    assert len(result["shapes"]) == 4  # the shapes come in whole
+    assert counts(result) == {"clip": 3}
+
+
 def test_pdf_pages(tmp_path):
     two = document("1 0 0 rg 10 10 72 72 re f", "0 0 1 rg 10 10 36 36 re f")
     path = pdf_file(tmp_path, two)

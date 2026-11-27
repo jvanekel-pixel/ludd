@@ -142,6 +142,8 @@ class _Page:
         subpaths = self.subpaths(obj, matrix)
         if not subpaths:
             return
+        if self.clipped(obj):
+            self.drawing.skipped.add("clip")
         width = 0.0
         if stroke:
             w = ctypes.c_float()
@@ -157,6 +159,38 @@ class _Page:
             stroke=stroke, stroke_width=width, cap=caps.get(pdfium.FPDFPageObj_GetLineCap(obj), "butt"),
             join=joins.get(pdfium.FPDFPageObj_GetLineJoin(obj), "miter"), miter_limit=10.0,
             dashed=bool(stroke) and pdfium.FPDFPageObj_GetDashCount(obj) > 0))
+
+    def clipped(self, obj) -> bool:
+        """Does a clip cut this shape? A box that holds all of it doesn't (many programs put one
+        round every page); any other clip is counted. A form's box is a clip, in the form's own
+        coordinates, like the shape's bounds there."""
+        pdfium = self.pdfium
+        clip = pdfium.FPDFPageObj_GetClipPath(obj)
+        paths = pdfium.FPDFClipPath_CountPaths(clip) if clip else 0
+        if paths <= 0:
+            return False
+        sides = [ctypes.c_float() for _ in range(4)]
+        if not pdfium.FPDFPageObj_GetBounds(obj, *(ctypes.byref(s) for s in sides)):
+            return False
+        left, bottom, right, top = (s.value for s in sides)
+        x, y = ctypes.c_float(), ctypes.c_float()
+        for i in range(min(paths, 16)):
+            n = pdfium.FPDFClipPath_CountPathSegments(clip, i)
+            if not 4 <= n <= 6:  # not a plain box (and never read through a long one)
+                return True
+            xs, ys = set(), set()
+            for j in range(n):
+                segment = pdfium.FPDFClipPath_GetPathSegment(clip, i, j)
+                if (not segment or pdfium.FPDFPathSegment_GetType(segment) == pdfium.FPDF_SEGMENT_BEZIERTO
+                        or not pdfium.FPDFPathSegment_GetPoint(segment, ctypes.byref(x), ctypes.byref(y))):
+                    return True
+                xs.add(round(x.value, 2))
+                ys.add(round(y.value, 2))
+            if len(xs) != 2 or len(ys) != 2:
+                return True
+            if left < min(xs) - 0.5 or bottom < min(ys) - 0.5 or right > max(xs) + 0.5 or top > max(ys) + 0.5:
+                return True
+        return False
 
     def subpaths(self, obj, matrix: tuple) -> list[Subpath]:
         pdfium = self.pdfium
