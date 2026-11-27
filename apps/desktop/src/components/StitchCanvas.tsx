@@ -798,11 +798,12 @@ function snapDirection(o: ObjectItem, p: Pt): Pt {
   return nearestOnLine(columnRing(o.geometry as { rail_a: PathNode[]; rail_b: PathNode[] }), p, true);
 }
 
-/** Where a drawn shape's stitching starts and ends (its first and last needle drop), mm. */
+/** Where a drawn shape's stitching starts and ends (its first and last needle drop), mm. A shape
+ *  sewn in a branch has none of its own: the branch's dots show (canvas/branchOverlay.ts). */
 function stitchEnds(scene: Scene, o: ObjectItem): { start: Pt; end: Pt } | null {
   const d = scene.design;
   const idx = useStore.getState().history.present?.layout.items.indexOf(o) ?? -1;
-  if (!d?.records.item || idx < 0) return null;
+  if (!d?.records.item || idx < 0 || d.branches?.some((b) => b.items.includes(o.id))) return null;
   const { x, y, kind, item } = d.records;
   let first = -1;
   let last = -1;

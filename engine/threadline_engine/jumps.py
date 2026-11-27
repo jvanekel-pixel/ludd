@@ -9,8 +9,9 @@ For each drawn piece, the ways it could be sewn are tried:
 - a fill: starting at the edge nearest the piece before, or nearest the piece after, with its rows
   sewn either way.
 The way chosen is the one whose start is nearest where the piece before ended and whose end is
-nearest the piece after (like a magnet between the two). Stitch files, lettering and appliques stay
-as they are, but count as neighbours. The choices are kept on the pieces (their points' order, or a
+nearest the piece after (like a magnet between the two). Lettering's first letter starts at its
+edge nearest where the piece before ended. Stitch files and appliques stay as they are, but count
+as neighbours, and so do shapes in a branch (the branch chooses their starts and ends). The choices are kept on the pieces (their points' order, or a
 fill's start point and direction), so drawing the design afterwards costs nothing extra.
 """
 
@@ -219,9 +220,30 @@ def _ends(it: dict[str, Any], idx: int, fabric: str | None) -> tuple[Pt, Pt] | N
     return (pts[0], pts[-1]) if pts else None
 
 
+def _first_letter_moved(it: dict[str, Any], idx: int, fabric: str | None, before: Pt,
+                        now: tuple[Pt, Pt]) -> tuple[dict[str, Any], tuple[Pt, Pt]] | None:
+    """Lettering whose first letter starts at its edge nearest `before` (where the piece before
+    ended), as a chosen start in the text's own frame (letters["0"].start_mm, as its green dot
+    keeps it), with its new ends; None if that doesn't make the jump shorter."""
+    t = L.Transform.from_dict(it.get("transform"))
+    local = _unturn(t, (before[0] - t.x, before[1] - t.y))
+    letters = dict(it.get("letters") or {})
+    letters["0"] = {**(letters.get("0") or {}), "start_mm": [local[0], local[1]]}
+    v = {**it, "letters": letters}
+    try:
+        blocks = L._text_block(v, idx, fabric)[0]
+    except (L.LayoutError, dz.DigitizeError):
+        return None
+    pts = [(r[0] / 10, r[1] / 10) for b in blocks for r in b.recs if r[2] == pe.STITCH]
+    if not pts or math.dist(before, pts[0]) >= math.dist(before, now[0]) - 0.05:
+        return None
+    return v, (pts[0], pts[-1])
+
+
 def optimize_jumps(layout: dict[str, Any]) -> dict[str, Any]:
     """Choose each drawn piece's start and end so jumps within a thread are shortest.
-    Returns {"changes": {id: {"geometry": …} or {"params": …}}, "before_mm", "after_mm"}."""
+    Returns {"changes": {id: {"geometry": …}, {"params": …} or, for lettering, {"letters": …}},
+    "before_mm", "after_mm"}. Shapes in a branch are left to it."""
     items = list(layout.get("items") or [])
     fabric = layout.get("fabric")
     r = L.render(layout)
@@ -242,8 +264,18 @@ def optimize_jumps(layout: dict[str, Any]) -> dict[str, Any]:
 
     chosen = dict(ends_now)
     changes: dict[str, dict[str, Any]] = {}
+    # Shapes sewn in a branch start and end where their branch needs them (layout/branch.py).
+    from .layout.branch import plans
+
+    in_branch = {i for p in plans(layout)[0] for i in p.run}
     for i, it in enumerate(items):
-        if it.get("kind") not in ("run", "satin", "fill") or i not in chosen:
+        if it.get("kind") == "text" and i in chosen and i > 0 and keys[i - 1] == keys[i] and i - 1 in chosen:
+            moved = _first_letter_moved(it, i, fabric, chosen[i - 1][1], chosen[i])
+            if moved is not None:
+                items[i], chosen[i] = moved
+                changes[str(it.get("id", i))] = {"letters": moved[0]["letters"]}
+            continue
+        if it.get("kind") not in ("run", "satin", "fill") or i not in chosen or i in in_branch:
             continue
         before = chosen[i - 1][1] if i > 0 and keys[i - 1] == keys[i] and i - 1 in chosen else None
         nxt = items[i + 1] if i + 1 < len(items) and keys[i + 1] == keys[i] else None

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 import pyembroidery as pe
 
 from .. import design, fabrics, kept, quality
-from . import passes
+from . import branch, passes  # branch registers its "after_items" pass
 from .extras import BASTING_MIN_MM, _basting, _knockdown
 from .files import _apply_ops, _load, _move_stitches, _split_blocks, _transform
 from .joins import _join_same_thread_objects, _merge_same, _sort_by_thread
@@ -26,6 +26,7 @@ class Rendered:
     blocks: list[Block]
     items: list[dict[str, Any]]
     warnings: list[dict[str, str]]
+    branches: list[dict[str, Any]] = field(default_factory=list)  # each branch as sewn (BranchInfo)
 
 
 def render(layout: dict[str, Any]) -> Rendered:
@@ -34,7 +35,8 @@ def render(layout: dict[str, Any]) -> Rendered:
         raise LayoutError("Nothing to show: the layout has no designs")
     # Render hooks (layout/passes.py): passes that change the layout before any item is made.
     layout, warnings = passes.run_before_items(layout)
-    items = layout.get("items") or []
+    # Branches (layout/branch.py): members start and end where their path needs them.
+    items = branch.prepared_items(layout)
     all_blocks: list[Block] = []
     item_info: list[dict[str, Any]] = []
 
@@ -126,6 +128,7 @@ def render(layout: dict[str, Any]) -> Rendered:
         all_blocks.extend(blk for blk in blocks if blk.recs)
 
     all_blocks = passes.run_passes(passes.AFTER_ITEMS, all_blocks, layout, warnings)
+    branches = branch.infos(all_blocks)
     # A colour whose stitches were all deleted (stitch editing) sews nothing: leave it out, so the
     # file has no empty colour change and its thread list stays in step with the stitches.
     all_blocks = [b for b in all_blocks if any(r[2] == pe.STITCH for r in b.recs)]
@@ -190,7 +193,7 @@ def render(layout: dict[str, Any]) -> Rendered:
             src_of.append(src)
     pattern.stitches.append([pattern.stitches[-1][0] if pattern.stitches else 0,
                              pattern.stitches[-1][1] if pattern.stitches else 0, pe.END])
-    return Rendered(pattern, item_of, src_of, all_blocks, item_info, warnings)
+    return Rendered(pattern, item_of, src_of, all_blocks, item_info, warnings, branches)
 
 
 def render_summary(layout: dict[str, Any]) -> dict[str, Any]:
@@ -222,6 +225,8 @@ def render_summary(layout: dict[str, Any]) -> dict[str, Any]:
         "items": r.items,
         "warnings": r.warnings,
     })
+    if r.branches:
+        summary["branches"] = r.branches
     return summary
 
 

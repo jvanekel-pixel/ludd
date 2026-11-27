@@ -62,4 +62,6 @@ def layout_optimize_order(layout: dict) -> dict:
 def layout_branch_plan(layout: dict, ids: list) -> dict:
     """Can the shapes `ids` be sewn as one path? {ok, reason, order} (order: every item id, the
     branch's members moved next to each other)."""
-    raise layout_module.LayoutError("not built yet")
+    from ..layout.branch import branch_plan
+
+    return branch_plan(layout, ids)
