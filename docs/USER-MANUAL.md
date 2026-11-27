@@ -772,9 +772,10 @@ the turn gentler. Two lines with their middles in the same place can't both be f
 follow the first one, and LUDD tells you to move the other at least 1 mm away. With three or more
 lines in a row, keep neighbors fairly close in direction: lines at 0°, 60° and 120° side by side
 leave the rows far off the middle one. A turning fill often shows a thin line of thread across rows
-already sewn: it moves between groups of rows, and on the outside of a bend it can step straight to
-a row that starts far away. Check the preview before sewing; **Back to one angle** sews it as a
-plain fill. Other patterns don't use the lines, but they come back with Tatami.
+already sewn, several centimetres on big shapes: it moves between groups of rows, and on the
+outside of a bend it can step straight to a row that starts far away. Check the preview before
+sewing; **Back to one angle** sews it as a plain fill. Other patterns don't use the lines, but they
+come back with Tatami.
 
 ### Motif lines
 A line's **Style → Motif** repeats a little pattern along it: **Wave**, **Zigzag**, **Scallop**,
