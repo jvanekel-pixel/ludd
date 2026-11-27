@@ -1,9 +1,9 @@
 {
  "lines_and_fill": {
-  "jumps": 2,
-  "records": 326,
-  "sha1": "4462338af52e36c7d349625f8e692d3ec1d6c2ea",
-  "stitches": 323,
+  "jumps": 1,
+  "records": 323,
+  "sha1": "e3ce582110ecebdc58ee34b6224de882f452039b",
+  "stitches": 321,
   "threads": [
    "#cc2222"
   ],

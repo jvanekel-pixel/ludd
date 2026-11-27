@@ -1,7 +1,7 @@
 """Branching (P7-B1): drawn shapes in one thread, sewn as one path with one start and one end.
 
 Items with the same `branch` id are a branch. Drawn lines, satins and fills sewn in the branch's
-thread can be in one; a member in another thread, a blend (more than one thread), an applique,
+thread (the one most of its members sew in) can be in one; a member in another thread, a blend (more than one thread), an applique,
 lettering or a stitch file is left out with a note, and a branch of one is ignored. Members next to
 each other in the sewing order are routed together, at the place of the first; a member sewn apart
 from the rest starts a path of its own, with a note.
@@ -55,13 +55,18 @@ BRANCH_KINDS = ("run", "satin", "fill")
 REACH_MM = 1.0  # a join's ends may reach the cover over this much (and a join this short is one stitch)
 DECIMALS = 3  # distances are compared rounded to this many decimals (mm): near ties are ties
 SAMPLE_MM = 0.5  # an outline's points are tried this far apart for where a member enters and leaves
+INSIDE_MM = 0.001  # a reached point is stepped this far past the cover's edge, so it lies inside once rounded
+CLOSE_MM = 0.31  # the covers of later blocks are merged closed by this much: stitching that meets leaves no slit
 EXACT_MAX = 8  # branches this big or smaller get the best order by exact search
 SWAPS_MAX = 200  # bigger ones: nearest first, then at most this many two-swap improvements
 
-CUT_NOTE = ("Branch: no hidden way from {a} to {b} (they don't touch and nothing sewn later covers the gap), "
-            "so the thread is cut there. Move them together or put a shape over the gap.")
-JUMP_NOTE = ("Branch: no hidden way from {a} to {b} (they don't touch and nothing sewn later covers the gap), "
-             "so the needle jumps there and leaves a short thread on top. Move them together or put a shape over the gap.")
+_JOIN_HELP = ("Shapes join best where fills touch or overlap, or where a line starts right at the end of the one "
+              "before. Move them that way, put a shape sewn later over that spot, or ")
+CUT_NOTE = ("Branch: the thread can't get from {a} to {b} hidden under stitching (nothing sewn later covers the "
+            "whole way between them), so it is cut there. " + _JOIN_HELP + "leave the cut.")
+JUMP_NOTE = ("Branch: the thread can't get from {a} to {b} hidden under stitching (nothing sewn later covers the "
+             "whole way between them), so the needle jumps there and leaves a short thread on top. " + _JOIN_HELP
+             + "snip that thread after sewing.")
 LEFT_OUT = {
     "thread": "{name} is in a branch but sews in a different thread, so it is sewn on its own. "
               "Give it the branch's thread, or take it out of the branch (Alt+Shift+U).",
@@ -112,13 +117,17 @@ def _name(it: dict[str, Any], idx: int) -> str:
 
 def _runs(items: list) -> tuple[list[tuple[str, list[int]]], list[dict]]:
     """The paths to plan: (branch id, member indices in layout order) for each run of two or more
-    members sewn next to each other; and the notes about members left out or sewn apart."""
+    members sewn next to each other; and the notes about members left out or sewn apart. A
+    branch's thread is the one most of its members sew in (a tie: the thread of the one listed
+    first), so recoloring one member leaves out that member, not the others."""
     notes: list[dict] = []
-    thread: dict[str, tuple] = {}
+    votes: dict[str, dict[tuple, list[int]]] = {}  # branch -> thread -> [members in it, first index]
     for idx, it in enumerate(items):
         b = _bid(it)
-        if b and b not in thread and it.get("kind") in BRANCH_KINDS and not _is_blend(it):
-            thread[b] = _thread_of(it)
+        if b and it.get("kind") in BRANCH_KINDS and not _is_blend(it):
+            v = votes.setdefault(b, {}).setdefault(_thread_of(it), [0, idx])
+            v[0] += 1
+    thread = {b: max(ts, key=lambda t: (ts[t][0], -ts[t][1])) for b, ts in votes.items()}
     ok: dict[int, str] = {}
     for idx, it in enumerate(items):
         b = _bid(it)
@@ -475,14 +484,18 @@ def _stitches(blk: Block) -> list:
 
 
 def _reach(p: Pt, zone: Any) -> Pt | None:
-    """`p` if the zone holds it, else the zone's nearest point if it is within REACH_MM."""
+    """`p` if the zone holds it, else the zone's nearest point if it is within REACH_MM, stepped
+    INSIDE_MM further in along the way from `p` (rounded to 0.0001 mm, the nearest point itself can
+    land just outside, past the 1e-6 mm a Zone allows, and the join would then be a cut)."""
     sp = SPoint(p)
     if zone.covers(sp):
         return p
-    if _rd(zone.distance(sp)) > REACH_MM:
+    d = zone.distance(sp)
+    if _rd(d) > REACH_MM:
         return None
     q = nearest_points(zone, sp)[0]
-    return (round(q.x, 4), round(q.y, 4))
+    k = 1 + INSIDE_MM / d if d > 1e-9 else 1.0
+    return (round(p[0] + (q.x - p[0]) * k, 4), round(p[1] + (q.y - p[1]) * k, 4))
 
 
 def _ring_key(ring: LineString) -> tuple:
@@ -544,11 +557,17 @@ def _join(a: Pt, b: Pt, zone: Any) -> tuple[str, list[Pt]]:
 
 
 def _zone(covers: list) -> Any:
+    """What the blocks in `covers` hide, as one shape. Each cover lies 0.3 mm inside its own
+    stitching (joins._cover), so two blocks whose stitching meets leave a 0.6 mm slit between their
+    covers; merged, the union is closed by CLOSE_MM, which bridges that slit (stitching up to about
+    0.02 mm apart) and nothing wider."""
     found = [c for c in covers if c is not None]
     if not found:
         return None
     try:
-        return shapely.union_all(found) if len(found) > 1 else found[0]
+        if len(found) == 1:
+            return found[0]
+        return shapely.union_all(found).buffer(CLOSE_MM, quad_segs=2).buffer(-CLOSE_MM, quad_segs=2)
     except GEOSException:
         return None
 
