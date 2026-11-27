@@ -245,6 +245,13 @@ describe("Phase 7: line styles, lock stitches and blackwork (Track A)", () => {
     for (const [style, want] of Object.entries(rows)) expect(rowLabels(line({ style })), style).toEqual(want);
   });
 
+  it("French knots says that each knot is a jump to snip on a machine that cuts only at color changes", () => {
+    const text = line({ style: "knots" }).textContent!;
+    expect(text).toContain("Between knots the needle jumps, and over 3 mm the jump is marked to be cut.");
+    expect(text).toContain("leaves that thread to snip by hand, unless you tick “Have the machine cut jump threads”");
+    expect(line({ style: "stem" }).textContent).not.toContain("the needle jumps");
+  });
+
   it("a motif line's Which side sits under its Width", () => {
     const section = line({ style: "motif", motif_side: "right" });
     expect(texts(section, '[aria-label="Which side"] button')).toEqual(["Centered", "Left", "Right"]);

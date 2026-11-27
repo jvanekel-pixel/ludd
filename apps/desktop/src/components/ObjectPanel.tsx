@@ -120,6 +120,7 @@ function LineStyleRows({ item, p, set }: { item: ObjectItem; p: Record<string, u
       </Row>
       {style === "motif" && <MotifSelect item={item} />}
       <FieldSteppers fields={def.fields} p={p} set={set} />
+      {def.hint && <p className="hint">{def.hint}</p>}
       {style === "motif" && (
         <Row label="Which side" hint="Which side of the line the motif sits on. For blanket stitch round an applique, pick the side that points its teeth onto the applique.">
           <div className="seg" role="group" aria-label="Which side">

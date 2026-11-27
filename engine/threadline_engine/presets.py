@@ -236,12 +236,17 @@ def check(data: Any, label: str, strict: bool = True) -> dict[str, Any]:
     if note is not None and not isinstance(note, str):
         raise broken
     known = settings_of(kind)
+    anywhere = frozenset().union(*(settings_of(k) for k in KINDS))
     params: dict[str, Any] = {}
     for key, value in data["params"].items():
-        if key in ONE_SHAPE or value is None:
+        # An applique always locks the usual way, so a lock setting means nothing to it.
+        if key in ONE_SHAPE or value is None or kind == "applique" and key in LOCKS:
             continue
         if key not in known:
             if strict:
+                if key in anywhere:  # this LUDD knows it, for another kind of shape
+                    raise PresetError(f"{label} has a setting, “{_text(str(key), 40)}”, that {KIND_PLURAL[kind]} "
+                                      "don't have, so LUDD can't use it.")
                 raise _newer(label, f"a setting, “{_text(str(key), 40)}”,")
             continue
         _check_numbers(value, label)
@@ -441,6 +446,8 @@ def export(preset_id: Any, dest: Any) -> dict[str, Any]:
         raise PresetError("Saving a preset needs a full path, from the drive or top folder down. Choose where to save it.")
     if path.suffix.lower() != EXT:
         path = path.with_name(path.name + EXT)  # added, never replacing: "Bob v1.2" stays whole
+    if ":" in path.name:  # on Windows it names a hidden stream, leaving an empty file behind
+        raise PresetError("A file name can't have “:” in it. Choose another name.")
     if _RESERVED.fullmatch(path.name):
         raise PresetError(f"Windows keeps the name “{path.name}” for a device. Choose another name.")
     if _in_data_folder(path):

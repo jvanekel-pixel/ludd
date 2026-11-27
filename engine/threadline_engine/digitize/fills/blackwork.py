@@ -22,6 +22,8 @@ from . import FillPattern, Param, register, spiral
 from .lattice import clip_segments, double_run_paths, tile_segments
 from .motif import own_frame, place
 
+#: A fill taking more stitches than this says so (as Repeat does).
+WARN_STITCHES = 60_000
 #: A join may run this far in from the shape's edge, or within ON_LINE_MM of a lattice line.
 EDGE_REACH_MM = 0.6
 ON_LINE_MM = 0.05
@@ -71,7 +73,12 @@ def _paths(poly, params, pos):
     # the geometry library in another place on another computer).
     here = (pos[0] - origin[0], pos[1] - origin[1]) if params.start_mm is not None else spiral.FAR
     pieces = double_run_paths(segments, _stitch(params), here)
-    return [place(p, origin) for p in _joined(pieces, local)], []
+    joined = _joined(pieces, local)
+    stitches = sum(len(p) for p in joined)
+    warnings = [] if stitches <= WARN_STITCHES else [
+        f"This fill takes about {round(stitches, -2):,} stitches: a very long sew-out on a home machine. "
+        "Bigger cells or a smaller shape sew faster."]
+    return [place(p, origin) for p in joined], warnings
 
 
 def _joined(pieces: list, local) -> list:

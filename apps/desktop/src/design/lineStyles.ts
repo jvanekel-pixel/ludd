@@ -21,6 +21,8 @@ export type LineStyleDef = {
   fields: Field[];
   /** No stitch Length: the style's own sizes are all it has. */
   noLength?: boolean;
+  /** Said under the style's settings: what sewing it means. */
+  hint?: string;
 };
 
 export const LINE_STYLE_DEFS: LineStyleDef[] = [
@@ -47,7 +49,11 @@ export const LINE_STYLE_DEFS: LineStyleDef[] = [
     ],
   },
   { id: "redwork", label: "Redwork", title: "Out and back along the line, the way back filling in between the holes: smooth, like hand redwork", more: true, fields: [] },
-  { id: "knots", label: "French knots", title: "A knot at every point of the line, with a jump from one to the next", more: true, noLength: true, fields: [KNOT_SIZE] },
+  {
+    id: "knots", label: "French knots", title: "A knot at every point of the line, with a jump from one to the next", more: true, noLength: true,
+    fields: [KNOT_SIZE],
+    hint: "Between knots the needle jumps, and over 3 mm the jump is marked to be cut. A machine that cuts only at color changes, like the PE550D, leaves that thread to snip by hand, unless you tick “Have the machine cut jump threads” when saving: then it stops at each cut, and you press Start.",
+  },
 ];
 
 /** A style's descriptor; an unknown or missing one is treated as Single. */

@@ -4,6 +4,7 @@ A user's name never becomes a path, and a file is checked before it's trusted.""
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -185,7 +186,6 @@ def test_import_needs_a_real_file(tmp_path):
     {"kind": "applique", "params": {"tack": "glue"}},
     {"kind": "fill", "params": {"tie_style": "knotty"}},
     {"kind": "fill", "params": {"sparkle_mm": 2}},
-    {"kind": "satin", "params": {"cover_width_mm": 3}},
     {"kind": "patch", "params": {}},
     {"kind": "fill", "params": {}, "version": 2},
 ])
@@ -193,6 +193,38 @@ def test_import_refuses_a_newer_pattern(data, isolated_data_dir, tmp_path):
     with pytest.raises(presets.PresetError, match="newer LUDD"):
         presets.import_file(a_file(tmp_path, {"name": "Future", **data}))
     assert stored(isolated_data_dir) == []
+
+
+@pytest.mark.parametrize("data,says", [
+    ({"kind": "satin", "params": {"cover_width_mm": 3}}, "“cover_width_mm”, that satins don't have"),
+    ({"kind": "applique", "params": {"stitch_mm": 2}}, "“stitch_mm”, that appliques don't have"),
+    ({"kind": "run", "params": {"pattern": "blackwork"}}, "“pattern”, that lines don't have"),
+])
+def test_import_refuses_another_kind_s_setting_without_calling_it_newer(data, says, isolated_data_dir, tmp_path):
+    with pytest.raises(presets.PresetError) as refused:
+        presets.import_file(a_file(tmp_path, {"name": "Mixed", **data}))
+    assert says in str(refused.value) and "newer" not in str(refused.value)
+    assert stored(isolated_data_dir) == []
+
+
+def test_an_applique_preset_with_lock_settings_comes_in_without_them(isolated_data_dir, tmp_path):
+    """Phase 7 audit: it was refused as made by a newer LUDD. Saving leaves them out as well."""
+    path = a_file(tmp_path, {"name": "Locked edge", "kind": "applique",
+                             "params": {"cover_width_mm": 3, "tie_style": "triangle", "tie_in": False}})
+    presets.import_file(path)
+    presets.save({"name": "Saved edge", "kind": "applique", "params": {"cover_width_mm": 2.5, "tie_style": "backtack"}})
+    assert [p["params"] for p in mine()] == [{"cover_width_mm": 3}, {"cover_width_mm": 2.5}]
+
+
+def test_export_refuses_a_name_with_a_colon_and_leaves_nothing(isolated_data_dir, tmp_path):
+    """Windows takes "a.txt:b.luddpreset" as a hidden stream of "a.txt", left behind empty."""
+    presets.save(preset())
+    out = tmp_path / "out"
+    out.mkdir()
+    for name in ("victim.txt:ads.luddpreset", "a:b"):
+        with pytest.raises(presets.PresetError, match="can't have “:”"):
+            presets.export("mine", f"{out}{os.sep}{name}")  # (out / "a:b" would read "a:" as a drive)
+        assert list(out.iterdir()) == []
 
 
 def test_import_leaves_out_what_belongs_to_one_shape_and_stray_extras(isolated_data_dir, tmp_path):

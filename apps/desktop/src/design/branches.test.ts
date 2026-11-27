@@ -180,6 +180,16 @@ describe("the order shown", () => {
     expect(useStore.getState().notice?.text).toContain("A branch sews its shapes in the order LUDD picks");
   });
 
+  it("a move the branch answers with another order of its own says so too", async () => {
+    // Seen in the app: c moved up, and the branch then sewed a, b, c, d.
+    let picked: BranchInfo[] = SEWN;
+    setDoc(FOUR(), ["c"], () => picked);
+    picked = [{ ...SEWN[0], items: ["a", "b", "c", "d"] }];
+    await A.moveItemTo("c", 0);
+    await A.whenIdle();
+    expect(useStore.getState().notice?.text).toContain("A branch sews its shapes in the order LUDD picks");
+  });
+
   it("an ordinary move says nothing", async () => {
     setDoc(lay([fill("x"), fill("y")]), ["x"]);
     await A.moveItemTo("x", 1);

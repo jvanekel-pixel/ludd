@@ -1,10 +1,10 @@
 """Branching (P7-B1): drawn shapes in one thread, sewn as one path with one start and one end.
 
 Items with the same `branch` id are a branch. Drawn lines, satins and fills sewn in the branch's
-thread (the one most of its members sew in) can be in one; a member in another thread, a blend (more than one thread), an applique,
-lettering or a stitch file is left out with a note, and a branch of one is ignored. Members next to
-each other in the sewing order are routed together, at the place of the first; a member sewn apart
-from the rest starts a path of its own, with a note.
+thread (the one most of its members sew in) can be in one; a member in another thread, a blend (more
+than one thread), an applique, lettering or a stitch file is left out with a note, and a branch of one
+is ignored. Members next to each other in the sewing order are routed together, at the place of the
+first; a member sewn apart from the rest starts a path of its own, with a note.
 
 Two steps, both cached:
 1. `plan` (before any item is made, `prepared_items`): the order of the members (overlapping ones

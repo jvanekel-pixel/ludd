@@ -151,6 +151,21 @@ describe("the buttonhole dialog", () => {
     expect(items()).toHaveLength(1);
   });
 
+  it("puts the refusal away as soon as a number or the style changes", async () => {
+    refusal = "Length must be between 8 and 40 mm";
+    open("object.buttonhole");
+    const shown = () => dialog()!.querySelector('[role="alert"]')?.textContent ?? null;
+    type("Length", "99");
+    await click(button("Add"));
+    expect(shown()).toBe("Length must be between 8 and 40 mm");
+    type("Length", "20");
+    expect(shown()).toBeNull();
+    await click(button("Add"));
+    expect(shown()).toBe("Length must be between 8 and 40 mm"); // the engine still says no
+    await click(button("Rounded ends"));
+    expect(shown()).toBeNull();
+  });
+
   it("an empty box keeps its number; Esc and Cancel add nothing", async () => {
     open("object.buttonhole");
     type("Length", "");

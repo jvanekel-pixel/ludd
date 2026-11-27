@@ -366,6 +366,17 @@ def test_the_estimate_is_near_what_is_sewn(kind):
         assert 0.7 < about / sewn < 1.6, (cell, stitch, about, sewn)
 
 
+def test_a_very_big_blackwork_warns_like_repeat_does():
+    big = _nodes([(0, 0), (250, 0), (250, 250), (0, 250)])
+    recs, warnings = generate(_fill("crossed", big, blackwork_mm=3, underlay="auto"))
+    sewn = sum(1 for r in recs if r[2] == STITCH)
+    assert sewn > blackwork.WARN_STITCHES == 60_000
+    (said,) = [w for w in warnings if "very long sew-out" in w]
+    about = int(said.split("about ")[1].split(" stitches")[0].replace(",", ""))
+    assert abs(about - sewn) <= 0.02 * sewn and "Bigger cells or a smaller shape sew faster." in said
+    assert not [w for w in generate(_fill("crossed", SQUARE, blackwork_mm=3, underlay="auto"))[1] if "very long" in w]
+
+
 def test_a_shape_too_small_for_blackwork_says_so():
     # No diagonal line has 0.8 mm of itself inside a strip 0.4 mm wide.
     with pytest.raises(DigitizeError, match="too small for a blackwork fill"):

@@ -58,6 +58,11 @@ function SmallObjectDialog({ kind }: { kind: SmallDialog }) {
 
   /** A box's number; an empty box means the number it started with. */
   const value = (key: string) => (text[key].trim() ? Number(text[key]) : (start[key] as number));
+  /** A change puts away what was refused: it was about the numbers before. */
+  const change = (patch: () => void) => {
+    patch();
+    setError(null);
+  };
 
   const add = async () => {
     if (busy) return;
@@ -94,7 +99,7 @@ function SmallObjectDialog({ kind }: { kind: SmallDialog }) {
     <label className="field" key={b.key}>
       {b.label}
       <span className="row">
-        <input ref={at} type="number" min={b.min} max={b.max} step={b.step} value={text[b.key]} onChange={(e) => setText((t) => ({ ...t, [b.key]: e.target.value }))} />
+        <input ref={at} type="number" min={b.min} max={b.max} step={b.step} value={text[b.key]} onChange={(e) => change(() => setText((t) => ({ ...t, [b.key]: e.target.value })))} />
         <small>{b.note ?? `${b.min} to ${b.max} mm`}</small>
       </span>
     </label>
@@ -116,7 +121,7 @@ function SmallObjectDialog({ kind }: { kind: SmallDialog }) {
           Style
           <div className="seg" role="group" aria-label="Buttonhole style">
             {STYLES.map((s) => (
-              <button key={s.id} type="button" aria-pressed={style === s.id} onClick={() => setStyle(s.id)} title={s.title}>
+              <button key={s.id} type="button" aria-pressed={style === s.id} onClick={() => change(() => setStyle(s.id))} title={s.title}>
                 {s.label}
               </button>
             ))}

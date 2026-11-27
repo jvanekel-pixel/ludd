@@ -842,12 +842,15 @@ const shownRows = (l: Layout) => inSewingOrder(l.items, useStore.getState().desi
 export async function moveItemTo(id: string, to: number) {
   const l = currentLayout();
   if (!l) return;
-  const before = shownRows(l).map((it) => it.id).join();
-  const next = moveShown(l, shownRows(l), id, to);
-  if (!(await commit(next))) return;
+  const rows = shownRows(l);
+  const from = rows.findIndex((it) => it.id === id);
+  if (from < 0) return;
+  const wanted = rows.map((it) => it.id).filter((x) => x !== id);
+  wanted.splice(Math.max(0, Math.min(rows.length - 1, Math.round(to))), 0, id);
+  if (!(await commit(moveShown(l, rows, id, to)))) return;
   const now = currentLayout();
-  // A branch sews its shapes in the order it picks: a move inside it can come straight back.
-  if (now && to !== before.split(",").indexOf(id) && shownRows(now).map((it) => it.id).join() === before)
+  // A branch sews its shapes in the order it picks, which needn't be the one arranged.
+  if (now && shownRows(now).map((it) => it.id).join() !== wanted.join())
     info("A branch sews its shapes in the order LUDD picks. To choose a shape's place yourself, take it out of the branch (Alt+Shift+U).");
 }
 
