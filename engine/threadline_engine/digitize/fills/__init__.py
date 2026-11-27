@@ -70,3 +70,4 @@ def get(name: str) -> FillPattern:
 from . import builtin  # noqa: E402,F401  (registers the six, in today's order)
 from . import spiral  # noqa: E402,F401
 from . import blend, motif, maze, ripple, mesh  # noqa: E402,F401  (in the panel's order)
+from . import blackwork  # noqa: E402,F401  (lattices sewn as double runs, fills/lattice.py)

@@ -1,0 +1,37 @@
+{
+ "backstitch_s_curve": {
+  "jumps": 0,
+  "records": 122,
+  "sha1": "e92502baefffd45c7bf9b620adc7597688006b62",
+  "stitches": 122,
+  "trims": 0
+ },
+ "candlewick_line": {
+  "jumps": 0,
+  "records": 227,
+  "sha1": "3a2297e0e36b03c41c1da61784d5c7ebce043549",
+  "stitches": 227,
+  "trims": 0
+ },
+ "knots_five": {
+  "jumps": 4,
+  "records": 77,
+  "sha1": "bd1da8a727958ca9e4fed78407996f2346c3e998",
+  "stitches": 69,
+  "trims": 4
+ },
+ "redwork_closed_square": {
+  "jumps": 0,
+  "records": 73,
+  "sha1": "7493a9d8c26f372af30b5387aa2fc07fe2dc7e5b",
+  "stitches": 73,
+  "trims": 0
+ },
+ "stem_s_curve": {
+  "jumps": 0,
+  "records": 122,
+  "sha1": "702509421e8c2a711e7e2579107115eb3a5b6742",
+  "stitches": 122,
+  "trims": 0
+ }
+}

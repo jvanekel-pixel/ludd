@@ -275,10 +275,25 @@ def _motif_unit(name: str) -> list[tuple[float, float]]:
     return list(MOTIF_UNITS[name])
 
 
+def _to_one_side(unit: Sequence[tuple[float, float]], side: str) -> list[tuple[float, float]]:
+    """One repeat moved wholly to the left or right of its line: its flat side, the edge nearest
+    where a repeat starts and ends (v -0.5 for the blanket stitch, whose teeth are the rest), lies
+    on the line, and the rest points away. Left is the left hand walking the line the way it was
+    drawn: along -n, with n = (-ty, tx). A built-in motif drawn between v -0.5 and 0.5 goes to
+    -(v + 0.5) or +(v + 0.5)."""
+    vs = [v for _, v in unit]
+    low, high = min(vs), max(vs)
+    base = (unit[0][1] + unit[-1][1]) / 2
+    flat = high if high - base < base - low - 1e-9 else low  # (a motif centered on its line: v low)
+    sign = -1.0 if side == "left" else 1.0
+    return [(u, sign * abs(v - flat)) for u, v in unit]
+
+
 def motif_points(nodes: Sequence, name: str, repeat_mm: float, width_mm: float, closed: bool = False,
-                 unit: Sequence[tuple[float, float]] | None = None) -> list[Point]:
+                 unit: Sequence[tuple[float, float]] | None = None, side: str = "center") -> list[Point]:
     """A motif repeated along the line: each repeat `repeat_mm` long and `width_mm` wide. `unit`:
-    one repeat to use instead of the built-in `name` (a motif of your own)."""
+    one repeat to use instead of the built-in `name` (a motif of your own). `side`: "center" (as
+    drawn, about the line), or "left" or "right" of it (see _to_one_side)."""
     poly, _ = flatten(nodes, closed)
     if closed and poly:
         poly = poly + [poly[0]]
@@ -289,6 +304,8 @@ def motif_points(nodes: Sequence, name: str, repeat_mm: float, width_mm: float, 
     n = max(1, round(total / repeat_mm))
     step = total / n
     unit = _motif_unit(name) if unit is None else list(unit)
+    if side != "center" and unit:
+        unit = _to_one_side(unit, side)
     out: list[Point] = []
     eps = min(0.2, total / 100)
     for k in range(n):

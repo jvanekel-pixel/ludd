@@ -72,7 +72,8 @@ def _motif(nodes, params, closed=False, start=None):
     unit = sewn_unit(params.motif_unit, params.motif_mm, params.motif_width_mm)
     stitch = max(params.stitch_mm, 1.0)
     _refuse_too_many(nodes, params, closed, unit, stitch)
-    pts = motif_points(nodes, params.motif, params.motif_mm, params.motif_width_mm, closed, unit=unit)
+    pts = motif_points(nodes, params.motif, params.motif_mm, params.motif_width_mm, closed, unit=unit,
+                       side=params.motif_side)
     return resample(pts, stitch, list(range(len(pts))))
 
 
