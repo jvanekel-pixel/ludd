@@ -35,9 +35,9 @@
   },
   "phase": 7,
   "status": "active",
-  "nextAction": "Phase 7 (lines, sequencing and drawing tools) in a fresh session once Phase 6 is merged: answer its spec's Owner decisions first",
-  "blockedOnHuman": "Answer the Phase 7 spec's Owner decisions",
-  "lastSessionAt": "2026-11-27T01:28:00Z",
+  "nextAction": "Resume the paused Phase 7 build: finish the four track branches, then integrate D, A, C, B (see HANDOFF.md)",
+  "blockedOnHuman": null,
+  "lastSessionAt": "2026-11-27T06:03:14Z",
   "health": {
     "tests": "passing",
     "build": "passing",
