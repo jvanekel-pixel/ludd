@@ -2,30 +2,30 @@
 
 from __future__ import annotations
 
-from ..layout import LayoutError
+from .. import presets
 from .registry import dispatcher
 
 
 @dispatcher.method("presets.list")
 def presets_list() -> list:
-    raise LayoutError("not built yet")
+    return presets.list_presets()
 
 
 @dispatcher.method("presets.save")
 def presets_save(preset: dict, replace: bool = False) -> dict:
-    raise LayoutError("not built yet")
+    return presets.save(preset, replace)
 
 
 @dispatcher.method("presets.delete")
 def presets_delete(id: str) -> None:  # noqa: A002 - the parameter's name in the protocol
-    raise LayoutError("not built yet")
+    presets.delete(id)
 
 
 @dispatcher.method("presets.export")
 def presets_export(id: str, dest: str) -> dict:  # noqa: A002
-    raise LayoutError("not built yet")
+    return presets.export(id, dest)
 
 
 @dispatcher.method("presets.import")
 def presets_import(path: str) -> dict:
-    raise LayoutError("not built yet")
+    return presets.import_file(path)
