@@ -8,6 +8,9 @@ import type { ObjectItem } from "./types";
 /** A number setting a pattern or line style has: its key in the shape's params, and its stepper. */
 export type Field = { key: string; label: string; def: number; min: number; max: number; step: number; digits?: number; suffix?: string; title?: string };
 
+/** A setting a pattern picks from a short list: its key in the shape's params. */
+export type Choice = { key: string; label: string; def: string; title?: string; options: { id: string; label: string; title?: string }[] };
+
 export type FillPatternDef = {
   id: string;
   label: string;
@@ -22,6 +25,8 @@ export type FillPatternDef = {
   maxStitch?: number;
   /** The settings only this pattern has. */
   fields: Field[];
+  /** And the ones it picks from a list, shown before the numbers. */
+  choices?: Choice[];
   hint?: string;
   /** The folded heading of an open pattern. */
   summary?: "label" | "label+density";
@@ -151,6 +156,29 @@ export const FILL_PATTERN_DEFS: FillPatternDef[] = [
       { key: "mesh_mm", label: "Cell size", def: 3, min: 1, max: 10, step: 0.5, digits: 1, suffix: "mm", title: "How far apart the lines are" },
       { key: "mesh_cross_deg", label: "Crossing angle", def: 90, min: 45, max: 90, step: 5, digits: 0, suffix: "°", title: "The angle between the two sets of lines" },
     ],
+    summary: "label",
+  },
+  {
+    id: "blackwork",
+    label: "Blackwork",
+    title: "A lattice of double lines, like hand blackwork",
+    open: true,
+    noSpacing: true,
+    choices: [
+      {
+        key: "blackwork_lattice",
+        label: "Lattice",
+        def: "diamonds",
+        title: "The shape of the cells",
+        options: [
+          { id: "diamonds", label: "Diamonds", title: "Squares standing on their points" },
+          { id: "grid", label: "Grid", title: "Level and upright squares" },
+          { id: "honeycomb", label: "Honeycomb", title: "Six-sided cells" },
+          { id: "crossed", label: "Crossed", title: "Squares with both diagonals: the densest" },
+        ],
+      },
+    ],
+    fields: [{ key: "blackwork_mm", label: "Cell size", def: 5, min: 3, max: 12, step: 0.5, digits: 1, suffix: "mm", title: "How big each cell is" }],
     summary: "label",
   },
 ];
