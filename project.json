@@ -35,9 +35,9 @@
   },
   "phase": 6,
   "status": "active",
-  "nextAction": "Phase 6 re-audit (fixes for all five findings on claude/wonderful-gauss-247164, not pushed); push and pull request only on the owner's yes after it",
+  "nextAction": "Phase 6 re-audit (claude/wonderful-gauss-247164, not pushed; all five audit findings fixed; the turning fills' thread line is not fixed and is judged as a known limit); push and pull request only on the owner's yes after it",
   "blockedOnHuman": "P6-A1 push compensation: the patent check (spec decision 1)",
-  "lastSessionAt": "2026-11-26T22:16:40Z",
+  "lastSessionAt": "2026-11-27T00:01:00Z",
   "health": {
     "tests": "passing",
     "build": "passing",
