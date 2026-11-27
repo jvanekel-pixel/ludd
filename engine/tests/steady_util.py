@@ -25,32 +25,34 @@ from threadline_engine.layout import text as text_pipeline
 
 
 def _nudged(real, rng):
-    def f(x):
-        v = real(x)
+    def f(*x):
+        v = real(*x)
         return math.nextafter(v, rng.choice((-math.inf, v, math.inf))) if v else v
 
     return f
 
 
 class LastDigitNoise:
-    """The math module with every sine and cosine off by one last digit, up or down or not at all,
-    at random: what another computer's maths library can give."""
+    """The math module with every sine and cosine (or the functions named) off by one last digit,
+    up or down or not at all, at random: what another computer's maths library can give."""
 
-    def __init__(self, seed):
+    def __init__(self, seed, names=("sin", "cos")):
         self._rng = random.Random(seed)
+        self._names = names
 
     def __getattr__(self, name):
         real = getattr(math, name)
-        if name not in ("sin", "cos"):
+        if name not in self._names:
             return real
         return _nudged(real, self._rng)
 
 
-def nudge_trig(monkeypatch, seed, *modules, rotations=False):
-    """Give each of `modules` (ones that use `math`) the noisy maths, until monkeypatch.undo().
-    `rotations`: also nudge shapely's rotate(), which calls cos and sin imported by name."""
+def nudge_trig(monkeypatch, seed, *modules, rotations=False, names=("sin", "cos")):
+    """Give each of `modules` (ones that use `math`) the noisy maths (`names`), until
+    monkeypatch.undo(). `rotations`: also nudge shapely's rotate(), which calls cos and sin imported
+    by name."""
     for i, module in enumerate(modules):
-        monkeypatch.setattr(module, "math", LastDigitNoise(seed + 100 * i))
+        monkeypatch.setattr(module, "math", LastDigitNoise(seed + 100 * i, names))
     if rotations:
         rng = random.Random(seed + 997)
         monkeypatch.setattr(affinity, "cos", _nudged(math.cos, rng))

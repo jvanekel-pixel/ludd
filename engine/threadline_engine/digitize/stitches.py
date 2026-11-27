@@ -227,18 +227,22 @@ def _zone(inside: "Polygon | Zone") -> Zone:
     return inside if isinstance(inside, Zone) else Zone(inside)
 
 
-def _edge_route(a: Point, b: Point, inside: "Polygon | Zone") -> list[Point] | None:
+def _edge_route(a: Point, b: Point, inside: "Polygon | Zone", steady: bool = False) -> list[Point] | None:
     """A path from a to b that follows one edge of the shape (outside or a hole), staying inside,
-    or None. Used to travel around holes instead of jumping over them."""
+    or None. Used to travel around holes instead of jumping over them. `steady`: see _ring_route."""
     z = _zone(inside)
     # 0.3 mm in from the edge first; only when that can't connect a and b (they sit either side
     # of a neck narrower than 0.6 mm) hug the edge itself, which still crosses the neck.
-    return _ring_route(a, b, z, 0.3) or _ring_route(a, b, z, 0.05)
+    return _ring_route(a, b, z, 0.3, steady) or _ring_route(a, b, z, 0.05, steady)
 
 
-def _ring_route(a: Point, b: Point, z: "Zone", inset: float) -> list[Point] | None:
+def _ring_route(a: Point, b: Point, z: "Zone", inset: float, steady: bool = False) -> list[Point] | None:
+    """The shortest way from a to b along one ring. With `steady`, lengths are compared to 0.001 mm
+    and a tie goes to the way whose points come first, so neither the order the geometry library
+    gives the rings in nor a last digit chooses (round a symmetric hole, both ways are as long)."""
     pa, pb = ShapelyPoint(a), ShapelyPoint(b)
     best: list[Point] | None = None
+    best_key = None
     for line in z.rings(inset):
         total = line.length
         # Step straight onto the ring, follow it, step straight off. The coverage check below
@@ -254,8 +258,11 @@ def _ring_route(a: Point, b: Point, z: "Zone", inset: float) -> list[Point] | No
         for path in (arc(sa, sb), arc(sb, sa)[::-1]):
             route = [a, *path, b]
             ls = LineString(route)
-            if z.cover.covers(ls) and (best is None or ls.length < LineString(best).length):
-                best = route
+            if not z.cover.covers(ls):
+                continue
+            key = (round(ls.length, 3), [(round(x, 3), round(y, 3)) for x, y in route]) if steady else ls.length
+            if best_key is None or key < best_key:
+                best, best_key = route, key
     return best
 
 
@@ -1436,6 +1443,8 @@ def fill_in_parts(outline: Sequence, holes: Sequence[Sequence],
         recs, part_warnings = _fill_part(poly, params, end_here=k == len(parts) - 1)
         warnings += [w for w in part_warnings if w not in warnings]
         out = join_pieces(out, recs)
+    if spec.notes:
+        warnings += spec.notes(out)
     return [(out, warnings, 0)]
 
 

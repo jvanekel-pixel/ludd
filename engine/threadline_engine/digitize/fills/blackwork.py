@@ -106,10 +106,10 @@ def _along_edge(a, b, zone, edge, lines) -> list | None:
     keeps off the open cells: round the edge first, else straight."""
     from ..stitches import MIN_STITCH_MM, _edge_route, _route_stitches, dist
 
-    if dist(a, b) < MIN_STITCH_MM:
+    if round(dist(a, b), 6) < MIN_STITCH_MM:
         return []
     straight = [a, b] if zone.cover.covers(shapely.LineString([a, b])) else None
-    for route in (_edge_route(a, b, zone), straight):
+    for route in (_edge_route(a, b, zone, steady=True), straight):
         if route is None:
             continue
         way = [(x, y) for x, y, _ in _route_stitches(a, route)]
@@ -119,17 +119,20 @@ def _along_edge(a, b, zone, edge, lines) -> list | None:
 
 
 def _keeps_off_cells(points: list, edge, lines: shapely.STRtree) -> bool:
-    """Whether every part of this thread lies near the shape's edge or along a lattice line."""
+    """Whether every part of this thread lies within EDGE_REACH_MM of the shape's edge or
+    ON_LINE_MM of a lattice line, measured every _SAMPLE_MM. Distances are rounded to 0.001 mm
+    and one exactly at its limit counts as within it, so a last digit can't choose between sewing
+    a join and jumping."""
     samples = []
     for (x0, y0), (x1, y1) in zip(points, points[1:]):
-        n = max(1, math.ceil(math.hypot(x1 - x0, y1 - y0) / _SAMPLE_MM))
+        n = max(1, math.ceil(round(math.hypot(x1 - x0, y1 - y0) / _SAMPLE_MM, 6)))
         samples += [(x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n) for k in range(n + 1)]
     at = shapely.points(np.array(samples))
-    far = at[np.round(shapely.distance(edge, at), 4) > EDGE_REACH_MM]
+    far = at[np.round(shapely.distance(edge, at), 3) > EDGE_REACH_MM]
     if not len(far):
         return True
     _, off = lines.query_nearest(far, return_distance=True, all_matches=False)
-    return bool(np.round(off.max(), 4) <= ON_LINE_MM)
+    return bool(np.round(off.max(), 3) <= ON_LINE_MM)
 
 
 def _jump(a, b, zone) -> list:
@@ -139,6 +142,18 @@ def _jump(a, b, zone) -> list:
     return travel(a, b)
 
 
+def _jumps_note(recs) -> list:
+    """How many times a fill had to jump, and what that means for the person sewing it."""
+    from ..stitches import JUMP
+
+    n = sum(1 for r in recs if r[2] == JUMP)
+    if not n:
+        return []
+    times, threads = ("once", "a thread to snip") if n == 1 else (f"{n} times", f"{n} threads to snip")
+    return [f"This Blackwork jumps {times}, where no edge leads from one part of its lattice to the next. "
+            f"On a machine that cuts only at color changes, that's {threads}."]
+
+
 register(FillPattern("blackwork", "open", params={"blackwork_mm": Param(5.0, 3.0, 12.0, "Cell size")}, paths=_paths,
                      step_mm2=lambda p: p.value("blackwork_mm") * p.stitch_mm / 4, auto_underlay=lambda level: [],
-                     join=_jump))
+                     join=_jump, notes=_jumps_note))

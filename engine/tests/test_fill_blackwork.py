@@ -257,6 +257,7 @@ JOINED_SHAPES = {  # outline, holes
     "four holes": (_box(0, 0, 40, 40), FOUR_HOLES),
     "off-center donut": (_ring(20, 20, 20), [_ring(26, 20, 12)]),
     "letter B": (_box(0, 0, 24, 40), [_box(6, 6, 12, 11), _box(6, 23, 12, 11)]),
+    "star with a hole": (_star(24, 11, 25), [_ring(25, 25, 8)]),
 }
 
 
@@ -287,6 +288,28 @@ def test_no_joining_thread_crosses_an_open_cell(name, kind, cell):
         assert invariants.count(recs, JUMP) == 0 and invariants.count(recs, TRIM) == 0
 
 
+@pytest.mark.parametrize("cell", [3, 5, 8, 12])
+@pytest.mark.parametrize("kind", LATTICES)
+@pytest.mark.parametrize("name", sorted(set(SHAPES) - {"donut"}))
+def test_a_shape_without_holes_never_jumps_or_says_it_does(name, kind, cell):
+    recs, warnings = generate(_fill(kind, *SHAPES[name], blackwork_mm=cell, underlay="auto"))
+    assert invariants.count(recs, JUMP) == 0 and not [w for w in warnings if "jumps" in w]
+
+
+@pytest.mark.parametrize("name,cell", [("off-center donut", 3), ("letter B", 5), ("four holes", 8),
+                                       ("star with a hole", 8)])
+def test_a_fill_that_jumps_says_how_many_threads_to_snip(name, cell):
+    outline, holes = JOINED_SHAPES[name]
+    recs, warnings = generate(_fill("diamonds", _nodes(outline), [_nodes(h) for h in holes], blackwork_mm=cell,
+                                    underlay="auto"))
+    n = invariants.count(recs, JUMP)
+    (note,) = [w for w in warnings if w.startswith("This Blackwork jumps ")]
+    assert n >= 1
+    assert note == (("This Blackwork jumps once" if n == 1 else f"This Blackwork jumps {n} times") +
+                    ", where no edge leads from one part of its lattice to the next. On a machine that cuts only at "
+                    f"color changes, that's {'a thread to snip' if n == 1 else f'{n} threads to snip'}.")
+
+
 @pytest.mark.parametrize("seed", [1, 2, 3])
 def test_joins_do_not_hang_on_the_last_digit(seed, monkeypatch):
     """Both ways round an edge can tie on a symmetric shape with holes: the choice, like the
@@ -296,7 +319,7 @@ def test_joins_do_not_hang_on_the_last_digit(seed, monkeypatch):
             for c in cases}
     forget_stitches()
     try:
-        nudge_trig(monkeypatch, seed, dz, paths, lattice, motif, blackwork)
+        nudge_trig(monkeypatch, seed, dz, paths, lattice, motif, blackwork, names=("sin", "cos", "hypot"))
         for (kind, name), recs in want.items():
             outline, holes = JOINED_SHAPES[name]
             got = _bare(kind, _nodes(outline), [_nodes(h) for h in holes], blackwork_mm=5)
@@ -395,7 +418,11 @@ SNAPSHOT_CASES = {
     "grid_donut": _fill("grid", _at(SQUARE), [_at(HOLE)], underlay="auto"),
     "honeycomb_40": _fill("honeycomb", _at(SQUARE), underlay="auto"),
     "crossed_40": _fill("crossed", _at(SQUARE), underlay="auto"),
+    # A symmetric hole: joins round it (both ways as long) and jumps where no edge leads on.
+    "diamonds_big_hole": _fill("diamonds", _at(SQUARE), [_at(_nodes([(4, 4), (36, 4), (36, 36), (4, 36)]))],
+                               underlay="auto", blackwork_mm=8),
 }
+JUMPING = {"diamonds_big_hole": 3}  # how many times a case with a hole jumps
 
 
 @pytest.mark.parametrize("name", sorted(SNAPSHOT_CASES))
@@ -408,7 +435,8 @@ def test_snapshots_do_not_hang_on_the_last_digit_of_a_sine(seed, monkeypatch):
     recorded = json.loads((SNAPSHOT_DIR / "fills_blackwork.json").read_text(encoding="utf-8"))
     forget_stitches()
     try:
-        nudge_trig(monkeypatch, seed, dz, blackwork, lattice, motif, spiral, rotations=True)
+        nudge_trig(monkeypatch, seed, dz, blackwork, lattice, motif, spiral, paths, rotations=True,
+                   names=("sin", "cos", "hypot"))
         for name in sorted(SNAPSHOT_CASES):
             assert digest_recs_steady(generate(SNAPSHOT_CASES[name])[0]) == recorded[name], name
     finally:
@@ -419,6 +447,11 @@ def test_snapshots_do_not_hang_on_the_last_digit_of_a_sine(seed, monkeypatch):
 @pytest.mark.parametrize("name", sorted(SNAPSHOT_CASES))
 def test_snapshot_cases_pass_the_invariants(name):
     obj = SNAPSHOT_CASES[name]
-    invariants.assert_sane(generate(obj)[0], inside=_shape_of(obj), tolerance_mm=0.05, max_jumps=0, max_trims=0)
+    jumps = JUMPING.get(name, 0)
+    recs = generate(obj)[0]
+    assert invariants.count(recs, JUMP) == jumps
+    # A join round a hole's edge may reach as far out as any open fill's travel (0.3 mm).
+    invariants.assert_sane(recs, inside=_shape_of(obj), tolerance_mm=0.3 if jumps else 0.05, max_jumps=jumps,
+                           max_trims=jumps)
     invariants.assert_deterministic(lambda: generate(obj)[0])
     invariants.assert_moves_with_shape(obj, 3.3, -8.1)

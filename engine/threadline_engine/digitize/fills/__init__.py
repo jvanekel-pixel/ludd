@@ -48,6 +48,8 @@ class FillPattern:
     # An open pattern's way from one of its paths to the next: (a, b, zone) -> records. None: travel
     # inside the shape (stitches.travel).
     join: Callable | None = None
+    # What a pattern says about a whole fill once it's sewn: (records) -> list[str].
+    notes: Callable | None = None
 
 
 REGISTRY: dict[str, FillPattern] = {}

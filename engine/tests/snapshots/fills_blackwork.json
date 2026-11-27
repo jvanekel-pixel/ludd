@@ -13,6 +13,13 @@
   "stitches": 493,
   "trims": 0
  },
+ "diamonds_big_hole": {
+  "jumps": 3,
+  "records": 206,
+  "sha1": "d7163a5d8f4de3a8701cff48ea45be85c26c4788",
+  "stitches": 200,
+  "trims": 3
+ },
  "grid_donut": {
   "jumps": 0,
   "records": 509,
