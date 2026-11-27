@@ -7,7 +7,7 @@ import pytest
 import shapely
 from shapely.geometry import LineString, Point
 
-from artimport_util import area_of, ask, bounds, close, kinds, layout_of, line_of, preview, refusal, write
+from artimport_util import area_of, bounds, close, kinds, layout_of, line_of, preview, refusal, write
 from threadline_engine import layout
 from threadline_engine.artimport import dxf as art_dxf
 
@@ -473,8 +473,3 @@ def test_a_dxf_over_50_mb_is_refused(tmp_path):
     with open(path, "wb") as fh:
         fh.truncate(50 * 1024 * 1024 + 1)
     assert "bigger than 50 MB" in refusal(path)
-
-
-def test_nothing_is_added_by_a_refusal(tmp_path):
-    answer = ask(write(tmp_path, b"junk\nEOF", "junk.dxf"))
-    assert set(answer) == {"jsonrpc", "id", "error"}

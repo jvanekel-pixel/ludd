@@ -528,10 +528,13 @@ ART = svg("""
   <path d="M45 45 C 55 30 65 60 75 45 S 95 30 98 44" stroke="#00aa00" stroke-width="1.5" fill="none"/>
   <path d="M5 45 L40 45" stroke="#000000" stroke-width="13" fill="none" stroke-linecap="round"/>
   <ellipse cx="15" cy="10" rx="11" ry="6" transform="rotate(23 15 10)"/>
+  <rect x="60" y="2" width="12" height="7" fill="#aa00aa"/>
+  <path d="M30 2 H44 V16 H30 Z M38 9 H52 V23 H38 Z" fill-rule="evenodd"/>
+  <path d="M76 2 H88 V14 H76 Z M79 5 H85 V11 H79 Z" fill-rule="evenodd"/>
 """)
 
 
-@pytest.mark.parametrize("seed", [1, 2, 3])
+@pytest.mark.parametrize("seed", range(1, 7))
 def test_the_same_shapes_with_the_last_digit_changed(seed):
     deadline, options = artimport.Deadline(), artimport.Options()
     plain = art_convert.convert(art_svg.read(ART.encode(), deadline), options, deadline)
