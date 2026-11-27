@@ -3,14 +3,8 @@
  * Done-when 4 (P7-C1), the whole way: 300 pointer samples on the real design canvas (a fake
  * drawing library), Enter, and the real engine sews the shape. At most 25 points; every sample
  * within 0.4 mm of the drawn curve and the curve within 0.4 mm of the stroke; and every needle
- * point the engine sews within 0.4 mm of the stroke. The engine is started from engine/ with
- * `uv run` (as the engine tests start it), in a data folder of its own.
+ * point the engine sews within 0.4 mm of the stroke (testEngine.ts starts the engine).
  */
-import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { act } from "react";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -27,71 +21,12 @@ import { Kind, type ObjectItem, type PathNode } from "../design/types";
 import { savePrefs } from "../prefs";
 import { useStore } from "../store";
 import { useFreehand } from "./freehand";
-
-const ENGINE_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../engine");
-const LONG_MS = 300_000; // the first run may have to set up the engine's environment
-
-type Answer = { id: number; result?: unknown; error?: { message: string } };
-
-/** The engine over JSON-RPC on stdio, one request per line, as the desktop app talks to it. */
-function startEngine(dataDir: string) {
-  const child = spawn("uv", ["run", "--locked", "python", "-m", "threadline_engine"], {
-    cwd: ENGINE_DIR,
-    env: { ...process.env, THREADLINE_DATA_DIR: dataDir },
-  });
-  const pending = new Map<number, (a: Answer) => void>();
-  let buffer = "";
-  let said = "";
-  let nextId = 1;
-  let gone: string | null = null;
-  const exited = new Promise<void>((resolve) => {
-    const over = (why: string) => {
-      gone = why;
-      for (const [id, done] of pending) done({ id, error: { message: why } });
-      pending.clear();
-      resolve();
-    };
-    child.on("error", (err) => over(`The engine didn't start (this test needs uv, as the engine tests do): ${err.message}`));
-    child.on("exit", (code) => over(`The engine stopped (exit ${code}): ${said.slice(-800)}`));
-  });
-  child.stderr.on("data", (d) => (said += String(d)));
-  child.stdout.setEncoding("utf8");
-  child.stdout.on("data", (chunk: string) => {
-    buffer += chunk;
-    for (let nl = buffer.indexOf("\n"); nl >= 0; nl = buffer.indexOf("\n")) {
-      const line = buffer.slice(0, nl);
-      buffer = buffer.slice(nl + 1);
-      if (!line.trim()) continue;
-      const answer = JSON.parse(line) as Answer;
-      pending.get(answer.id)?.(answer);
-      pending.delete(answer.id);
-    }
-  });
-  return {
-    call<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
-      const id = nextId++;
-      return new Promise<T>((resolve, reject) => {
-        const done = (a: Answer) => (a.error ? reject(new Error(a.error.message)) : resolve(a.result as T));
-        if (gone) return done({ id, error: { message: gone } });
-        pending.set(id, done);
-        child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`);
-      });
-    },
-    async stop() {
-      child.stdin.end();
-      const kill = setTimeout(() => child.kill(), 10_000);
-      await exited;
-      clearTimeout(kill);
-    },
-  };
-}
+import { ENGINE_START_MS as LONG_MS, startEngine } from "./testEngine";
 
 let engine: ReturnType<typeof startEngine>;
-let dataDir: string;
 
 beforeAll(async () => {
-  dataDir = mkdtempSync(path.join(os.tmpdir(), "ludd-freehand-"));
-  engine = startEngine(dataDir);
+  engine = startEngine();
   await engine.call("ping");
   // Lock stitches off, so every needle point the engine sews is a point on the line.
   savePrefs({ objectDefaults: { run: { style: "single", stitch_mm: 2.5, tie_in: false, tie_off: false } } });
@@ -99,7 +34,6 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await engine?.stop();
-  rmSync(dataDir, { recursive: true, force: true });
 }, 60_000);
 
 /** A repeatable hand shake, -1..1. */
