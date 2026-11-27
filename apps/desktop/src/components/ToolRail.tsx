@@ -6,6 +6,7 @@ import { acceptGuess, dismissAutoTrace, nextGuess, setSpacing, setSpread, setTra
 import { fmtLen } from "./InfoPanel";
 import { Menu } from "./Menu";
 import { formatShortcut } from "../commands";
+import { isDrawingTool, setSmoothing, useFreehand } from "../feat/freehand";
 import { useStore, type Tool } from "../store";
 
 const TOOLS: { id: string; tool: Tool; icon: ReactNode; label: string }[] = [
@@ -93,10 +94,36 @@ const HINTS: Record<Exclude<Tool, "select">, string> = {
   fill: "Click around the shape's edge. It closes by itself.",
 };
 
+/** The same while freehand drawing is on (Y). */
+const FREEHAND_HINTS: Record<"run" | "satin" | "fill" | "carve", string> = {
+  run: "Drag to draw the line, or click point by point.",
+  satin: "Drag along the middle of the ribbon, or click point by point (its width is in the panel).",
+  fill: "Drag round the shape's edge and let go where you started, or click point by point.",
+  carve: "Drag along the line to carve, or click point by point.",
+};
+
+/** Freehand's Smoothing, − and +, shown while it's on with a drawing tool. */
+function FreehandControl() {
+  const smooth = useFreehand((s) => s.smooth);
+  return (
+    <span className="at-spacing" title="Freehand drawing (Y turns it off): more smoothing makes fewer points, less keeps closer to your hand">
+      Freehand · Smoothing
+      <button onClick={() => setSmoothing(smooth - 1)} disabled={smooth <= 1} aria-label="Less smoothing">
+        −
+      </button>
+      <b>{smooth}</b>
+      <button onClick={() => setSmoothing(smooth + 1)} disabled={smooth >= 5} aria-label="More smoothing">
+        +
+      </button>
+    </span>
+  );
+}
+
 /** What to do next while drawing, in plain words. */
 export function DrawHint() {
   const tool = useStore((s) => s.tool);
   const pen = useStore((s) => s.pen);
+  const freehand = useFreehand((s) => s.on);
   const measure = useStore((s) => s.measure);
   const ghost = useStore((s) => s.ghost);
   const edgeFit = useStore((s) => s.edgeFit);
@@ -153,6 +180,7 @@ export function DrawHint() {
     );
   }
   if (tool === "select") return null;
+  const free = freehand && isDrawingTool(tool) ? <FreehandControl /> : null;
   if (edgeFit && pen?.kind === "satin") {
     const n = edgeFit.options.length;
     const fit = edgeFit.options[edgeFit.index];
@@ -170,12 +198,13 @@ export function DrawHint() {
             {n > 1 ? " (press again for other ways)" : ""}. Or keep clicking.
           </>
         )}
+        {free}
       </div>
     );
   }
   if (ghost) {
-    return (
-      <div className="draw-hint" role="status">
+    const said = (
+      <>
         <kbd>Tab</kbd> takes the suggested point, <kbd>Shift</kbd>+<kbd>Tab</kbd> keeps going
         {ghost.alternatives.length ? (
           <>
@@ -184,8 +213,9 @@ export function DrawHint() {
         ) : null}
         {" "}· <kbd>[</kbd> <kbd>]</kbd> step {step} mm · or just click.
         {penReady() ? <> <kbd>Enter</kbd> finishes.</> : null}
-      </div>
+      </>
     );
+    return <HintBar free={free}>{said}</HintBar>;
   }
   if (tool === "autotrace") return <AutoTraceBar />;
   if (tool === "text") {
@@ -195,13 +225,14 @@ export function DrawHint() {
       </div>
     );
   }
-  const next = pen?.carveFor ? "Click along the line to carve." : HINTS[tool];
+  const hints = freehand && isDrawingTool(tool) ? FREEHAND_HINTS : null;
+  const next = pen?.carveFor ? (hints?.carve ?? "Click along the line to carve.") : (hints?.[tool as "run" | "satin" | "fill"] ?? HINTS[tool]);
   const placed = pen ? pen.a.length + pen.b.length : 0;
   const ready = penReady();
   // Carving goes on line after line: Esc drops the line being drawn, then stops.
   const esc = pen?.carveFor ? (placed ? "drops this line" : "stops carving") : pen ? "drops the shape" : "goes back to Select";
   return (
-    <div className="draw-hint" role="status">
+    <HintBar free={free}>
       {next} <span className="kinds">Click = <b>curve</b> · <kbd>Ctrl</kbd>+click = <b>straight</b> · <kbd>Shift</kbd>+click = <b>sharp corner</b> · <kbd>Alt</kbd> = 15° steps</span>{" "}
       {ready ? <>Finish: <kbd>Enter</kbd> or right-click{tool === "run" ? <> (<kbd>Ctrl</kbd>+right-click closes it)</> : null}.</> : null} <kbd>Backspace</kbd> undoes a point, <kbd>Esc</kbd> {esc}.
       {placed > 0 && (
@@ -210,6 +241,24 @@ export function DrawHint() {
           {placed} point{placed === 1 ? "" : "s"} placed: <kbd>Esc</kbd> drops {placed === 1 ? "it" : "them"}.
         </strong>
       )}
+    </HintBar>
+  );
+}
+
+/** A plain hint (the pointer goes through it to the design), or, with a control beside it, one
+ *  that takes clicks. */
+function HintBar({ free, children }: { free: ReactNode; children: ReactNode }) {
+  if (!free) {
+    return (
+      <div className="draw-hint" role="status">
+        {children}
+      </div>
+    );
+  }
+  return (
+    <div className="draw-hint auto-trace" role="status">
+      <span>{children}</span>
+      {free}
     </div>
   );
 }

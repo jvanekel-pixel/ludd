@@ -42,6 +42,7 @@ import {
   type History,
 } from "./design/layout";
 import type { ShapeId } from "./design/shapes";
+import { plainNodes, reversePath } from "./design/simplify";
 import { visibleRecords } from "./design/player";
 import type {
   Chart,
@@ -1086,12 +1087,15 @@ export async function penFinish(opts: { close?: boolean } = {}) {
   const thread = s.drawThread;
   // A satin fitted all the way round an edge is closed too.
   const closed = opts.close || pen.closed ? { closed: true } : {};
+  // Continued from its first point (K), the pen holds the line backwards: turned back, it keeps
+  // its direction, with the new points before its old start.
+  const points = pen.prepend ? plainNodes(reversePath(pen.a)) : pen.a;
   const obj =
     pen.kind === "run"
-      ? { kind: "run" as const, geometry: { nodes: pen.a, ...closed }, params: defaultsFor("run"), thread }
+      ? { kind: "run" as const, geometry: { nodes: points, ...closed }, params: defaultsFor("run"), thread }
       : pen.kind === "satin"
-        ? { kind: "satin" as const, geometry: { nodes: pen.a, width_mm: s.satinWidth, ...closed }, params: defaultsFor("satin"), thread }
-        : { kind: "fill" as const, geometry: { outline: pen.a }, params: defaultsFor("fill"), thread };
+        ? { kind: "satin" as const, geometry: { nodes: points, width_mm: s.satinWidth, ...closed }, params: defaultsFor("satin"), thread }
+        : { kind: "fill" as const, geometry: { outline: points }, params: defaultsFor("fill"), thread };
   s.setPen(null);
   // A hole (O): add it to the fill it was drawn in.
   if (pen.holeFor && layout.items.some((it) => it.id === pen.holeFor)) {
@@ -1108,7 +1112,7 @@ export async function penFinish(opts: { close?: boolean } = {}) {
   if (pen.replaceId && layout.items.some((it) => it.id === pen.replaceId)) {
     const id = pen.replaceId;
     // Keep what the pen doesn't draw (a fill's holes, a closed line, a satin's width).
-    const drawn = pen.kind === "fill" ? { outline: pen.a } : { nodes: pen.a, ...closed };
+    const drawn = pen.kind === "fill" ? { outline: points } : { nodes: points, ...closed };
     const next = updateObject(layout, id, (o) => ({ ...o, geometry: { ...o.geometry, ...drawn } }) as ObjectItem);
     if (await commit(next)) useStore.getState().select(id);
     return;
@@ -1119,7 +1123,8 @@ export async function penFinish(opts: { close?: boolean } = {}) {
   else if (!useStore.getState().pen && useStore.getState().tool === pen.kind) useStore.getState().setPen(pen);
 }
 
-/** Pick the selected shape back up in the pen to add more points ("continue digitizing"). */
+/** Pick the selected shape back up in the pen to add more points ("continue digitizing"): at its
+ *  end, or, for an open line or ribbon with its first point selected, before its start. */
 export function continueDrawing() {
   const s = useStore.getState();
   const o = currentLayout()?.items.find((it) => it.id === s.selectedId);
@@ -1129,10 +1134,12 @@ export function continueDrawing() {
   const b: PathNode[] = [];
   // An applique is drawn like a fill (a closed outline); it stays an applique.
   const kind = o.kind === "applique" ? "fill" : o.kind;
-  s.setTool(kind);
-  s.setPen({ kind, a: [...a], b: [...b], replaceId: o.id });
+  const open = (o.kind === "run" || o.kind === "satin") && !(o.geometry as { closed?: boolean }).closed;
+  const fromStart = open && a.length > 1 && s.selectedNode?.id === o.id && s.selectedNode.list === "nodes" && s.selectedNode.index === 0;
+  s.setTool(kind); // (lets go of the selected point, so it's looked at first)
+  s.setPen({ kind, a: fromStart ? reversePath(a) : [...a], b: [...b], replaceId: o.id, ...(fromStart ? { prepend: true } : {}) });
   s.setDrawThread(o.thread);
-  info("Keep clicking to add points to this shape; Enter when done.");
+  info(fromStart ? "Keep clicking to add points before this shape's start; Enter when done." : "Keep clicking to add points to this shape; Enter when done.");
 }
 
 /** Add a ready-made shape (as a fill) in the middle of the hoop, selected, ready to reshape.
