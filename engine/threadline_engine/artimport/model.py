@@ -73,6 +73,13 @@ SKIPPED = {
     "dimension": ("1 dimension or note left out.", "{n} dimensions or notes left out."),
     "xref": ("1 linked drawing (xref) not opened: bind it into the drawing in your CAD program to bring it in.",
              "{n} linked drawings (xrefs) not opened: bind them into the drawing in your CAD program to bring them in."),
+    "shading": ("1 shaded (gradient) area left out. Give it a solid color in your drawing program to bring it in.",
+                "{n} shaded (gradient) areas left out. Give them solid colors in your drawing program to bring them "
+                "in."),
+    "nested_form": ("1 group inside another group left out. Ungroup the drawing in the program that made it and save "
+                    "the PDF again.",
+                    "{n} groups inside other groups left out. Ungroup the drawing in the program that made it and save "
+                    "the PDF again."),
     "other": ("1 object LUDD doesn't read left out (such as a point, a 3D solid or a mesh).",
               "{n} objects LUDD doesn't read left out (such as points, 3D solids or meshes)."),
     "damaged": ("1 damaged shape left out.", "{n} damaged shapes left out."),
