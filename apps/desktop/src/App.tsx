@@ -19,6 +19,7 @@ import {
   type RecoveryInfo,
 } from "./actions";
 import { formatShortcut } from "./commands";
+import { ART_FILE, importArtwork } from "./feat/importArt";
 import { keepFocusOffBars, onKeyDown, onKeyUp, onWindowBlur } from "./keys";
 import { BatchDialog } from "./components/BatchDialog";
 import { ExportDialog } from "./components/ExportDialog";
@@ -83,7 +84,8 @@ function useShortcuts() {
   }, []);
 }
 
-/** Files dropped onto the window: pictures are added to trace, designs open (or are added to an open one). */
+/** Files dropped onto the window: pictures are added to trace, artwork (SVG, DXF, PDF) is previewed
+ *  to import, and designs open (or are added to an open one). */
 function useFileDrop() {
   const [over, setOver] = useState(false);
   useEffect(() => {
@@ -100,6 +102,7 @@ function useFileDrop() {
           const path = p.paths[0];
           if (!path) return;
           if (IMAGE_FILE.test(path)) void addPicture(path);
+          else if (ART_FILE.test(path)) void importArtwork(path);
           // Dropping onto an open design adds to it (Ctrl+Z takes it out again); otherwise it opens.
           else if (useStore.getState().history.present && !isProjectPath(path)) void addDesign(path);
           else void openDesign(path);
