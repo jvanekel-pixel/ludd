@@ -2,6 +2,19 @@
 
 ## Next (unreleased)
 
+### Phase 7: line styles, branching, freehand, artwork import (2026-11-27)
+- **More line styles**: Backstitch, Stem stitch, Candlewicking, Redwork (out and back) and French knots, under More styles. Motif lines can sit to one side of the line. A new Blackwork fill sews a lattice of double lines.
+- **Lock stitches**: choose Standard, Triangle or Back-tack for a shape's start and end.
+- **Buttonholes and eyelets**: Shapes menu, or Alt+B and Alt+E. They are ordinary shapes you can reshape.
+- **Branch** (Alt+Shift+B): sew the selected same-color shapes as one path with one start and one end. Moves between them run hidden under later stitching; where that isn't possible LUDD says so and cuts the thread there (a gap of 3 mm or less is jumped, leaving a short thread). Optimize jumps now also chooses where an applique and a text's first letter start.
+- **Freehand** (Y): drag to draw; Smoothing sets how many points you get. **K** can now continue a line from its first point.
+- **Repeat**: Mirror, Wreath round the middle of the hoop, and Kaleidoscope, with outlines showing where copies will land.
+- **Stitch presets** (Alt+P): save a shape's settings under a name, apply them to other shapes, share them as files. Five come built in.
+- **Import artwork** (Ctrl+Alt+I, or drop the file on the window): SVG, DXF and PDF drawings come in as fills, lines and satins at their real size, after a preview. Nothing in a file is ever fetched or followed elsewhere. The engine is about 7 MB bigger for the three new libraries.
+- **Fixed** (an older bug): turning a line round, with Optimize jumps or by dragging its end dot, could bend a line that mixes curves and straight parts. Optimize jumps now also saves every change when it turns a piece round.
+- The "almost touch" check says a gap you made on purpose, such as a buttonhole's slit, can stay.
+- Nothing already in your designs sews differently. Projects that use the new stitch types or a branch say so, and an older LUDD asks you to update instead of sewing them wrong.
+
 ### Phase 6: fills and stitch quality (2026-11-26)
 - **Blend** fill: the shape's color fades into a second (and a third) across the rows. Add a color, swap them, and set the **Balance**; each color sews in turn. The rows are a one-color fill's evenly spaced rows, each given to one of the colors, so the fade is as dense as a plain fill at any Spacing (a thinning color sews at least two rows side by side); every color is sewn when there are at least two rows per color, and with fewer a warning says which color is left out.
 - **Motif** fill (rows of a little pattern across the shape), **Maze** (one path that winds in and back out; a shape with a hole or many narrow parts sews as several mazes, and LUDD says so), **Ripple** (rings spreading from the middle) and **Mesh** (a net; set the cell size and crossing angle).

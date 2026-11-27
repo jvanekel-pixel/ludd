@@ -84,6 +84,12 @@ The user is testing on the machine once the software is about 95% done (decided 
 | Phase 6 | **Feather and hand-sewn** | Two fills feathered into each other; a line, satin and fill at 60% hand-sewn | Soft join with no gap; the hand-sewn pieces look deliberately irregular, nothing loose |
 | Phase 6 | **Motif fill, maze, ripple, mesh** | A 40 mm circle in each | Each lies flat; the maze has no crossing; mesh cells are even |
 | Phase 6 | **Turning fill** | A leaf with two angle lines 50° apart; a rectangle with a second line turned sharply | Stitches fan smoothly; no bunching inside the turn, no gaps outside it or along the edges; the sharp turn's crease holds; note where a thin line of thread shows across finished rows, and how much it bothers (L-002) |
+| Phase 7 | **Craft line styles** | A 60 mm S curve in Backstitch, Stem stitch, Candlewicking and Redwork; five French knots; blanket stitch round a felt circle with its teeth toward the felt | Each looks like its name; stem stitch looks like rope; knots stand up and don't pull out (also at the trims); every blanket tooth catches the felt; no thread nests |
+| Phase 7 | **Blackwork fill** | A 40 mm square in each lattice, 5 mm cells | Lines crisp and doubled; no loose threads across cells |
+| Phase 7 | **Lock-stitch shapes** | The same 30 mm satin on T-shirt knit with Standard, Triangle and Back-tack | Tug the tails: none unravels; the triangle doesn't show |
+| Phase 7 | **Buttonhole and eyelet** | A 16 mm bar buttonhole and a rounded one on two layers of cotton; a 4 mm eyelet | Cut the slit: sides don't fray and the button passes; the eyelet holds once punched |
+| Phase 7 | **Branch** | Three touching leaves in one green; two red shapes joined under a later blue patch; two shapes with a gap | One start and one end; nothing to snip where shapes touch or are covered; the hidden run doesn't show through; where shapes only touch, the hand-over (up to about 1 mm) doesn't show; the gap is cut once |
+| Phase 7 | **Imported artwork** | A simple SVG logo (fills and 2 mm strokes) imported 80 mm wide | Measures 80 mm; strokes sew as satins of the drawn width; fills meet their borders |
 
 ## Log
 
