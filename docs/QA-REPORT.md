@@ -113,7 +113,7 @@ for p in r['paths']: print(os.path.basename(p), 'stops:', n(pe.read(p), pe.STOP)
 **Repro:**
 
 ```
-import sys; sys.path.insert(0, r"C:\Users\Copper Felix\HTML Stuffs\threadline\engine")
+import sys; sys.path.insert(0, r"%USERPROFILE%\HTML Stuffs\threadline\engine")
 from threadline_engine import layout
 Y = {"color": "#f1c40f", "name": "y", "catalog": "", "brand": ""}
 def run(id, nodes, tr=None):
@@ -160,11 +160,11 @@ print("area valid:", a.is_valid, "| cover:", c.geom_type, explain_validity(c))
 **Repro:**
 
 ```
-import sys, time; sys.path.insert(0, r"C:\Users\Copper Felix\HTML Stuffs\threadline\engine")
+import sys, time; sys.path.insert(0, r"%USERPROFILE%\HTML Stuffs\threadline\engine")
 from threadline_engine import layout as L, project
 def timed(fn, *a):
     t = time.time(); fn(*a); return time.time() - t
-lay = project.open_project(r"C:\Users\Copper Felix\HTML Stuffs\threadline\samples\Banner (two hoopings).ludd")["layout"]
+lay = project.open_project(r"%USERPROFILE%\HTML Stuffs\threadline\samples\Banner (two hoopings).ludd")["layout"]
 for tu in (False, True):
     l = dict(lay, travel_under=tu); L.render(l)
     print(f"Banner travel_under={tu}: render {timed(L.render, l):.2f}s check {timed(L.check, l):.2f}s")
@@ -798,7 +798,7 @@ echo "onnxruntime==1.31.0" | uv pip compile - --no-config --python-platform x86_
 
 ### C22 · High · Reviewer-reproduced: Print template and thread list print unstyled in the installed app (black square, no centre cross, no swatches): Tauri injects a style nonce that cancels 'unsafe-inline'
 
-**Where:** `apps/desktop/src/print.ts:66,94,98-114,140-145`, `apps/desktop/src-tauri/tauri.conf.json:24`, `apps/desktop/index.html:9-12`, `C:/Users/Copper Felix/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-2.12.3/src/manager/mod.rs:96-103`  
+**Where:** `apps/desktop/src/print.ts:66,94,98-114,140-145`, `apps/desktop/src-tauri/tauri.conf.json:24`, `apps/desktop/index.html:9-12`, `%USERPROFILE%/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-2.12.3/src/manager/mod.rs:96-103`  
 **Found by:** tauri  
 **Status:** Reviewer-reproduced (not independently re-verified)
 
@@ -823,7 +823,7 @@ Full page: <scratch>/tauri/run_app5.py (renders printHtml() output; AS SHIPPED s
 
 ### C23 · High · Reviewer-reproduced: Installed app leaves a ~180 MB PyInstaller temp folder behind on every quit
 
-**Where:** `scripts/build_engine.py:44-50`, `apps/desktop/src/engine/sidecar.ts:49-53`, `C:/Users/Copper Felix/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-plugin-shell-2.4.1/src/lib.rs:163-173`, `apps/desktop/src/App.tsx:172-183`  
+**Where:** `scripts/build_engine.py:44-50`, `apps/desktop/src/engine/sidecar.ts:49-53`, `%USERPROFILE%/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/tauri-plugin-shell-2.4.1/src/lib.rs:163-173`, `apps/desktop/src/App.tsx:172-183`  
 **Found by:** packaging, tauri (also reported as packaging#2)  
 **Status:** Reviewer-reproduced (not independently re-verified)
 
@@ -903,7 +903,7 @@ cp -r engine/threadline_engine engine/tests S/ci/engine/ ; cp fixtures/README.md
 cd S/ci/engine && PYTHONPATH=. uv run --frozen --no-sync python -m pytest -q
 # actual: FAILED tests/test_library.py::test_scan_lists_designs_with_thumbnails_and_skips_other_files
 #         assert ([])      ->  1 failed, 251 passed, 4 skipped
-# (my copy: C:/Users/COPPER~1/AppData/Local/Temp/claude/C--Users-Copper-Felix-HTML-Stuffs-threadline/182de744-a28c-4a68-96f5-d0545ff7ce29/scratchpad/tests/ci/engine)
+# (my copy: %LOCALAPPDATA%/Temp/claude/C--Users-USERNAME-HTML-Stuffs-threadline/182de744-a28c-4a68-96f5-d0545ff7ce29/scratchpad/tests/ci/engine)
 ```
 
 **Suggested fix:** Write two or three small designs with pyembroidery into tmp_path (or point the test at the committed samples/ folder) and assert on those; make the filter test assert that the result is non-empty.
@@ -1323,13 +1323,13 @@ Each entry: status, title, where, suggested fix. Area in headings. Full detail a
 ### packaging
 
 - **Suspected**: If any build leg fails, the updater-manifest job is skipped and no latest.json is produced for anyone  
-  Where: `C:/Users/Copper Felix/HTML Stuffs/threadline/.github/workflows/release.yml:44-46`, `C:/Users/Copper Felix/HTML Stuffs/threadline/.github/workflows/release.yml:144-145`  
+  Where: `%USERPROFILE%/HTML Stuffs/threadline/.github/workflows/release.yml:44-46`, `%USERPROFILE%/HTML Stuffs/threadline/.github/workflows/release.yml:144-145`  
   Fix: Add `if: ${{ !cancelled() && needs.create-release.result == 'success' }}` to updater-manifest. Add one RELEASING.md line: re-run failed jobs only, never Re-run all.
 - **Suspected**: The packaged engine needs macOS 13/14 or newer (and Intel needs 14) but the app declares macOS 10.13; no OS minimums documented  
   Where: `apps/desktop/src-tauri/tauri.conf.json:27-76 (no bundle.macOS.minimumSystemVersion)`, `engine/uv.lock (onnxruntime macosx_14_0_arm64; opencv macosx_13_0_arm64 / macosx_14_0_x86_64; numpy macosx_14_0_*)`  
   Fix: Set `bundle.macOS.minimumSystemVersion` to "14.0" (or to "13.0" for Apple Silicon only, after fixing the onnxruntime marker). State the minimum macOS and Linux versions in USER-GUIDE and the release ...
 - **Reviewer-reproduced**: Nothing ever runs the frozen engine: no smoke test in build_engine.py, ci.yml or release.yml, and the FFmpeg drop is not verified  
-  Where: `C:/Users/Copper Felix/HTML Stuffs/threadline/.github/workflows/ci.yml:34-62`, `C:/Users/Copper Felix/HTML Stuffs/threadline/.github/workflows/release.yml:82-88`  
+  Where: `%USERPROFILE%/HTML Stuffs/threadline/.github/workflows/ci.yml:34-62`, `%USERPROFILE%/HTML Stuffs/threadline/.github/workflows/release.yml:82-88`  
   Fix: Add a `--smoke` mode or a short scripts/smoke_engine.py that does the above. Call it at the end of build_engine.py (assert the spec edit applied) and as a CI step after `pnpm build:engine` on each ...
 - **Suspected**: No single-instance handling and no macOS open-file event: double-clicking a .ludd either does nothing (Mac) or starts a second app that shares one recovery file  
   Where: `apps/desktop/src-tauri/src/lib.rs:1-19`, `apps/desktop/src-tauri/Cargo.toml:17-22 (no tauri-plugin-single-instance)`  
@@ -1380,7 +1380,7 @@ Each entry: status, title, where, suggested fix. Area in headings. Full detail a
   Where: `engine/threadline_engine/project.py:111`, `engine/threadline_engine/project.py:196`  
   Fix: In `_pack` (project.py:111), keep an existing `original_name` when the item's path is inside the project-files cache: `it["original_name"] = it.get("original_name") if _in_cache(it["path"]) and ...
 - **Confirmed**: Project format version is never bumped, so older LUDD versions silently sew new projects wrong  
-  Where: `C:/Users/Copper Felix/HTML Stuffs/threadline/engine/threadline_engine/project.py:33`, `C:/Users/Copper Felix/HTML Stuffs/threadline/engine/threadline_engine/project.py:103`  
+  Where: `%USERPROFILE%/HTML Stuffs/threadline/engine/threadline_engine/project.py:33`, `%USERPROFILE%/HTML Stuffs/threadline/engine/threadline_engine/project.py:103`  
   Fix: Make `_pack` stamp the lowest version that can read the project (for example `version = 2` only when a layout uses a post-1.0.1 feature such as a fill pattern other than tatami/gradient, a ribbon ...
 - **Confirmed**: Stitch-edit moves are stored as world-space deltas: turning, scaling or mirroring an edited stitch file afterwards puts the moved stitches in the wrong place  
   Where: `engine/threadline_engine/layout.py:177-194`, `engine/threadline_engine/layout.py:672-676`  
@@ -1410,7 +1410,7 @@ Each entry: status, title, where, suggested fix. Area in headings. Full detail a
   Where: `engine/threadline_engine/digitize/stitches.py:364-376 (edge and zigzag underlay, never split)`, `engine/threadline_engine/digitize/stitches.py:384-392 (the only place split_mm is applied)`  
   Fix: Make the split helper shared and apply it to the edge-turn and zigzag legs in `satin_from_pairs` (`stitches.py:368-376`), or have the satin return which records are underlay so `quality.check` can ...
 - **Confirmed**: Knife on a closed satin ribbon or closed line cuts it into 3 pieces, not 2 (also QA-REPORT M6)  
-  Where: `C:/Users/Copper Felix/HTML Stuffs/threadline/engine/threadline_engine/shapeops.py:173-178`, `C:/Users/Copper Felix/HTML Stuffs/threadline/engine/threadline_engine/shapeops.py:198-210`  
+  Where: `%USERPROFILE%/HTML Stuffs/threadline/engine/threadline_engine/shapeops.py:173-178`, `%USERPROFILE%/HTML Stuffs/threadline/engine/threadline_engine/shapeops.py:198-210`  
   Fix: In `split`, when `g.get("closed")` is true and there are at least 2 pieces, whose first piece starts at the ring start and whose last piece ends there, replace them with one LineString: last piece ...
 
 ### security
@@ -1455,7 +1455,7 @@ Each entry: status, title, where, suggested fix. Area in headings. Full detail a
   Where: `apps/desktop/src/updates.ts:56-61`, `apps/desktop/src/App.tsx:263-295,334`  
   Fix: In the timer callback re-read loadPrefs() and require welcomed === true and checkUpdates !== false; on Welcome 'Continue' with the box ticked, schedule the check then.
 - **Reviewer-reproduced**: F5 and the default WebView2 context menu are live in the installed app: reload wipes the open design without a prompt and leaves an extra engine process  
-  Where: `apps/desktop/src-tauri/src/lib.rs:13-21`, `C:/Users/Copper Felix/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wry-0.57.0/src/lib.rs:1768-1769`  
+  Where: `apps/desktop/src-tauri/src/lib.rs:13-21`, `%USERPROFILE%/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wry-0.57.0/src/lib.rs:1768-1769`  
   Fix: In useShortcuts (capture phase) preventDefault F5, Ctrl+R, Ctrl+Shift+R, Ctrl+F, Ctrl+P regardless of command enabled state; preventDefault 'contextmenu' outside text inputs; add a beforeunload guard ...
 - **Suspected**: Engine start depends on a 10 s ping after a 180 MB onefile extraction on every launch; one slow start leaves the app dead  
   Where: `apps/desktop/src/engine/rpc.ts:29`, `apps/desktop/src/engine/sidecar.ts:55-65`  
@@ -1580,7 +1580,7 @@ Each entry: status, title, where, suggested fix. Area in headings. Full detail a
 - **Confirmed**: Project format VERSION stays 1 although new projects use geometry and params that the released (HEAD, 1.0.1) engine cannot read, so the "saved by a newer LUDD; update to open it" guard never fires  
   Where: `engine/threadline_engine/project.py:33 (VERSION = 1)`, `engine/threadline_engine/project.py:103 (_pack always writes VERSION)`
 - **Confirmed**: Stray apps/desktop/tsconfig.tsbuildinfo (stale tsc build cache) is untracked and not git-ignored  
-  Where: `C:/Users/Copper Felix/HTML Stuffs/threadline/.gitignore (missing *.tsbuildinfo)`, `C:/Users/Copper Felix/HTML Stuffs/threadline/apps/desktop/tsconfig.tsbuildinfo (untracked, stale, 1804 bytes, Oct 11 18:11)`
+  Where: `%USERPROFILE%/HTML Stuffs/threadline/.gitignore (missing *.tsbuildinfo)`, `%USERPROFILE%/HTML Stuffs/threadline/apps/desktop/tsconfig.tsbuildinfo (untracked, stale, 1804 bytes, Oct 11 18:11)`
 
 ### docs-a
 
@@ -1802,9 +1802,9 @@ Each entry: status, title, where, suggested fix. Area in headings. Full detail a
 ### packaging
 
 - **Reviewer-reproduced**: Release workflow hardening: actions pinned only to mutable tags, checkout keeps the write token, ci.yml has no permissions block, and no tag/version guard  
-  Where: `C:/Users/Copper Felix/HTML Stuffs/threadline/.github/workflows/release.yml:22,62,63,64,71,72,131,149`, `C:/Users/Copper Felix/HTML Stuffs/threadline/.github/workflows/release.yml:12-13,28-32`
+  Where: `%USERPROFILE%/HTML Stuffs/threadline/.github/workflows/release.yml:22,62,63,64,71,72,131,149`, `%USERPROFILE%/HTML Stuffs/threadline/.github/workflows/release.yml:12-13,28-32`
 - **Suspected**: CI and release builds are not locked: `uv run` and the tauri/cargo build can silently re-resolve dependencies  
-  Where: `C:/Users/Copper Felix/HTML Stuffs/threadline/.github/workflows/ci.yml:22`, `C:/Users/Copper Felix/HTML Stuffs/threadline/.github/workflows/release.yml:83`
+  Where: `%USERPROFILE%/HTML Stuffs/threadline/.github/workflows/ci.yml:22`, `%USERPROFILE%/HTML Stuffs/threadline/.github/workflows/release.yml:83`
 - **Reviewer-reproduced**: Cargo.toml rust-version = "1.77" is wrong: every Tauri dependency requires Rust 1.90  
   Where: `apps/desktop/src-tauri/Cargo.toml:7`
 - **Reviewer-reproduced**: .gitignore gaps: untracked apps/desktop/tsconfig.tsbuildinfo is not ignored, and *.pfx / *.p12 certificates are not blocked  

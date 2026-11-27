@@ -55,7 +55,7 @@ change, in the same commit as docs/CHANGELOG.md. Never edited by the help agent.
 | Can't open | Embrilliance working files (`.be`, `.bt`): they're a closed format. Open the PES/JEF Embrilliance saved, or recreate. See L-012. |
 | Project file | `.ludd`: everything embedded (shapes, lettering, placed designs, traced pictures, the lettering's fonts). Old `.thl` projects and `.tlfont` stitch fonts still open. |
 | Data folder (Windows) | `%APPDATA%\Ludd` (older installs: the old `Threadline` folder still works). Holds threads, settings, `fonts` (stitch fonts, including fonts made from letter files), `templates` (name templates), `motifs` (My motifs), `recovery`, `project-files` (private copies of added pictures/designs; unused 90 days → deleted), `machines` (extra machine profiles). |
-| Installer location (developer builds) | `C:\Users\Copper Felix\HTML Stuffs\threadline\apps\desktop\src-tauri\target\release\bundle\nsis\LUDD_<version>_x64-setup.exe` |
+| Installer location (developer builds) | `%USERPROFILE%\HTML Stuffs\threadline\apps\desktop\src-tauri\target\release\bundle\nsis\LUDD_<version>_x64-setup.exe` |
 | Releases | GitHub `jvanekel-pixel/ludd` → Releases. Installers aren't code-signed yet (Windows SmartScreen / macOS Gatekeeper warning; see T-001). |
 | Shortcuts | Embrilliance's keys wherever Embrilliance has one. Every menu item and button tooltip shows its key. |
 

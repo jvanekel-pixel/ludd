@@ -1,6 +1,6 @@
 # Embroidery Studio: Research & Build Plan
 
-Oct 11, 2026 · @Copper
+Oct 11, 2026 · the owner
 
 ## Summary
 
