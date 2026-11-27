@@ -107,6 +107,34 @@ def test_lips_join_without_a_jump(size, fabric):
         assert len(trims) == 1 and records[trims[0]][3] in (2, 3)  # only from one tack to the other
 
 
+def _as_a_group(objects, k, rotate=0.0, flip=False):
+    """The shapes resized, turned and mirrored together, as the handles do a group: each about its
+    own middle, its middle moved about (0, 0)."""
+    out = []
+    for obj in objects:
+        pts, _ = flatten(obj["geometry"]["nodes"])
+        xs, ys = [p[0] for p in pts], [p[1] for p in pts]
+        cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
+        a = math.radians(rotate)
+        x, y = (-cx if flip else cx) * k, cy * k
+        move = {"x": x * math.cos(a) - y * math.sin(a) - cx, "y": x * math.sin(a) + y * math.cos(a) - cy}
+        out.append({**obj, "transform": {**move, "scale_x": k, "scale_y": k, "rotate": rotate, "flip_x": flip}})
+    return out
+
+
+@pytest.mark.parametrize("k,rotate,flip", [(1.5, 0, False), (0.75, 0, False), (1.0, 90, False), (1.3, 37, True)])
+def test_a_buttonhole_resized_as_a_group_keeps_its_hand_over_and_clear_slit(k, rotate, flip):
+    records = _sewn(_layout(_as_a_group(_made()["objects"], k, rotate, flip)))
+    stitched = [(i, r) for i, r in enumerate(records) if r[2] == pe.STITCH]
+    last = max(i for i, r in stitched if r[3] == 0)
+    first = min(i for i, r in stitched if r[3] == 1)
+    assert {r[2] for r in records[last + 1 : first + 1]} == {pe.STITCH}
+    assert sum(1 for r in records if r[2] == pe.TRIM) == 1
+    slit = affinity.rotate(box(-6.5 * k + 0.2 * k, -0.5 * k + 0.15, 6.5 * k - 0.2 * k, 0.5 * k - 0.15), rotate,
+                           origin=(0, 0))
+    assert slit.area > 0 and not [t for t in _threads(records) if t.intersects(slit)]
+
+
 def test_rounded_buttonhole_is_one_closed_ribbon():
     made = _made(style="round", length_mm=16, width_mm=5, cut_gap_mm=1)
     [obj] = made["objects"]

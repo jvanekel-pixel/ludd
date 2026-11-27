@@ -366,9 +366,11 @@ def test_projects_name_each_feature(tmp_path):
             features = json.loads(z.read("project.json"))["features"]
         assert feature in features, features
         assert project.open_project(saved["path"])["layout"]["items"][0]["params"] == obj["params"]
-    # A centered motif, the usual locks and a shape with no lock stitches need none of these.
+    # A centered motif, the usual locks, a shape with no lock stitches and an applique (which
+    # always locks the usual way) need none of these.
     plain = [_obj(LINE, style="motif", motif="blanket", motif_side="center"),
-             _obj(LINE, tie_style="standard"), _obj(LINE, tie_style="backtack", tie_in=False, tie_off=False)]
+             _obj(LINE, tie_style="standard"), _obj(LINE, tie_style="backtack", tie_in=False, tie_off=False),
+             {"kind": "applique", "geometry": {"outline": SQUARE}, "params": {"tie_style": "triangle"}}]
     used = project._features({"items": plain})
     assert used == {"motif_lines"}
 
