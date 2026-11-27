@@ -10,7 +10,6 @@ import pytest
 
 from threadline_engine import layout as L
 from threadline_engine import presets
-from threadline_engine.digitize import fills, lines
 from threadline_engine.methods.registry import dispatcher
 
 BLEND = [{"color": "#00aa00", "name": "Green", "catalog": "", "brand": ""}]
@@ -286,12 +285,6 @@ def test_broken_files_in_the_folder_are_left_out_and_never_overwritten(isolated_
     assert (folder(isolated_data_dir) / "mine.luddpreset").read_text(encoding="utf-8") == "{broken"
 
 
-def _known(p: dict) -> bool:
-    """Whether this engine knows the preset's style and pattern."""
-    params = p["params"]
-    return params.get("style", "single") in lines.REGISTRY and params.get("pattern", "tatami") in fills.REGISTRY
-
-
 SHAPES = {
     "run": {"nodes": [[0, 0, "s"], [20, 5, "s"], [40, 0, "s"]]},
     "satin": {"nodes": [[0, 20, "s"], [20, 25, "s"], [40, 20, "s"]], "width_mm": 2},
@@ -302,12 +295,9 @@ T = {"x": 0, "y": 0, "rotate": 0, "scale_x": 1, "scale_y": 1, "flip_x": False, "
 
 
 def test_builtins_pass_their_checks_and_sew():
-    """Each built-in is checked like any imported preset and sews on a sample shape. (One whose
-    style another part of this phase adds is checked once it's there.)"""
+    """Each built-in is checked like any imported preset and sews on a sample shape."""
     checked = []
     for p in presets.list_presets():
-        if not _known(p):
-            continue
         clean = presets.check({k: p[k] for k in ("name", "kind", "params", "width_mm", "note")}, p["name"])
         assert clean["params"] == p["params"] and clean["width_mm"] == p["width_mm"]
         geometry = dict(SHAPES[p["kind"]])
@@ -318,20 +308,18 @@ def test_builtins_pass_their_checks_and_sew():
         render = L.render({"items": [item], "merge_colors": False, "color_sort": False, "basting": {"enabled": False, "margin_mm": 5}})
         assert len(render.pattern.stitches) > 10, p["name"]
         checked.append(p["name"])
-    assert {"Light sketch fill", "Bold outline", "Narrow satin border", "Felt applique"} <= set(checked)
+    assert checked == BUILTINS
 
 
 def test_every_setting_of_the_new_line_styles_and_locks_is_known():
-    """Once the new line styles, lock stitches and blackwork are in the engine, presets keep
-    their settings. (Lock stitches' shape is read outside the settings classes.)"""
+    """Presets keep the settings of the new line styles, lock stitches and blackwork. (Lock
+    stitches' shape is read outside the settings classes.)"""
     assert {"tie_in", "tie_off", "tie_style"} <= presets.settings_of("run") & presets.settings_of("satin") & presets.settings_of("fill")
     assert not presets.settings_of("applique") & {"tie_style", "style", "pattern"}
     for kind in ("run", "satin", "fill", "applique"):
         assert not presets.settings_of(kind) & {"angle_deg", "reverse", "start_mm", "end_mm", "angle_line", "angle_lines",
                                                   "ripple_center", "blend_flip", "push_comp_mm", "carve", "extra",
                                                   "underlay_spacing_mm"}, kind
-    if "redwork" not in lines.REGISTRY:
-        pytest.skip("the new line styles aren't in this engine yet")
     assert {"motif_side", "stem_width_mm", "knot_mm", "knot_gap_mm"} <= presets.settings_of("run")
     assert {"blackwork_mm", "blackwork_lattice"} <= presets.settings_of("fill")
 

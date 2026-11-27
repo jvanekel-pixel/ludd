@@ -508,6 +508,10 @@ export function ObjectSections({ item, info, sel }: { item: ObjectItem; info: La
           <Cmd id="draw.continue" label="Add points (K)" />
           {(item.kind === "fill" || item.kind === "applique") && <Cmd id="object.hole" label="Add a hole (O)" />}
         </div>
+        {/* K can start at either end only of an open line or ribbon. */}
+        {(item.kind === "run" || isRibbon(item)) && !(item.geometry as { closed?: boolean }).closed && (
+          <p className="hint">Select the first point to add at the start.</p>
+        )}
         <p className="hint">Drag a point to reshape; right-click a point to switch it between curve, straight and sharp corner; double-click the outline to add a point.</p>
       </Section>
       <ThreadPickerFor open={picking} current={sewn} onPick={(t) => setObjectThread(item.id, t)} onClose={() => setPicking(false)} />

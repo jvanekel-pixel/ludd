@@ -47,7 +47,7 @@ function show(item: ObjectItem): HTMLElement {
 function showKind(item: ObjectItem, title: string): HTMLElement {
   unmount();
   const k = item.kind;
-  savePrefs({ sections: { [`object@${k}`]: true, [`sub:underlay-${k}`]: true, [`sub:advanced-${k}`]: true } });
+  savePrefs({ sections: { [`object@${k}`]: true, [`size@${k}`]: true, [`sub:underlay-${k}`]: true, [`sub:advanced-${k}`]: true } });
   const d = newDoc();
   const doc: Doc = { layout: { ...d.layout, items: [item] }, images: [] };
   const design: Design = {
@@ -318,5 +318,20 @@ describe("Phase 7: line styles, lock stitches and blackwork (Track A)", () => {
     section = show(fill({ pattern: "blackwork" }));
     await pick(select(section, "Lattice")!, "honeycomb");
     expect(params().blackwork_lattice).toBe("honeycomb");
+  });
+});
+
+describe("Phase 7: the hint under Add points (K)", () => {
+  const START = "Select the first point to add at the start.";
+  const LINE = [[0, 0, "c"], [10, 0, "c"]];
+  const sizeText = (item: ObjectItem) => showKind(item, "Size and points").textContent!;
+
+  it("says how to add at the start only where K can: open lines and satin ribbons", () => {
+    expect(sizeText(shape("run", { nodes: LINE }))).toContain(START);
+    expect(sizeText(shape("satin", { nodes: LINE, width_mm: 3 }))).toContain(START);
+    const column = { rail_a: LINE, rail_b: [[0, 3, "c"], [10, 3, "c"]] };
+    for (const item of [shape("run", { nodes: [...LINE, [10, 10, "c"]], closed: true }), shape("satin", column), fill()]) {
+      expect(sizeText(item)).not.toContain(START);
+    }
   });
 });
