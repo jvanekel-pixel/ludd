@@ -30,6 +30,7 @@ from .stitches import (
     SatinParams,
     _crossing_rungs,
     _finite,
+    _start_point,
     check_points,
     satin_from_pairs,
     stitch_run,
@@ -50,6 +51,8 @@ class AppliqueParams:
     tack: str = "zigzag"  # zigzag | run
     tack_width_mm: float = 1.5
     placement: bool = True  # sew the placement line (off for pre-cut pieces placed by eye)
+    #: Each edge starts at its point nearest this (mm; Optimize jumps sets it). None: as drawn.
+    start_mm: Point | None = None
 
     @classmethod
     def from_dict(cls, d: dict[str, Any] | None) -> "AppliqueParams":
@@ -60,6 +63,7 @@ class AppliqueParams:
             tack=str(d.get("tack", "zigzag")),
             tack_width_mm=_finite(d, "tack_width_mm", 1.5),
             placement=bool(d.get("placement", True)),
+            start_mm=_start_point(d.get("start_mm")),
         )
         if not 1 <= p.cover_width_mm <= 8:
             raise DigitizeError("The applique border must be between 1 and 8 mm wide")
@@ -169,8 +173,29 @@ def _border(edge: list[Point], width: float, spacing: float, pull_comp: float) -
     return recs, warnings
 
 
+def _started_at(edge: list[Point], at: Point) -> list[Point]:
+    """A closed edge re-started at its point nearest `at` (a new point where that is between two).
+    Of equally near places the first round the edge wins, to the millionth of a mm."""
+    body = edge[:-1] if len(edge) > 1 and edge[0] == edge[-1] else list(edge)
+    best: tuple[float, int, Point] | None = None
+    for i, (ax, ay) in enumerate(body):
+        bx, by = body[(i + 1) % len(body)]
+        dx, dy = bx - ax, by - ay
+        long2 = dx * dx + dy * dy
+        t = 0.0 if long2 == 0 else max(0.0, min(1.0, ((at[0] - ax) * dx + (at[1] - ay) * dy) / long2))
+        q = (ax + dx * t, ay + dy * t)
+        d = round(math.dist(q, at), 6)
+        if best is None or d < best[0]:
+            best = (d, i, q)
+    _, i, q = best
+    rest = [p for p in body[i + 1:] + body[:i + 1] if math.dist(p, q) > 1e-6]
+    return [q, *rest, q]
+
+
 def applique(outline: Sequence, params: AppliqueParams, holes: Sequence[Sequence] = ()) -> tuple[list[Rec], list[str]]:
     edges = _edges(outline, holes)
+    if params.start_mm is not None:
+        edges = [_started_at(e, params.start_mm) for e in edges]
     warnings: list[str] = []
     out: list[Rec] = []
 

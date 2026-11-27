@@ -406,28 +406,25 @@ def _plan(b: str, run: list[int], items: list, fabric: str | None, dots: tuple[P
 def _entered(m: _Member, prev: Any, nxt: Any) -> tuple[dict[str, Any], Pt | None]:
     """A copy of the member made to start nearest where the thread comes from (`prev`, a point)
     and to end nearest where it goes (`nxt`, a shape or point); and where it ends."""
-    from ..jumps import _reversed_path, _to_local
+    from ..jumps import _to_local, can_turn, turned_round
 
     it = m.item
-    v = copy.deepcopy(it)
-    params = dict(v.get("params") or {})
     if m.mode == "open":
         e0, e1 = m.points[0], m.points[-1]
 
         def cost(a: Pt, z: Pt) -> float:
             return (_distance(prev, a) if prev is not None else 0.0) + (_distance(nxt, z) if nxt is not None else 0.0)
 
-        turn = cost(e1, e0) < cost(e0, e1)
-        g = dict(v.get("geometry") or {})
-        if turn and g.get("nodes"):
-            g["nodes"] = _reversed_path(g["nodes"])
-        elif turn:
-            g["rail_a"], g["rail_b"] = _reversed_path(g["rail_a"]), _reversed_path(g["rail_b"])
-        v["geometry"] = g
+        # A line whose curve would change turned round is sewn the way it was drawn.
+        turn = cost(e1, e0) < cost(e0, e1) and can_turn(it)
+        v = turned_round(it) if turn else copy.deepcopy(it)
+        params = dict(v.get("params") or {})
         params.pop("start_mm", None)
         params.pop("end_mm", None)
         v["params"] = params
         return v, (e0 if turn else e1)
+    v = copy.deepcopy(it)
+    params = dict(v.get("params") or {})
     pts = m.points
     if m.mode == "closed":
         target = prev if prev is not None else nxt

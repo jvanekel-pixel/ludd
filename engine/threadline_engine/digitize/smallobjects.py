@@ -78,8 +78,10 @@ def _bar(placed: _Placed, length: float, width: float, cut: float, lip: float) -
     half, middle = length / 2, cut / 2 + lip / 2  # the lips' middle lines are this far from the slit's
     over = half - HAND_OVER_MM
     lips = [
+        # Both lips have both dots, so Optimize jumps leaves their handover as it is.
         _satin("Buttonhole lip 1", [placed.node(-half, -middle), placed.node(half, -middle, "l")], lip,
-               {"underlay": ["center"], "end_mm": placed.point(over, -cut / 2)}),
+               {"underlay": ["center"], "start_mm": placed.point(-half, -middle),
+                "end_mm": placed.point(over, -cut / 2)}),
         _satin("Buttonhole lip 2", [placed.node(half, middle), placed.node(-half, middle, "l")], lip,
                {"underlay": ["center"], "start_mm": placed.point(over, cut / 2),
                 "end_mm": placed.point(-half, width / 2)}),

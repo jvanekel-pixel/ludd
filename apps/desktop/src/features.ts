@@ -378,7 +378,8 @@ export async function optimizeJumps() {
   const l = currentLayout();
   if (!l) return;
   try {
-    const r = await engine().call<{ changes: Record<string, { geometry?: unknown; params?: Record<string, unknown> }>; before_mm: number; after_mm: number }>(
+    type Change = { geometry?: unknown; params?: Record<string, unknown>; letters?: TextItem["letters"] };
+    const r = await engine().call<{ changes: Record<string, Change>; before_mm: number; after_mm: number }>(
       "layout.optimize_jumps",
       { layout: l },
       LONG_MS,
@@ -393,6 +394,8 @@ export async function optimizeJumps() {
       ...now,
       items: now.items.map((it) => {
         const c = r.changes[it.id];
+        // A text's change is where its first letter now starts.
+        if (c?.letters && isText(it)) return { ...it, letters: c.letters };
         if (!c || !isObject(it)) return it;
         return { ...it, ...(c.geometry ? { geometry: c.geometry } : {}), ...(c.params ? { params: c.params } : {}) } as ObjectItem;
       }),
