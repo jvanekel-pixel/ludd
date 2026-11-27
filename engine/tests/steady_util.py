@@ -19,7 +19,7 @@ import random
 
 from shapely import affinity
 
-from threadline_engine import lettering
+from threadline_engine import jumps, lettering
 from threadline_engine.layout import objects as layout_objects
 from threadline_engine.layout import text as text_pipeline
 
@@ -62,3 +62,4 @@ def forget_stitches():
     text_pipeline._text_cache.clear()
     layout_objects._object_cache.clear()
     lettering.extras._cache.clear()
+    jumps.forget()

@@ -3,8 +3,8 @@ and ends so the jumps between them are as short as possible, without changing th
 (that decides what lies on top).
 
 For each drawn piece, the ways it could be sewn are tried:
-- a line, satin ribbon or two-sided satin: either way round (only when its curve stays the same
-  turned round);
+- a line, satin ribbon or two-sided satin: either way round (only when it sews the same turned
+  round: its curve stays as it is, and a motif line's pattern too);
 - a closed line or ribbon (a border): starting at the point nearest the piece before, or nearest the
   piece after (it ends where it starts);
 - a fill: starting at the edge nearest the piece before, or nearest the piece after, with its rows
@@ -21,10 +21,13 @@ costs nothing extra.
 from __future__ import annotations
 
 import copy
+import json
 import math
 from typing import Any
 
+import numpy as np
 import pyembroidery as pe
+import shapely
 from shapely.geometry import LineString, Point as SPoint, Polygon
 
 from . import layout as L
@@ -67,7 +70,9 @@ def set_end(it: dict[str, Any], which: str, at: list[float]) -> dict[str, Any]:
     `at` (mm, as shown). Returns the piece changed to suit:
     - a fill starts at the edge nearest `at`, and its rows end as near `at` as they can;
     - a closed line or ribbon (a border) starts and ends at its point nearest `at`;
-    - an open line, ribbon or satin column is turned round if `at` is nearer its other end.
+    - an open running line is turned round if `at` is nearer its other end, unless it would sew
+      differently from there: then it raises, saying why;
+    - an open satin (ribbon or column) starts or ends at `at`.
     """
     if which not in ("start", "end"):
         raise EndsError("Choose the start or the end")
@@ -98,13 +103,12 @@ def set_end(it: dict[str, Any], which: str, at: list[float]) -> dict[str, Any]:
             v["params"] = {**(v.get("params") or {}), "start_mm": [round(lx, 3), round(ly, 3)]}
             return v
         here, other = (world[0], world[-1]) if which == "start" else (world[-1], world[0])
-        return turned_round(it) if math.dist(p, other) < math.dist(p, here) else v
-    if kind == "satin" and g.get("rail_a") and g.get("rail_b"):
-        a, b = _world_points(it, "rail_a"), _world_points(it, "rail_b")
-        first = ((a[0][0] + b[0][0]) / 2, (a[0][1] + b[0][1]) / 2)
-        last = ((a[-1][0] + b[-1][0]) / 2, (a[-1][1] + b[-1][1]) / 2)
-        here, other = (first, last) if which == "start" else (last, first)
-        return turned_round(it) if math.dist(p, other) < math.dist(p, here) else v
+        if math.dist(p, other) >= math.dist(p, here):
+            return v
+        why = _why_not_turned(it)
+        if why:
+            raise EndsError(why)
+        return turned_round(it)
     raise EndsError("Only drawn lines, satins and fills can have their start and end moved")
 
 
@@ -138,10 +142,115 @@ def _reversed_path(nodes: list, closed: bool = False) -> list:
     return out
 
 
+#: How far a motif line's stitching may move, sewn from its other end, and still count as the same.
+TURN_SAME_MM = 0.05
+#: A motif line's stitching is compared at its needle points and every this far along its stitches.
+TURN_SAMPLE_MM = 0.25
+_turn_cache: dict[str, bool] = {}
+_TURN_CACHE_MAX = 1024
+
+NOT_TURNED = {
+    "curve": "Sewn from its other end, this line's curve would change, so LUDD keeps its direction. "
+             "To start there, draw the line again from that end.",
+    "pattern": "Sewn from its other end, this line's pattern would come out differently, so LUDD keeps its "
+               "direction. To start there, draw the line again from that end.",
+}
+
+
 def can_turn(it: dict[str, Any]) -> bool:
-    """Whether an open line, ribbon or satin column draws the same sewn from its other end."""
+    """Whether an open line, ribbon or satin column sews the same from its other end: its curve
+    stays as it is, and a motif line, whose pattern can be lopsided (a centered blanket's teeth, a
+    leaf's tip), sews the same stitching."""
+    return _why_not_turned(it) is None
+
+
+def _why_not_turned(it: dict[str, Any]) -> str | None:
+    """Why a line can't be turned round (a NOT_TURNED message), or None if it can."""
     g = it.get("geometry") or {}
-    return all(reverses_exactly(g[k]) for k in ("nodes", "rail_a", "rail_b") if g.get(k))
+    if not all(reverses_exactly(g[k]) for k in ("nodes", "rail_a", "rail_b") if g.get(k)):
+        return NOT_TURNED["curve"]
+    if (it.get("kind") == "run" and (it.get("params") or {}).get("style") == "motif"
+            and g.get("nodes") and not g.get("closed") and not _same_motif_turned(it)):
+        return NOT_TURNED["pattern"]
+    return None
+
+
+def _same_motif_turned(it: dict[str, Any]) -> bool:
+    """Whether a motif line sews the same stitching, as shown, turned round (remembered by shape:
+    the branch planner and Optimize jumps ask again and again)."""
+    a, b = _placed(it), _placed(turned_round(it))
+    key = json.dumps([[o.get("geometry"), o.get("params")] for o in (a, b)], sort_keys=True, default=str)
+    hit = _turn_cache.get(key)
+    if hit is None:
+        try:
+            one, two = _stitched_segments(a), _stitched_segments(b)
+        except dz.DigitizeError:
+            return True  # it doesn't sew either way round: the render says what's wrong with it
+        # A motif that sews the same comes out as the same stitches in reverse, which is quick to see;
+        # anything else is measured.
+        hit = np.array_equal(_stretches(one), _stretches(two)) or (_lies_on(one, two) and _lies_on(two, one))
+        if len(_turn_cache) >= _TURN_CACHE_MAX:
+            _turn_cache.pop(next(iter(_turn_cache)))
+        _turn_cache[key] = hit
+    return hit
+
+
+def _stitched_segments(obj: dict[str, Any]) -> np.ndarray:
+    """The thread an object sews from needle point to needle point (not its jumps): shape (n, 2, 2)."""
+    out = []
+    prev = None
+    for x, y, k in L._generate_cached(obj)[0]:
+        if k != dz.STITCH:
+            prev = None
+            continue
+        if prev is not None:
+            out.append((prev, (x, y)))
+        prev = (x, y)
+    return np.array(out, float).reshape(-1, 2, 2)
+
+
+def _stretches(a: np.ndarray) -> np.ndarray:
+    """The stretches of thread as sorted rows of their two ends to 0.01 mm, each end pair in a fixed
+    order: the same whichever way and in whatever order they were sewn."""
+    q = np.round(a, 2)
+    flip = (q[:, 0, 0] > q[:, 1, 0]) | ((q[:, 0, 0] == q[:, 1, 0]) & (q[:, 0, 1] > q[:, 1, 1]))
+    q[flip] = q[flip][:, ::-1]
+    rows = q.reshape(-1, 4)
+    return rows[np.lexsort(rows.T[::-1])]
+
+
+def _lies_on(a: np.ndarray, b: np.ndarray) -> bool:
+    """Whether every part of the thread `a` lies within TURN_SAME_MM of the thread `b`."""
+    if not len(a) or not len(b):
+        return len(a) == len(b)
+    tree = shapely.STRtree(shapely.linestrings(b))
+
+    def near(points: np.ndarray) -> bool:
+        _, d = tree.query_nearest(shapely.points(points), return_distance=True, all_matches=False)
+        return round(float(d.max()), 3) <= TURN_SAME_MM
+
+    if not near(a.reshape(-1, 2)):  # the needle points first: a lopsided pattern shows there
+        return False
+    parts = np.maximum(1, np.ceil(np.hypot(*(a[:, 1] - a[:, 0]).T) / TURN_SAMPLE_MM)).astype(int)
+    if not (parts > 1).any():
+        return True
+    which = np.repeat(np.arange(len(a)), parts - 1)
+    step = np.concatenate([np.arange(1, n) for n in parts if n > 1]) / parts[which]
+    return near(a[which, 0] + (a[which, 1] - a[which, 0]) * step[:, None])
+
+
+def _placed(it: dict[str, Any]) -> dict[str, Any]:
+    """An item with its transform applied to its points (as it sews)."""
+    t = L.Transform.from_dict(it.get("transform"))
+    if t.is_identity():
+        return it
+    x0, y0, x1, y1 = dz.bounds(dz.geometry_points(it))
+    return dz.transform_geometry(it, t, ((x0 + x1) / 2, (y0 + y1) / 2))
+
+
+def forget() -> None:
+    """Forget which motif lines sew the same turned round (tests change the maths under it)."""
+    _turn_cache.clear()
 
 
 def turned_round(it: dict[str, Any]) -> dict[str, Any]:
@@ -161,13 +270,7 @@ def turned_round(it: dict[str, Any]) -> dict[str, Any]:
 
 def _world_points(it: dict[str, Any], key: str) -> list[Pt]:
     """An item's points for `key` as shown (its transform applied)."""
-    t = L.Transform.from_dict(it.get("transform"))
-    obj = it
-    if not t.is_identity():
-        pts = dz.geometry_points(it)
-        x0, y0, x1, y1 = dz.bounds(pts)
-        obj = dz.transform_geometry(it, t, ((x0 + x1) / 2, (y0 + y1) / 2))
-    return [(float(n[0]), float(n[1])) for n in (obj.get("geometry") or {}).get(key) or []]
+    return [(float(n[0]), float(n[1])) for n in (_placed(it).get("geometry") or {}).get(key) or []]
 
 
 def _dotted_satin(it: dict[str, Any]) -> bool:
@@ -245,12 +348,7 @@ def _variants(it: dict[str, Any], before: Pt | None, after_shape: Any) -> list[d
 
 def _nearest_on_outline(it: dict[str, Any], p: Pt) -> Pt:
     """The point of a fill's or applique's outline, as shown, nearest `p`."""
-    t = L.Transform.from_dict(it.get("transform"))
-    obj = it
-    if not t.is_identity():
-        x0, y0, x1, y1 = dz.bounds(dz.geometry_points(it))
-        obj = dz.transform_geometry(it, t, ((x0 + x1) / 2, (y0 + y1) / 2))
-    poly, _ = flatten((obj.get("geometry") or {}).get("outline") or [], closed=True)
+    poly, _ = flatten((_placed(it).get("geometry") or {}).get("outline") or [], closed=True)
     ring = LineString(poly + poly[:1])
     q = ring.interpolate(ring.project(SPoint(p)))
     return (q.x, q.y)

@@ -631,12 +631,11 @@ const smooth = (n: Noted) => n[2] === "s" || n[3] === "s";
 const lineIn = (n: Noted) => n[2] === "l" || n[3] === "l";
 
 /**
- * A path the other way round, as the engine turns lines (jumps.py `_reversed_path`) for its
- * straight stretches: a stretch's "straight" goes with the stretch, so it moves to the point at its
- * other end. A point's sharpness stays with the point (the engine moves that too, which bends mixed
- * paths). Turning round twice gives back exactly the same points. The one thing three kinds can't
- * say turned round is a smooth point with a straight stretch coming into it: it shows sharp while
- * turned, and keeps its note.
+ * A path the other way round, as the engine turns lines (jumps.py `_reversed_path`): a stretch's
+ * "straight" goes with the stretch, so it moves to the point at its other end, and a point's
+ * sharpness stays with the point. Turning round twice gives back exactly the same points. The one
+ * thing three kinds can't say turned round is a smooth point with a straight stretch coming into
+ * it: it shows sharp while turned, and keeps its note.
  */
 export function reversePath(nodes: readonly PathNode[]): PathNode[] {
   const path = nodes as readonly Noted[];
@@ -657,3 +656,7 @@ export function reversePath(nodes: readonly PathNode[]): PathNode[] {
 
 /** Points without their notes, as they're kept in a shape. */
 export const plainNodes = (nodes: readonly PathNode[]): PathNode[] => nodes.map(([x, y, kind]) => [x, y, kind]);
+
+/** The points a pen line is saved with, and so is drawn with: continued from its first point (K),
+ *  the pen holds the line backwards, and it is turned back. */
+export const penPoints = (nodes: readonly PathNode[], prepend?: boolean): PathNode[] => (prepend ? plainNodes(reversePath(nodes)) : [...nodes]);

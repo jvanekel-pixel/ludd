@@ -42,7 +42,7 @@ import {
   type History,
 } from "./design/layout";
 import type { ShapeId } from "./design/shapes";
-import { plainNodes, reversePath } from "./design/simplify";
+import { penPoints, reversePath } from "./design/simplify";
 import { visibleRecords } from "./design/player";
 import type {
   Chart,
@@ -1087,9 +1087,9 @@ export async function penFinish(opts: { close?: boolean } = {}) {
   const thread = s.drawThread;
   // A satin fitted all the way round an edge is closed too.
   const closed = opts.close || pen.closed ? { closed: true } : {};
-  // Continued from its first point (K), the pen holds the line backwards: turned back, it keeps
-  // its direction, with the new points before its old start.
-  const points = pen.prepend ? plainNodes(reversePath(pen.a)) : pen.a;
+  // Continued from its first point (K), the line keeps its direction, with the new points before its
+  // old start: exactly the points the canvas has been drawing.
+  const points = penPoints(pen.a, pen.prepend);
   const obj =
     pen.kind === "run"
       ? { kind: "run" as const, geometry: { nodes: points, ...closed }, params: defaultsFor("run"), thread }
