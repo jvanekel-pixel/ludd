@@ -223,6 +223,13 @@ export function rotateBy(layout: Layout, id: string, deg: number): Layout {
   );
 }
 
+/** A motif that sits to one side of its line changes sides in a mirror image: the points are
+ *  mirrored but not their order, so without this the teeth would jump across the line. */
+function mirroredSide(o: ObjectItem): ObjectItem {
+  if (o.kind !== "run" || (o.params.motif_side !== "left" && o.params.motif_side !== "right")) return o;
+  return { ...o, params: { ...o.params, motif_side: o.params.motif_side === "left" ? "right" : "left" } };
+}
+
 /** Mirror as seen on screen. After a rotation, a screen mirror also flips the rotation direction. */
 export function mirror(layout: Layout, id: string, axis: "x" | "y"): Layout {
   return onItem(
@@ -239,10 +246,12 @@ export function mirror(layout: Layout, id: string, axis: "x" | "y"): Layout {
       const [cx, cy] = objectCenter(o);
       // A mirrored fill's rows mirror too. (Mirrored left to right, rows running at a degrees run
       // at 180 - a; top to bottom, at -a.)
-      return withFillAngle(
-        mapObjectNodes(o, (x, y) => (axis === "x" ? [2 * cx - x, y] : [x, 2 * cy - y])),
-        (ang) => (axis === "x" ? 180 - ang : -ang),
-        true,
+      return mirroredSide(
+        withFillAngle(
+          mapObjectNodes(o, (x, y) => (axis === "x" ? [2 * cx - x, y] : [x, 2 * cy - y])),
+          (ang) => (axis === "x" ? 180 - ang : -ang),
+          true,
+        ),
       );
     },
   );
