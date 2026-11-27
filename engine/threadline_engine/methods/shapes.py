@@ -54,14 +54,14 @@ def shape_set_end(obj: dict, which: str, at: list) -> dict:
 def shape_buttonhole(length_mm: float = 16, width_mm: float = 5, style: str = "bar", cut_gap_mm: float = 1.0,
                      angle_deg: float = 0, at: list | None = None) -> dict:
     """A buttonhole as ordinary shapes, centered on `at` (mm): {objects, warnings}."""
-    from ..layout import LayoutError
+    from ..digitize.smallobjects import buttonhole
 
-    raise LayoutError("not built yet")
+    return buttonhole(length_mm, width_mm, style, cut_gap_mm, angle_deg, at)
 
 
 @dispatcher.method("shape.eyelet")
 def shape_eyelet(hole_mm: float = 4, ring_mm: float = 1.6, at: list | None = None) -> dict:
     """An eyelet as ordinary shapes, centered on `at` (mm): {objects, warnings}."""
-    from ..layout import LayoutError
+    from ..digitize.smallobjects import eyelet
 
-    raise LayoutError("not built yet")
+    return eyelet(hole_mm, ring_mm, at)

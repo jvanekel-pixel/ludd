@@ -16,9 +16,10 @@ from shapely import affinity
 from shapely.geometry import LineString, Point as ShapelyPoint, Polygon
 from shapely.ops import substring
 
-from . import fills, lines
+from . import fills, lines, ties
 from . import rows as row_hooks  # "rows" names tatami's own rows
 from .fills import turning
+from .fills.lattice import LATTICES
 from .paths import Point, corner_indices, cumulative, dist, flatten, point_at, resample, sharp_points
 from .patterns import (FILL_PATTERNS, MOTIFS, contour_paths, cross_paths, gradient_ys, motif_points, nearest_rotation,
                        polygons, stipple_paths, wave_offset)
@@ -296,16 +297,22 @@ def _route_stitches(a: Point, route: list[Point]) -> list[Rec]:
 # ---------------------------------------------------------------- running stitch
 
 
+MOTIF_SIDES = ("center", "left", "right")
+
+
 @dataclass
 class RunParams:
-    style: str = "single"  # single | triple (whole line 3x) | bean (each stitch 3x) | motif
+    style: str = "single"  # single | triple (whole line 3x) | bean (each stitch 3x) | motif | a craft style
     stitch_mm: float = 2.5
     motif: str = "wave"  # for style "motif": wave | zigzag | scallop | blanket
     motif_mm: float = 4.0  # length of one repeat
     motif_width_mm: float = 2.5
     hand_pct: float = 0.0  # the hand-sewn look, 0 to 100
     motif_unit: list | None = None  # a motif of your own, carried with the line (lines.carried_unit)
+    motif_side: str = "center"  # for style "motif": which side of the line it sits on (patterns.motif_points)
     extra: dict[str, float] = field(default_factory=dict)  # a registered style's own settings (fills.Param)
+    # Not a setting: what the style wants to tell the user about this line (French knots left out).
+    notes: list[str] = field(default_factory=list, compare=False)
 
     def value(self, key: str) -> float:
         """A setting by name: one of the fields above, else one of the style's own (`extra`)."""
@@ -320,7 +327,8 @@ class RunParams:
         p = cls(style=style, stitch_mm=_finite(d, "stitch_mm", 2.5),
                 motif=str(d.get("motif", "wave")), motif_mm=_finite(d, "motif_mm", 4.0),
                 motif_width_mm=_finite(d, "motif_width_mm", 2.5), hand_pct=_hand_pct(d),
-                motif_unit=lines.carried_unit(d.get("motif_unit")) if style == "motif" else None)
+                motif_unit=lines.carried_unit(d.get("motif_unit")) if style == "motif" else None,
+                motif_side=_choice(d, "motif_side", MOTIF_SIDES, "motif side") if style == "motif" else "center")
         if p.style not in lines.REGISTRY:
             raise DigitizeError(f"Unknown running stitch style: {p.style}")
         if p.style == "motif":
@@ -350,7 +358,11 @@ def running(nodes: Sequence, params: RunParams, closed: bool = False, start: Poi
     """A running-stitch line in its style (digitize/lines: single, triple, bean, motif, ...).
     The hand-sewn look (rows/hand.py) works on single, triple and bean lines: the line's needle
     points are moved, then sewn once, three times or each stitch three times as the style does.
-    Other styles (motif) are sewn as they are."""
+    Other styles (motif) are sewn as they are. A style with `recs` makes its own records (it needs
+    jumps)."""
+    style = lines.REGISTRY[params.style]
+    if style.recs is not None:
+        return style.recs(nodes, params, closed, start)
     if params.hand_pct and params.style in HAND_LINE_STYLES:
         pts = row_hooks.hand.line(lines.REGISTRY["single"].points(nodes, params, closed, start), params.hand_pct)
         if len(pts) >= 2 and params.style == "triple":
@@ -358,7 +370,7 @@ def running(nodes: Sequence, params: RunParams, closed: bool = False, start: Poi
         elif len(pts) >= 2 and params.style == "bean":
             pts = [pts[0], *(p for a, b in zip(pts, pts[1:]) for p in (b, a, b))]  # each stitch three times
         return stitch_run(pts)
-    return stitch_run(lines.REGISTRY[params.style].points(nodes, params, closed, start))
+    return stitch_run(style.points(nodes, params, closed, start))
 
 
 HAND_LINE_STYLES = ("single", "triple", "bean")  # the line styles the hand-sewn look moves
@@ -778,6 +790,7 @@ class FillParams:
     ripple_center: tuple[float, float] | None = None  # ripple: where the rings spread from, mm
     motif: str = "wave"  # motif fill: which motif
     motif_unit: list | None = None  # motif fill: a motif of your own, carried with the shape
+    blackwork_lattice: str = "diamonds"  # blackwork fill: diamonds | grid | honeycomb | crossed
     carve: tuple = ()  # not a setting: the shape's carved lines (geometry.carve) as polylines, mm
     extra: dict[str, float] = field(default_factory=dict)  # a registered pattern's own settings (fills.Param)
 
@@ -836,6 +849,7 @@ class FillParams:
             ripple_center=_start_point(d.get("ripple_center")),
             motif=str(d.get("motif") or "wave"),
             motif_unit=lines.carried_unit(d.get("motif_unit")) if pattern == "motif" else None,
+            blackwork_lattice=_choice(d, "blackwork_lattice", LATTICES, "blackwork lattice"),
         )
         if not 0 <= p.pull_comp_mm <= 2:
             raise DigitizeError("Pull compensation must be between 0 and 2 mm")
@@ -1442,11 +1456,15 @@ def generate_parts(obj: dict[str, Any]) -> list[tuple[list[Rec], list[str], int]
                 raise DigitizeError("This shape has a point that isn't a number") from None
     if kind in ("fill", "satin") and p.get("push_comp_mm"):
         raise DigitizeError(row_hooks.push.NOT_BUILT)
+    # The lock stitches' shape (digitize/ties.py); appliques lock their own parts the usual way.
+    locks = ties.style_of(p) if kind in ("run", "satin", "fill") else "standard"
     if kind == "run":
         nodes = g.get("nodes") or []
         if len(nodes) < 2:
             raise DigitizeError("A running stitch needs at least two points")
-        parts = [(running(nodes, RunParams.from_dict(p), bool(g.get("closed")), _start_point(p.get("start_mm"))), [], 0)]
+        line = RunParams.from_dict(p)
+        recs = running(nodes, line, bool(g.get("closed")), _start_point(p.get("start_mm")))
+        parts = [(recs, list(line.notes), 0)]
     elif kind == "satin" and g.get("nodes") is not None:
         # A ribbon: a centre line and a width (what the Satin tool draws).
         parts = [(*satin_ribbon(g["nodes"], _finite(g, "width_mm", 3.0), SatinParams.from_dict(p), bool(g.get("closed")),
@@ -1473,9 +1491,9 @@ def generate_parts(obj: dict[str, Any]) -> list[tuple[list[Rec], list[str], int]
     out = []
     for recs, warnings, slot in parts:
         if p.get("tie_in", True):
-            recs = tie_in(recs)
+            recs = ties.tie_in(recs, locks)
         if p.get("tie_off", True):
-            recs = tie_off(recs)
+            recs = ties.tie_off(recs, locks)
         out.append((recs, warnings, slot))
     return out
 

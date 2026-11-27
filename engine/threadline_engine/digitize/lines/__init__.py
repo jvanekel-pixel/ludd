@@ -2,7 +2,8 @@
 import line here.
 
 A style turns a line's nodes into the needle points, in order; `stitches.running()` looks the
-style up and sews the points. Settings a style needs beyond RunParams' own fields go in `params`
+style up and sews the points. A style that needs jumps (French knots) has `recs` instead, which
+gives the records themselves. Settings a style needs beyond RunParams' own fields go in `params`
 (read and range-checked into RunParams.extra). A motif is one repeat: x 0..1 along the line,
 y -0.5..0.5 across it. A motif of your own is carried by the shape that uses it
 (params["motif_unit"]); carried_unit() checks it and sewn_unit() sizes it.
@@ -31,6 +32,9 @@ class LineStyle:
     name: str
     params: dict[str, Param] = field(default_factory=dict)  # Param from digitize.fills
     points: Callable = None  # (nodes, params, closed, start) -> list[Point]: the needle points, in order
+    # (nodes, params, closed, start) -> list[Rec]: for a style that needs jumps (French knots); used
+    # instead of `points`. What it wants to tell the user goes in params.notes.
+    recs: Callable | None = None
 
 
 REGISTRY: dict[str, LineStyle] = {}
@@ -121,3 +125,4 @@ __all__ = ["LineStyle", "MOTIF_UNITS", "Param", "REGISTRY", "carried_unit", "reg
 
 from . import builtin  # noqa: E402,F401  (registers single, triple, bean, motif and the four motifs)
 from . import leaf  # noqa: E402,F401  (the leaf motif)
+from . import craft  # noqa: E402,F401  (backstitch, stem stitch, candlewicking, redwork, French knots)
