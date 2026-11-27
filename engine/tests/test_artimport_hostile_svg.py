@@ -194,6 +194,18 @@ def test_a_huge_curve_is_refused_by_its_size_not_flattened(tmp_path):
     assert "far bigger than any hoop" in _quickly(path, 5)
 
 
+def test_shapes_geos_cannot_work_out_are_refused_in_plain_words(tmp_path, monkeypatch):
+    from shapely.errors import GEOSException
+
+    from threadline_engine.artimport import geometry
+
+    def broken(*_args, **_kwargs):
+        raise GEOSException("TopologyException: side location conflict")
+
+    monkeypatch.setattr(geometry, "fill_regions", broken)
+    assert "couldn't work out the shapes" in refusal(write(tmp_path, svg(SQUARE)))
+
+
 def test_a_time_limit_ends_a_slow_import(tmp_path, monkeypatch):
     from threadline_engine import artimport
 

@@ -23,9 +23,19 @@ def read(data: bytes, deadline: Deadline) -> Drawing:
     deadline.check()
     from svgelements import SVG, Shape
 
-    document = SVG.parse(io.BytesIO(prepared.data), reify=False, ppi=96)
+    broken = 0
+    try:
+        document = SVG.parse(io.BytesIO(prepared.data), reify=False, ppi=96)
+    except Exception:
+        # One path it can't read mustn't lose the whole drawing: leave such paths out.
+        data, broken = svgclean.without_broken_paths(prepared.data)
+        if not broken:
+            raise
+        deadline.check()
+        document = SVG.parse(io.BytesIO(data), reify=False, ppi=96)
     deadline.check()
     drawing = Drawing(scale_note=None if prepared.real_size else NO_REAL_SIZE)
+    drawing.skipped.add("damaged", broken)
     drawing.skipped.add("link", prepared.links)
     drawing.skipped.add("clip", prepared.clips)
     for i, element in enumerate(document.elements()):
@@ -145,6 +155,8 @@ def _subpaths(element) -> list[Subpath]:
             out.append(sub)
 
     for seg in element.segments(transformed=False):
+        if not _complete(seg):
+            break  # path data that goes wrong is drawn up to there, as browsers draw it
         if isinstance(seg, Move):
             keep(current)
             current = Subpath(at(seg.end)) if seg.end is not None else None
@@ -177,6 +189,13 @@ def _subpaths(element) -> list[Subpath]:
                     current.segments.append(("C", place(*c1), place(*c2), place(*end)))
     keep(current)
     return out
+
+
+def _complete(seg) -> bool:
+    """Does the segment have all its numbers? (Cut-short path data leaves some out.)"""
+    points = (getattr(seg, name, None) for name in ("start", "end", "control", "control1", "control2", "center",
+                                                    "prx", "pry"))
+    return all(p is None or (p.x is not None and p.y is not None) for p in points)
 
 
 def _arc_curves(arc) -> list[tuple]:

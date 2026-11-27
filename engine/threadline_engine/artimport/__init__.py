@@ -154,7 +154,14 @@ def preview(path: Any, options: Any = None) -> dict[str, Any]:
         traceback.print_exc(file=sys.stderr)
         raise ArtError(f"LUDD couldn't read this {kind.upper()} file. It may be damaged, or use something LUDD "
                        "doesn't understand. Save it again from your drawing program and try that.") from exc
-    return convert.convert(drawing, opts, deadline)
+    from shapely.errors import GEOSException
+
+    try:
+        return convert.convert(drawing, opts, deadline)
+    except (GEOSException, RecursionError, MemoryError):  # shapes too tangled to work out
+        traceback.print_exc(file=sys.stderr)
+        raise ArtError("LUDD couldn't work out the shapes in this drawing. Simplify it in your drawing program "
+                       "(merge or tidy shapes that cross themselves) and save it again.") from None
 
 
 __all__ = ["ArtError", "Deadline", "Options", "preview"]

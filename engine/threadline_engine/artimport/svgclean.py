@@ -492,6 +492,8 @@ class _Builder:
             new = ET.Element(f"{{{SVG_NS}}}{tag}", self.attributes(el, keep_ids))
         else:
             return None
+        if tag == "path" and new.get("d") is None:
+            new.set("d", "")  # (svgelements stops on a path without any)
         if tag == "use":
             href = _href(el)
             if href and not href.startswith("#"):
@@ -545,6 +547,24 @@ class _Builder:
         body = ET.SubElement(group, f"{{{SVG_NS}}}g", inner)
         self.children(symbol, body, False)
         return group
+
+
+def without_broken_paths(data: bytes) -> tuple[bytes, int]:
+    """A rebuilt drawing with the path data svgelements stops on (an arc cut short, say) left
+    out, and how many paths that was."""
+    from svgelements import Path
+
+    root = ET.fromstring(data)  # our own rebuilt drawing
+    broken = 0
+    for el in root.iter(f"{{{SVG_NS}}}path"):
+        try:
+            Path().parse(el.get("d", ""))
+        except ValueError:
+            pass  # it keeps what comes before the mistake, as a browser does
+        except Exception:  # noqa: BLE001
+            el.set("d", "")
+            broken += 1
+    return ET.tostring(root, encoding="utf-8"), broken
 
 
 def prepare(data: bytes) -> Prepared:

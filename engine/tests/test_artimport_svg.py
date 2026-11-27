@@ -377,6 +377,19 @@ def test_text_and_pictures_are_skipped_and_counted(tmp_path):
     assert all(s["message"] and str(s["count"]) in s["message"] for s in result["skipped"] if s["count"] > 1)
 
 
+@pytest.mark.parametrize("broken, damaged", [
+    ('<path/>', 0),  # no path data at all, as some programs write it
+    ('<path style="fill:red"/>', 0),
+    ('<path d="A 1 1 0 0 1 3 3"/>', 1),  # an arc with nowhere to start from
+    ('<path d="M 0 0 C 1 1 2 2"/>', 0),  # cut short: what comes before is kept
+    ('<path d="M 5 5 H"/>', 0),
+])
+def test_a_broken_path_does_not_stop_the_rest(tmp_path, broken, damaged):
+    result = preview(write(tmp_path, svg(SQUARE + broken)))
+    assert kinds(result)[0] == "fill" and result["size_mm"][0] >= 20
+    assert sum(s["count"] for s in result["skipped"] if s["what"] == "damaged") == damaged
+
+
 def test_tiny_pieces_are_dropped_and_counted(tmp_path):
     body = (SQUARE + '<rect x="50" y="10" width="0.9" height="0.9"/>'
             '<line x1="60" y1="10" x2="60.5" y2="10" stroke="black"/>'
