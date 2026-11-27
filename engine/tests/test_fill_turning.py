@@ -56,6 +56,12 @@ SQUARE = _nodes([(0, 0), (40, 0), (40, 40), (0, 40)])
 SHARP_LINES = [_line(12, 30, -45, 3), _line(28, 30, 45, 3)]
 
 
+def _sharp(warnings) -> list[str]:
+    """The warnings that mention a sharp turn, in any words: a test that expects none must also
+    fail on code that warned in other words."""
+    return [w for w in warnings if "sharp" in w.lower()]
+
+
 def _fill(outline, lines, **params):
     p = {"angle_deg": 45, "spacing_mm": SPACING, "underlay": [], "tie_in": False, "tie_off": False,
          "angle_lines": lines, **params}
@@ -178,7 +184,7 @@ def test_coverage(name):
     obj = {**CASES[name], "params": {**CASES[name]["params"], "pull_comp_mm": 0.2}}
     recs = generate(obj)[0]
     assert invariants.coverage(recs, _area(obj), SPACING) >= 0.97
-    assert TOO_SHARP not in generate(obj)[1]
+    assert not _sharp(generate(obj)[1])
 
 
 def test_too_sharp_a_turn_warns_and_still_fills_most():
@@ -209,7 +215,7 @@ def test_no_bare_spot(name):
 
 def test_two_lines_with_the_same_middle_follow_the_first():
     recs, warnings = generate(CROSS)
-    assert SAME_MIDDLE in warnings and TOO_SHARP not in warnings
+    assert SAME_MIDDLE in warnings and not _sharp(warnings)
     first = CROSS["params"]["angle_lines"][0]
     assert max(_follows(recs, [first])) <= 5.0
     assert turning.mean_angle(FillParams.from_dict(CROSS["params"])) == pytest.approx(0.0, abs=1e-6)
@@ -226,7 +232,7 @@ def test_a_gentle_turn_does_not_warn():
     # 1.1 mm deep), which is no reason to tell anyone to move the lines.
     obj = _fill(PANEL, [_line(15, 15, 0), _line(35, 15, 30)])
     recs, warnings = generate(obj)
-    assert TOO_SHARP not in warnings
+    assert not _sharp(warnings), warnings
     assert invariants.largest_bare_spot(recs, _area(obj), 0.5) <= 0.01
 
 
@@ -239,7 +245,7 @@ def test_a_real_crease_warns_even_for_a_gentle_turn():
 
 def test_wide_rows_warn_only_when_a_fold_is_deeper_than_a_row():
     # At 2 mm rows, a 0 and 34 degree fan's rows would fold back 1.7 mm, less than one row.
-    assert TOO_SHARP not in generate(_fill(PANEL, [_line(15, 15, 0), _line(35, 15, 34)], spacing_mm=2.0))[1]
+    assert not _sharp(generate(_fill(PANEL, [_line(15, 15, 0), _line(35, 15, 34)], spacing_mm=2.0))[1])
     # A deep crease still warns at 2 mm rows (0 and 60 degrees: more than 11 mm).
     assert TOO_SHARP in generate(_fill(PANEL, [_line(15, 15, 0), _line(35, 15, 60)], spacing_mm=2.0))[1]
 
