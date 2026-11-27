@@ -279,6 +279,19 @@ describe("freehand drawing", () => {
     expect(Math.hypot(clicked[0], clicked[1])).toBeGreaterThan(5);
   });
 
+  it("the wheel still zooms with freehand on", async () => {
+    await setUp();
+    await drawWith("run");
+    await act(async () => {
+      canvas.host.dispatchEvent(new WheelEvent("wheel", { bubbles: true, cancelable: true, deltaY: -400, clientX: 400, clientY: 300 }));
+      await new Promise((r) => requestAnimationFrame(r));
+    });
+    // Zoomed in about the middle: the spot where (30, 20) used to be is another design point now.
+    canvas.click([30, 20]);
+    const [x, y] = pen()!.a[0];
+    expect(Math.hypot(x - 30, y - 20)).toBeGreaterThan(5);
+  });
+
   it("a second finger or a lost window drops the stroke, leaving the shape", async () => {
     await setUp();
     await drawWith("run");

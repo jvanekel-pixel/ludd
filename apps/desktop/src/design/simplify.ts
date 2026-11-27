@@ -5,10 +5,11 @@
  * A stroke becomes pen points in steps: samples closer than 0.15 mm to the last one are dropped as
  * places for a point; Ramer-Douglas-Peucker keeps the ones the shape needs; a kept point where the
  * stroke turns more than 50 degrees (over 1 mm either side) is a sharp corner, the rest curve
- * points. A smooth curve through points can bow further from them than straight lines do, so
- * points are then added where the drawn curve strays, and curve points are dropped while it stays
- * close. "Close" is both ways, within the tolerance: every sample to the curve, and every point of
- * the curve to the stroke.
+ * points. A smooth curve through points can bow further from them than straight lines do, and
+ * strays more where they're unevenly spread. So each stretch between corners then gets the fewest
+ * curve points, spread by how much it bends; points are added where the curve still strays; and
+ * curve points are dropped while it stays close. "Close" is both ways, within the tolerance: every
+ * sample to the curve, and every point of the curve to the stroke.
  */
 import { distToSegment, flatten, type Pt } from "./paths";
 import type { NodeKind, PathNode } from "./types";
