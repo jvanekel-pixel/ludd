@@ -1,4 +1,5 @@
 /** Branching: sew the selected shapes as one path, or take shapes out of their branch. */
+import "../canvas/branchOverlay"; // the branch's dots, registered when the app loads
 import { registerCommands } from "../commands";
 import { branchSelected, unbranchSelected } from "../feat/branch";
 import { useStore } from "../store";
