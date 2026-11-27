@@ -1,13 +1,15 @@
 """Phase 7 integration: what only shows when the tracks meet (docs/phases/PHASE-07-lines-sequencing-
 drawing.md, section 8)."""
 
+import json
 import math
+import zipfile
 
 import pyembroidery as pe
 import pytest
 from shapely.geometry import LineString
 
-from threadline_engine import layout
+from threadline_engine import layout, project
 from threadline_engine.digitize.paths import flatten
 from threadline_engine.digitize.smallobjects import buttonhole
 from threadline_engine.digitize.stitches import STITCH, generate
@@ -174,3 +176,22 @@ def test_optimize_jumps_moves_an_applique_start():
     first = next((x / 10, y / 10) for (x, y, c), it in zip(layout.render(moved).pattern.stitches, layout.render(moved).item_of)
                  if it == 1 and c & pe.COMMAND_MASK == pe.STITCH)
     assert math.dist(first, (20, 18)) < 2.0
+
+
+def test_a_saved_file_with_a_branch_of_one_does_not_carry_the_branches_flag(tmp_path):
+    """An older LUDD refuses a file with a flag it doesn't know, and a branch of one sews as an
+    ordinary shape (Phase 7 audit, finding 4)."""
+    def square(ident, x, branch):
+        return {"id": ident, "kind": "fill", "geometry": {"outline": [[x, 0, "c"], [x + 10, 0, "c"], [x + 10, 10, "c"], [x, 10, "c"]]},
+                "params": {}, "thread": {"color": "#cc2222", "name": "Red"}, "branch": branch}
+
+    for items, flagged in (([square("a", 0, "b1")], False),
+                           ([square("a", 0, "b1"), square("c", 20, "b2")], False),
+                           ([square("a", 0, "b1"), square("c", 10, "b1")], True)):
+        saved = project.save(str(tmp_path / "one"), {"title": "t", "layout": {"version": 1, "items": items}, "images": []})
+        with zipfile.ZipFile(saved["path"]) as z:
+            manifest = json.loads(z.read("project.json"))
+        assert ("branches" in manifest["features"]) is flagged, items
+        assert manifest["version"] == (2 if flagged else 1)
+        back = project.open_project(saved["path"])["layout"]["items"]
+        assert [it["branch"] for it in back] == [it["branch"] for it in items]

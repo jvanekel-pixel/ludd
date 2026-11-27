@@ -6,11 +6,10 @@ import {
   addImage,
   addItem,
   centreItem,
-  moveItem,
   addObject,
   clearRecolors,
   deleteColor,
-  duplicateItem,
+  duplicateItems,
   repeatItem,
   setGroup,
   transformTogether,
@@ -25,7 +24,6 @@ import {
   newDoc,
   newId,
   objectCenter,
-  reorder,
   pushHistory,
   shapeNodes,
   recolor,
@@ -41,6 +39,7 @@ import {
   updateObject,
   type History,
 } from "./design/layout";
+import { addCopies, dissolveSingles, inSewingOrder, moveShown } from "./design/branches";
 import type { ShapeId } from "./design/shapes";
 import { penPoints, reversePath } from "./design/simplify";
 import { visibleRecords } from "./design/player";
@@ -310,7 +309,10 @@ type Merge = boolean | "start";
 
 /** Apply an edit to the whole document: render it, and only then add it to the undo history.
  *  `merge`: part of the same gesture as the last edit (one undo step for the lot). */
-export async function commitDoc(next: Doc, merge: Merge = false) {
+export async function commitDoc(edited: Doc, merge: Merge = false) {
+  // No edit leaves a branch of one behind (a deleted, cut or merged member, say).
+  const layout = dissolveSingles(edited.layout);
+  const next = layout === edited.layout ? edited : { ...edited, layout };
   const h = latestHistory();
   if (merge === false) gesture = null; // any other edit ends a gesture
   // Nothing changed (a value set to what it was, a click that moved nothing): no undo step, and
@@ -826,29 +828,35 @@ function removeItems(ids: string[]) {
 
 /** Ctrl+D: a copy of everything selected (one undo step); the copies end up selected. */
 export function duplicateSelected() {
-  let l = currentLayout();
+  const l = currentLayout();
   const ids = selectionIds();
   if (!l || !ids.length) return;
-  const copies: string[] = [];
-  for (const id of ids) {
-    const r = duplicateItem(l, id);
-    l = r.layout;
-    copies.push(r.id);
-  }
-  const out = l;
+  const { layout: out, ids: copies } = duplicateItems(l, ids);
   void commit(out).then((ok) => ok && useStore.getState().setSelection(copies[0], copies.slice(1)));
 }
 
-/** Drag and drop in Order & colors: sew `id` at position `to`. */
-export function moveItemTo(id: string, to: number) {
+/** Order & colors lists the items as they sew: a branch's shapes in the order it sews them. */
+const shownRows = (l: Layout) => inSewingOrder(l.items, useStore.getState().design?.branches);
+
+/** Drag and drop in Order & colors: sew `id` at place `to` of the list as shown. */
+export async function moveItemTo(id: string, to: number) {
   const l = currentLayout();
-  if (l) void commit(moveItem(l, id, to));
+  if (!l) return;
+  const before = shownRows(l).map((it) => it.id).join();
+  const next = moveShown(l, shownRows(l), id, to);
+  if (!(await commit(next))) return;
+  const now = currentLayout();
+  // A branch sews its shapes in the order it picks: a move inside it can come straight back.
+  if (now && to !== before.split(",").indexOf(id) && shownRows(now).map((it) => it.id).join() === before)
+    info("A branch sews its shapes in the order LUDD picks. To choose a shape's place yourself, take it out of the branch (Alt+Shift+U).");
 }
 
 /** Sew an item one place earlier (-1) or later (1), building on the newest version. */
 export function reorderItem(id: string, dir: -1 | 1) {
   const l = currentLayout();
-  if (l) void commit(reorder(l, id, dir));
+  if (!l) return;
+  const i = shownRows(l).findIndex((it) => it.id === id);
+  if (i >= 0 && i + dir >= 0 && i + dir < l.items.length) void moveItemTo(id, i + dir);
 }
 
 /** Whether the selected item can be sewn earlier (-1) or later (1). */
@@ -856,7 +864,7 @@ function canMoveInOrder(dir: -1 | 1): boolean {
   const l = currentLayout();
   const id = targetId();
   if (!l || !id || !canEdit() || drawing() || useStore.getState().extraIds.length) return false;
-  const i = l.items.findIndex((it) => it.id === id);
+  const i = shownRows(l).findIndex((it) => it.id === id);
   return dir < 0 ? i > 0 : i >= 0 && i < l.items.length - 1;
 }
 
@@ -865,8 +873,8 @@ function sewAt(to: -1 | 1 | "first" | "last") {
   const l = currentLayout();
   const id = targetId();
   if (!l || !id) return;
-  if (to === "first") moveItemTo(id, 0);
-  else if (to === "last") moveItemTo(id, l.items.length - 1);
+  if (to === "first") void moveItemTo(id, 0);
+  else if (to === "last") void moveItemTo(id, l.items.length - 1);
   else reorderItem(id, to);
 }
 
@@ -1880,16 +1888,17 @@ function copySelected(cut: boolean) {
 function pasteClipboard() {
   const l = currentLayout();
   if (!l || !clipboard.length) return;
-  let out = l;
-  const pasted: string[] = [];
   // Pasted copies keep their own group, apart from the originals.
   const group = clipboard.some((it) => it.group) ? `g${Date.now().toString(36)}` : undefined;
-  for (const src of clipboard) {
-    const copy = { ...structuredClone(src), id: newId(), group: src.group ? group : undefined } as LayoutItem;
-    out = { ...out, items: [...out.items, copy] };
-    out = moveBy(out, copy.id, ADD_OFFSET_MM, ADD_OFFSET_MM);
-    pasted.push(copy.id);
-  }
+  const copies = clipboard.map((src) => ({
+    item: { ...structuredClone(src), id: newId(), group: src.group ? group : undefined } as LayoutItem,
+    source: src.id,
+    after: null,
+  }));
+  // At the end, except where a copied branch shape joins its branch (addCopies).
+  let out = addCopies(l, copies);
+  for (const c of copies) out = moveBy(out, c.item.id, ADD_OFFSET_MM, ADD_OFFSET_MM);
+  const pasted = copies.map((c) => c.item.id);
   void commit(out).then((ok) => ok && useStore.getState().setSelection(pasted[0], pasted.slice(1)));
 }
 

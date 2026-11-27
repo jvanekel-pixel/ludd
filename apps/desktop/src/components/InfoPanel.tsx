@@ -22,6 +22,7 @@ import { GARMENTS } from "../design/garments";
 import type { Garment } from "../store";
 import { formatShortcut } from "../commands";
 import { heldCount, holdEscape } from "../escape";
+import { inSewingOrder } from "../design/branches";
 import { hasRecolors, scaleImageByMeasure } from "../design/layout";
 import { hoopFit } from "../design/machine";
 import { estimate, fmtMinutes, fmtThread } from "../design/estimate";
@@ -180,11 +181,14 @@ function OrderSection({ sel }: { sel: SelKind }) {
     else palette.push({ thread: t, blocks: [k] });
   });
 
+  /** The rows, in the order they sew: a branch's shapes in the order it sews them. */
+  const rows = inSewingOrder(layout.items, design?.branches);
+
   /** Drag a row by its grip: the rows make room as you go; let go to sew it there. Esc puts it back. */
   const startDrag = (e: React.PointerEvent, id: string) => {
     if (e.button !== 0) return;
     e.preventDefault();
-    const from = layout.items.findIndex((it) => it.id === id);
+    const from = rows.findIndex((it) => it.id === id);
     let to = from;
     setDrag({ id, to });
     const panel = list.current?.closest<HTMLElement>(".info-panel");
@@ -226,11 +230,11 @@ function OrderSection({ sel }: { sel: SelKind }) {
   /** The rows as shown: while dragging, the dragged one sits where it would land. */
   const shown = drag
     ? (() => {
-        const rest = layout.items.filter((it) => it.id !== drag.id);
-        rest.splice(drag.to, 0, layout.items.find((it) => it.id === drag.id)!);
+        const rest = rows.filter((it) => it.id !== drag.id);
+        rest.splice(drag.to, 0, rows.find((it) => it.id === drag.id)!);
         return rest;
       })()
-    : layout.items;
+    : rows;
 
   /** Select from the list without the list jumping: selecting opens that item's section above
    *  it, so scroll by as much as the row moved (and a double-click lands on the same row).
@@ -411,10 +415,10 @@ function OrderSection({ sel }: { sel: SelKind }) {
                 >
                   📌
                 </button>
-                <button aria-label="Sew earlier" title="Sew earlier" disabled={i === 0} onClick={() => reorderItem(it.id, -1)}>
+                <button aria-label="Sew earlier" title="Sew earlier" disabled={k === 0} onClick={() => reorderItem(it.id, -1)}>
                   ↑
                 </button>
-                <button aria-label="Sew later" title="Sew later" disabled={i === layout.items.length - 1} onClick={() => reorderItem(it.id, 1)}>
+                <button aria-label="Sew later" title="Sew later" disabled={k === shown.length - 1} onClick={() => reorderItem(it.id, 1)}>
                   ↓
                 </button>
               </li>

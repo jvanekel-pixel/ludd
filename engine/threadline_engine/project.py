@@ -190,7 +190,15 @@ LAYOUT_FEATURES: dict[str, Callable[[dict], bool]] = {
     "trim_jumps_all": lambda layout: layout.get("jumps_to_trims") is not None,  # "Trim jumps longer than…" for the whole layout
     # "Don't sew what's hidden under shapes on top".
     "remove_overlap": lambda layout: isinstance(layout.get("remove_overlap"), dict) and bool(layout["remove_overlap"].get("enabled")),
+    # Shapes sewn as one path. A branch of one sews as an ordinary shape, so it needs nothing.
+    "branches": lambda layout: _shared_branch(layout),
 }
+
+
+def _shared_branch(layout: dict) -> bool:
+    """Whether some branch id is held by two or more items."""
+    ids = [it["branch"] for it in layout.get("items") or [] if isinstance(it, dict) and isinstance(it.get("branch"), str) and it["branch"]]
+    return len(ids) != len(set(ids))
 
 
 def _is_fill(item: dict) -> bool:
@@ -279,7 +287,6 @@ ITEM_FEATURES: dict[str, Callable[[dict, dict, dict], bool]] = {  # (item, param
     "fill_blackwork": lambda it, p, g: _is_fill(it) and p.get("pattern") == "blackwork",
     "motif_side": lambda it, p, g: _line_style(it, p, "motif") and p.get("motif_side") not in (None, "", "center"),
     "tie_styles": lambda it, p, g: _shaped_locks(it, p),
-    "branches": lambda it, p, g: bool(it.get("branch")),
 }
 KNOWN_FEATURES = set(LAYOUT_FEATURES) | set(ITEM_FEATURES)
 

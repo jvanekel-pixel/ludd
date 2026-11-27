@@ -5,52 +5,19 @@
  * `layout.branches`. The dots themselves are drawn by canvas/branchOverlay.ts.
  */
 import { commit, currentLayout, engine, fail, info } from "../actions";
+import { branchOf, dissolveSingles, inBranch } from "../design/branches";
 import { newId } from "../design/layout";
 import type { BranchInfo, Layout, LayoutItem } from "../design/types";
 import { useStore } from "../store";
 
 type Plan = { ok: boolean; reason: string; order: string[] };
-type Dots = NonNullable<Layout["branches"]>;
 
 const round3 = (v: number) => Math.round(v * 1000) / 1000;
-
-/** An item's branch id (drawn shapes and lettering can carry one; stitch files can't). */
-const branchOf = (it: LayoutItem): string | undefined => (it as { branch?: string }).branch;
-
-/** An item without its branch id. */
-function withoutBranch(it: LayoutItem): LayoutItem {
-  const { branch: _gone, ...rest } = it as LayoutItem & { branch?: string };
-  return rest as LayoutItem;
-}
 
 /** The selected items' ids, the first one picked first. */
 function selectionIds(): string[] {
   const s = useStore.getState();
   return s.selectedId ? [s.selectedId, ...s.extraIds] : [];
-}
-
-/** A branch left with one member (or none) is no branch: its member loses the id and its dots go. */
-function dissolveSingles(items: LayoutItem[], dots: Dots | undefined): { items: LayoutItem[]; branches: Dots | undefined } {
-  const count = new Map<string, number>();
-  for (const it of items) {
-    const b = branchOf(it);
-    if (b) count.set(b, (count.get(b) ?? 0) + 1);
-  }
-  const out = items.map((it) => {
-    const b = branchOf(it);
-    return !b || (count.get(b) ?? 0) > 1 ? it : withoutBranch(it);
-  });
-  let branches = dots;
-  if (dots) {
-    const kept = Object.entries(dots).filter(([id]) => (count.get(id) ?? 0) > 1);
-    branches = kept.length ? Object.fromEntries(kept) : undefined;
-  }
-  return { items: out, branches };
-}
-
-function withBranches(layout: Layout, items: LayoutItem[], branches: Dots | undefined): Layout {
-  const { branches: _old, ...rest } = layout;
-  return branches ? { ...rest, items, branches } : { ...rest, items };
 }
 
 /** The layout with the items in `order` (every item's id, from `layout.branch_plan`), the
@@ -61,11 +28,8 @@ export function branchedLayout(layout: Layout, order: string[], ids: string[], b
   const sorted = order.map((id) => byId.get(id)).filter((it): it is LayoutItem => !!it);
   // Anything the plan didn't name (it can't happen) keeps its place at the end, never lost.
   const named = new Set(order);
-  const items = [...sorted, ...layout.items.filter((it) => !named.has(it.id))].map((it) =>
-    chosen.has(it.id) ? ({ ...it, branch: bid } as LayoutItem) : it,
-  );
-  const done = dissolveSingles(items, layout.branches);
-  return withBranches(layout, done.items, done.branches);
+  const items = [...sorted, ...layout.items.filter((it) => !named.has(it.id))].map((it) => (chosen.has(it.id) ? inBranch(it, bid) : it));
+  return dissolveSingles({ ...layout, items });
 }
 
 /** The layout with the shapes `ids` taken out of their branches (a branch left with one member
@@ -73,9 +37,8 @@ export function branchedLayout(layout: Layout, order: string[], ids: string[], b
 export function unbranchedLayout(layout: Layout, ids: string[]): Layout {
   const out = new Set(ids);
   if (!layout.items.some((it) => out.has(it.id) && branchOf(it))) return layout;
-  const items = layout.items.map((it) => (out.has(it.id) && branchOf(it) ? withoutBranch(it) : it));
-  const done = dissolveSingles(items, layout.branches);
-  return withBranches(layout, done.items, done.branches);
+  const items = layout.items.map((it) => (out.has(it.id) && branchOf(it) ? inBranch(it, undefined) : it));
+  return dissolveSingles({ ...layout, items });
 }
 
 /** The layout with a branch's green ("start") or red ("end") dot put at `at` (mm on the hoop). */
