@@ -4,9 +4,13 @@ project on a computer that doesn't have it. Every test uses a data folder of its
 
 import json
 import math
+import os
 import re
 import statistics
+import subprocess
+import sys
 import time
+from pathlib import Path
 
 import pytest
 from shapely.geometry import LineString, Point, Polygon
@@ -44,6 +48,20 @@ def _rpc(method, params=None):
     out = dispatcher.handle_line(json.dumps({"jsonrpc": "2.0", "id": 1, "method": method, "params": params or {}}))
     assert "result" in out, out.get("error")
     return json.loads(json.dumps(out["result"], allow_nan=False))
+
+
+def _new_engine(data_dir, *requests):
+    """The answers to (method, params) requests from a newly started engine process, as the app
+    starts it, with `data_dir` as its data folder."""
+    sent = "".join(json.dumps({"jsonrpc": "2.0", "id": i, "method": m, "params": p}) + "\n"
+                   for i, (m, p) in enumerate(requests))
+    done = subprocess.run([sys.executable, "-m", "threadline_engine"], input=sent, capture_output=True, text=True,
+                          encoding="utf-8", timeout=120, cwd=Path(__file__).parents[1],
+                          env={**os.environ, "THREADLINE_DATA_DIR": str(data_dir)})
+    answers = {a["id"]: a for a in map(json.loads, done.stdout.splitlines())}
+    for i, (method, _) in enumerate(requests):
+        assert "result" in answers.get(i, {}), (method, answers.get(i), done.stderr[-2000:])
+    return [answers[i]["result"] for i in range(len(requests))]
 
 
 def _stitches(recs):
@@ -572,7 +590,7 @@ def test_a_resized_motif_line_keeps_its_motif_size():
 
 def test_shape_carries_its_motif(tmp_path):
     """Done-when 4: a line saved as a motif is used in a motif line and a motif fill, and the
-    project reopens on a computer that doesn't have the motif, sewing the same."""
+    saved project reopens in a new engine that doesn't have the motif, sewing the same."""
     saved = _rpc("motifs.save", {"name": "My hill", "nodes": [[0, 0, "c"], [3, -4, "c"], [7, 1, "c"], [10, 0, "c"]]})
     assert saved["id"] == "user:my-hill"
     carried = {"motif": saved["id"], "motif_unit": saved["unit"]}
@@ -593,15 +611,19 @@ def test_shape_carries_its_motif(tmp_path):
     assert _rpc("layout.render", {"layout": wave})["records"] != before["records"]
 
     path = str(tmp_path / "carried.ludd")
-    _rpc("project.save", {"path": path, "project_data": {"title": "t", "layout": design, "images": []}})
+    # The app's own save request (it calls project.save), with what the app sends.
+    project_data = {"title": "carried", "layout": design, "images": [], "machine": None, "hoop": None}
+    _rpc("project.save", {"path": path, "project_data": project_data})
     for f in _folder().iterdir():
         f.unlink()
-    _folder().rmdir()  # a computer that has no motifs of its own
-    assert all(m["builtin"] for m in _rpc("motifs.list"))
-    forget_stitches()  # nothing kept from before
-    opened = _rpc("project.open", {"path": path})
+    _folder().rmdir()  # the motif is gone
+    # Reopened for real: a new engine process, so nothing is kept from before, with a data folder
+    # of its own that never had the motif, as on another computer.
+    other = tmp_path / "another-computer"
+    mine, opened = _new_engine(other, ("motifs.list", {}), ("project.open", {"path": path}))
+    assert all(m["builtin"] for m in mine)
     assert [it["params"]["motif_unit"] for it in opened["layout"]["items"]] == [saved["unit"]] * 2
-    after = _rpc("layout.render", {"layout": opened["layout"]})
+    [after] = _new_engine(other, ("layout.render", {"layout": opened["layout"]}))
     assert after["records"] == before["records"]
     assert after["threads"] == before["threads"]
     assert after["warnings"] == before["warnings"]
