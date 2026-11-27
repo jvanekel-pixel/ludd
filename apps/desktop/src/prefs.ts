@@ -45,6 +45,13 @@ export type Prefs = {
   fabric?: string;
   /** Sides asked for last in "Add a polygon". */
   polygonSides?: number;
+  /** Freehand drawing: how much it smooths, 1 to 5 (3). */
+  freehandSmooth?: number;
+  /** The sizes asked for last in "Add a buttonhole" and "Add an eyelet", by dialog. */
+  smallObjects?: Record<string, Record<string, number | string>>;
+  /** "Import artwork": how lines come in ("auto", "lines" or "satins") and whether colors are
+   *  matched to My threads. */
+  importArt?: { strokes?: string; match?: boolean };
   welcomed?: boolean;
 };
 

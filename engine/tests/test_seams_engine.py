@@ -338,7 +338,7 @@ def test_line_styles_and_motifs_registered():
 
 def test_rpc_method_list_matches_the_manifest():
     names = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert len(names) == 71
+    assert len(names) == 80
     assert sorted(dispatcher._methods) == names
 
 

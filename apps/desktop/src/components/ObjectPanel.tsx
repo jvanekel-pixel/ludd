@@ -262,6 +262,11 @@ export function ObjectSections({ item, info, sel }: { item: ObjectItem; info: La
             </div>
           </Row>
         )}
+        {item.branch && (
+          <Row label="In a branch" hint="Sewn with the other shapes of its branch as one path">
+            <Cmd id="layout.unbranch" label="Take it out (Alt+Shift+U)" />
+          </Row>
+        )}
         {(item.kind === "fill" || item.kind === "applique") && (
           <div className="btn-row">
             <Cmd id="object.hole" label="✂ Cut a hole (O)" />
@@ -415,6 +420,9 @@ export function ObjectSections({ item, info, sel }: { item: ObjectItem; info: La
               <Check label="Lock stitches at the end" checked={(p.tie_off as boolean | undefined) ?? true} onChange={(v) => set({ tie_off: v })} />
             </>
           )}
+          <div className="btn-row">
+            <Cmd id="presets.open" label="Presets… (Alt+P)" />
+          </div>
           <AdvisorButton />
           <RememberedNote kind={item.kind} />
         </Sub>

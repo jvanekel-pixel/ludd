@@ -46,8 +46,14 @@ export type Design = {
   };
   /** Layouts only: where each placed design ended up. */
   items?: LayoutItemInfo[];
+  /** Layouts only: each branch as sewn (shapes sewn as one path). */
+  branches?: BranchInfo[];
   warnings?: Warning[];
 };
+
+/** One branch as it was sewn: its members in order, its first and last stitch (mm), the travel
+ *  hidden under later stitching and how many times the thread had to be cut. */
+export type BranchInfo = { id: string; items: string[]; start: [number, number]; end: [number, number]; hidden_mm: number; cuts: number };
 
 export type LayoutItemInfo = {
   id: string;
@@ -161,8 +167,10 @@ export type FillGeometry = { outline: PathNode[]; holes?: PathNode[][]; carve?: 
 export type Motif = "wave" | "zigzag" | "scallop" | "blanket" | "leaf";
 /** A built-in motif, or one of your own (its repeat travels with the shape in `motif_unit`). */
 export type MotifId = Motif | `user:${string}`;
+/** How a shape's lock stitches are shaped, at its start and end. */
+export type TieStyle = "standard" | "triangle" | "backtack";
 export type RunParams = {
-  style?: "single" | "triple" | "bean" | "motif";
+  style?: "single" | "triple" | "bean" | "motif" | "backstitch" | "stem" | "candlewick" | "redwork" | "knots";
   stitch_mm?: number;
   /** style "motif": the pattern repeated along the line, how long each repeat is and how wide. */
   motif?: MotifId;
@@ -170,10 +178,19 @@ export type RunParams = {
   motif_width_mm?: number;
   /** One repeat of your own motif: [along 0..1, across] (same scale both ways). */
   motif_unit?: [number, number][];
+  /** style "motif": which side of the line it sits on, seen walking the way it was drawn ("center"). */
+  motif_side?: "center" | "left" | "right";
+  /** style "stem": how wide the rope is, 0.3 to 2.5 mm (0.8). */
+  stem_width_mm?: number;
+  /** styles "candlewick" and "knots": how big each knot is, 1 to 3 mm (1.6). */
+  knot_mm?: number;
+  /** style "candlewick": how far apart the knots are, 2 to 15 mm (4). */
+  knot_gap_mm?: number;
   /** "Hand-sewn look", 0 to 100%: stitches a little irregular, the same way every time. */
   hand_pct?: number;
   tie_in?: boolean;
   tie_off?: boolean;
+  tie_style?: TieStyle;
 };
 export type SatinParams = {
   spacing_mm?: number;
@@ -185,6 +202,7 @@ export type SatinParams = {
   push_comp_mm?: number;
   tie_in?: boolean;
   tie_off?: boolean;
+  tie_style?: TieStyle;
 };
 export type FillPattern =
   | "tatami"
@@ -198,7 +216,8 @@ export type FillPattern =
   | "motif"
   | "maze"
   | "ripple"
-  | "mesh";
+  | "mesh"
+  | "blackwork";
 /** How the needle points of neighboring rows line up. */
 export type Weave = "standard" | "brick" | "twill" | "smooth" | "random";
 /** Which row ends are feathered: left and right are as the rows run at angle 0. */
@@ -242,6 +261,9 @@ export type FillParams = {
   ripple_center?: [number, number];
   mesh_mm?: number;
   mesh_cross_deg?: number;
+  /** blackwork: the size of one cell of the lattice, 3 to 12 mm (5), and which lattice ("diamonds"). */
+  blackwork_mm?: number;
+  blackwork_lattice?: "diamonds" | "grid" | "honeycomb" | "crossed";
   angle_deg?: number;
   /** Where its purple direction dots were left (they set angle_deg). */
   angle_line?: [[number, number], [number, number]];
@@ -254,6 +276,7 @@ export type FillParams = {
   underlay?: ("edge" | "tatami")[];
   tie_in?: boolean;
   tie_off?: boolean;
+  tie_style?: TieStyle;
 };
 
 export type AppliqueParams = {
@@ -271,6 +294,8 @@ type ObjectBase = {
   /** Pinned: can't be dragged on the canvas. */
   locked?: boolean;
   group?: string;
+  /** Shapes with the same branch id are sewn as one path, with one start and one end. */
+  branch?: string;
   thread: Thread;
   transform: Transform;
   threads: (Thread | null)[];
@@ -401,6 +426,8 @@ export type Layout = {
   /** "Don't sew what's hidden under shapes on top" (drawn fills), and how far under their edge
    *  to keep sewing. */
   remove_overlap?: { enabled: boolean; keep_mm: number };
+  /** Each branch's start and end dots moved by hand, mm on the hoop (by branch id). */
+  branches?: Record<string, { start_mm?: [number, number]; end_mm?: [number, number] }>;
   /** Saved sets of thread colors (colorways), to switch between. */
   colorways?: Colorway[];
   /** Guide lines dragged from the rulers (mm). */

@@ -63,7 +63,9 @@ export function itemMenu(item: LayoutItem | undefined, several: boolean): Contex
   const kind = item?.kind;
   const shape = kind === "fill" || kind === "applique" || kind === "satin" || kind === "run";
   const fill = kind === "fill" || kind === "applique";
-  const together = several ? [c("arrange.group"), c("arrange.ungroup"), c("object.merge"), c("text.onLine")] : [];
+  const together = several
+    ? [c("arrange.group"), c("arrange.ungroup"), c("object.merge"), c("text.onLine"), c("layout.branch", "Branch: sew as one path"), c("layout.unbranch", "Take out of the branch")]
+    : [];
   return [
     ...(shape || kind === "text" ? [c("object.thread")] : []),
     ...(kind === "text"
@@ -89,6 +91,7 @@ export function itemMenu(item: LayoutItem | undefined, several: boolean): Contex
     ...(several ? [] : [c("arrange.rename")]),
     SEP,
     c("view.zoomSelected"),
+    ...(shape && !several ? [c("presets.open", "Stitch presets…")] : []),
     ...(shape ? [c("ai.advisor")] : []),
   ];
 }

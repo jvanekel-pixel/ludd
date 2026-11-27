@@ -1564,14 +1564,21 @@ drawing a satin).
 | Show whole design | `End` | `player.end` |
 | Faster playback | `]` | `player.fasterAlt` |
 | Slower playback | `[` | `player.slowerAlt` |
+| Branch: sew the selected shapes as one path | `Alt+Shift+B` | `layout.branch` |
+| Take the selected shapes out of their branch | `Alt+Shift+U` | `layout.unbranch` |
+| Draw freehand | `Y` | `tool.freehand` |
+| Stitch presets… | `Alt+P` | `presets.open` |
 | Add another angle line (a turning fill) | `Shift+I` | `object.addAngle` |
 | Carve lines into the fill (grooves) | `Shift+C` | `object.carve` |
 | Motifs… | `Alt+Shift+M` | `motif.library` |
+| Import artwork (SVG, DXF, PDF)… | `Mod+Alt+I` | `file.importArt` |
 | Adjust single letters | `Alt+Shift+A` | `text.letters` |
 | Put the letters back | `Alt+Shift+Z` | `text.resetLetters` |
 | Make a stitch font from letter files… | `Mod+Alt+F` | `text.fontFromFiles` |
 | Save this layout as a name template… | `Mod+Alt+P` | `text.saveTemplate` |
 | Placement guides… | `Alt+Shift+G` | `text.placement` |
+| Add a buttonhole | `Alt+B` | `object.buttonhole` |
+| Add an eyelet | `Alt+E` | `object.eyelet` |
 | Repair this design… | `Mod+Alt+D` | `stitch.repair` |
 | Remove stitches hidden under what's on top | `Alt+Shift+H` | `stitch.removeHidden` |
 | Thin out dense spots | `Alt+Shift+D` | `stitch.declump` |

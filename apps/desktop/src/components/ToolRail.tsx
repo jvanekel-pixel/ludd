@@ -63,6 +63,8 @@ export function ToolRail() {
             { id: "shape.triangle", label: "△  Triangle" },
             { id: "shape.polygon", label: "⬡  Polygon…" },
             { id: "shape.heart", label: "♡  Heart" },
+            { id: "object.buttonhole", label: "▯  Buttonhole…" },
+            { id: "object.eyelet", label: "◎  Eyelet…" },
             "separator",
             { id: "text.monogram", label: "Monogram" },
             "separator",
