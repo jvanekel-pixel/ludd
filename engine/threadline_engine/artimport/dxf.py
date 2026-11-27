@@ -13,6 +13,7 @@ import io
 import json
 import math
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -43,6 +44,8 @@ _NOTES = frozenset({"DIMENSION", "ARC_DIMENSION", "LARGE_RADIAL_DIMENSION", "LEA
                     "TOLERANCE", "ACAD_TABLE"})
 _XREF_FLAGS = 4 | 8 | 16 | 32  # BLOCK flags: an xref, an overlay, externally dependent, resolved
 _BINARY = b"AutoCAD Binary DXF"
+# ezdxf's repairs drop objects it can't make sense of, and say so like this.
+_REMOVED = re.compile(r"Removed (SPLINE|LWPOLYLINE|POLYLINE|LINE|CIRCLE|ARC|ELLIPSE|HATCH|MPOLYGON|INSERT)\b")
 
 _import_lock = threading.Lock()
 
@@ -92,11 +95,11 @@ def _open(data: bytes):
         from ezdxf.document import Drawing as Document
         from ezdxf.lldxf.tagger import binary_tags_loader
 
-        return Document.load(binary_tags_loader(data))
+        return Document.load(binary_tags_loader(data)), 0
     from ezdxf import recover
 
-    document, _auditor = recover.read(io.BytesIO(data))
-    return document
+    document, auditor = recover.read(io.BytesIO(data))
+    return document, sum(1 for fix in auditor.fixes if _REMOVED.match(str(fix.message)))
 
 
 @dataclass
@@ -463,14 +466,21 @@ class _Reader:
                 ring = ring_of(flatten(self.found[i].item.subpaths[0], close=True)[0])
                 shapes.append(Polygon(ring) if len(ring) >= 3 else Polygon())
             tree = STRtree(shapes)
+            twice: set[int] = set()  # an outline drawn again on top of itself
+            for a, outline in enumerate(shapes):
+                if a in twice or outline.is_empty:
+                    continue
+                for b in sorted(tree.query(outline.exterior.buffer(0.01), predicate="intersects").tolist()):
+                    if b > a and b not in twice and abs(shapes[b].area - outline.area) <= 0.01 * outline.length \
+                            and shapes[b].exterior.hausdorff_distance(outline.exterior) < 0.01:
+                        twice.add(b)
+                        consumed.add(members[b])
             containers: list[list[int]] = [[] for _ in members]
             for a, outer in enumerate(shapes):
-                if not outer.is_valid or outer.is_empty:
+                if a in twice or not outer.is_valid or outer.is_empty:
                     continue
                 for b in tree.query(outer, predicate="contains").tolist():
-                    inner = shapes[b]
-                    if b != a and inner.is_valid and (outer.area > inner.area + 1e-9 or
-                                                      (abs(outer.area - inner.area) <= 1e-9 and a < b)):
+                    if b != a and b not in twice and shapes[b].is_valid and outer.area > shapes[b].area:
                         containers[b].append(a)
             for b, held_by in enumerate(containers):
                 if len(held_by) % 2 == 1:
@@ -491,12 +501,13 @@ class _Reader:
 
 
 def read(data: bytes, opts: Options, deadline: Deadline) -> Drawing:
-    document = _open(data)
+    document, removed = _open(data)
     deadline.check()
     # ezdxf fills in a default for a missing $INSUNITS in a few cases, so check the file itself.
     units = document.header.get("$INSUNITS", 0) if b"$INSUNITS" in data else 0
     factor = UNIT_MM.get(units, 1.0)
     reader = _Reader(document, opts, deadline, factor)
+    reader.drawing.skipped.add("damaged", removed)
     if units not in UNIT_MM:
         reader.drawing.scale_note = NO_UNITS
     model = document.modelspace()

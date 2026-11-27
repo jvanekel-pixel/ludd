@@ -109,11 +109,12 @@ def test_closed_outlines_nest_by_color_and_layer(tmp_path):
         square(msp, 10, 10, 20, layer="Red")  # an island in the hole
         square(msp, 15, 15, 10)  # another color: a fill of its own on top
         square(msp, 50, 0, 10, layer="Red")
-        square(msp, 50, 0, 10, layer="Red")  # drawn twice: no hole, no loop
+        square(msp, 50, 0, 10, layer="Red")  # drawn twice: one fill, not a hole in itself
 
     result = preview(make(tmp_path, build), closed_as_fills=True)
     assert [(s["color"], len(s["geometry"].get("holes", []))) for s in result["shapes"]] == [
-        ("#ff0000", 1), ("#ff0000", 0), ("#000000", 0), ("#ff0000", 1)]
+        ("#ff0000", 1), ("#ff0000", 0), ("#000000", 0), ("#ff0000", 0)]
+    assert area_of(result["shapes"][-1]).area == pytest.approx(100, abs=0.1)
 
 
 def test_crossing_outlines_stay_two_fills(tmp_path):
@@ -127,7 +128,7 @@ def test_dxf_curves_come_in_at_their_size(tmp_path):
         msp.add_circle((10, 10), 10)
         msp.add_arc((40, 10), 10, 0, 90)
         msp.add_ellipse((70, 10), major_axis=(10, 0), ratio=0.5)
-        msp.add_spline([(85, 0), (90, 20), (95, 0), (100, 20)])
+        msp.add_spline([(85, 0), (90, 10), (95, 0), (100, 10)])  # (it overshoots a little)
         msp.add_lwpolyline([(0, -10, 0, 0, 1.0), (20, -10)], format="xyseb")  # a bulge: a half circle
         msp.add_polyline2d([(30, -10), (35, -5), (40, -10)])
         msp.add_polyline3d([(45, -10, 3), (50, -5, 4), (55, -10, 5)])
@@ -184,7 +185,7 @@ def test_hatch_edges_patterns_and_gradients(tmp_path):
         edges = hatch.paths.add_edge_path()
         edges.add_arc((10, 10), 8, 0, 360)
         pattern = msp.add_hatch(color=5)
-        pattern.set_pattern_fill("ANSI31", scale=0.5)
+        pattern.set_pattern_fill("ANSI31", color=5, scale=0.5)  # (its default color is 7)
         pattern.paths.add_polyline_path([(30, 0), (40, 0), (40, 10)], is_closed=True)
         gradient = msp.add_hatch()
         gradient.set_gradient(color1=(18, 52, 86), color2=(200, 100, 0))
@@ -420,20 +421,37 @@ def test_a_huge_drawing_asks_for_a_width(tmp_path):
     assert preview(path, width_mm=80)["size_mm"] == [80.0, 80.0]
 
 
-def test_a_spline_of_absurd_degree_is_left_out(tmp_path):
+def test_a_broken_spline_is_left_out_and_counted(tmp_path):
     def build(doc, msp):
         square(msp)
         spline = msp.add_spline([(0, 0), (1, 1), (2, 0)])
         spline.dxf.degree = 500
 
+    result = preview(make(tmp_path, build))  # ezdxf's repair drops it: still counted
+    assert kinds(result) == ["run"] and counts(result) == {"damaged": 1}
+
+
+def test_a_spline_of_very_high_degree_is_left_out(tmp_path):
+    def build(doc, msp):
+        square(msp)
+        msp.add_open_spline([(i, i % 3) for i in range(30)], degree=20)  # valid, but slow to work out
+
     result = preview(make(tmp_path, build))
     assert kinds(result) == ["run"] and counts(result) == {"damaged": 1}
 
 
+def long_polyline(n: int) -> str:
+    """A DXF with one LWPOLYLINE of n points, written by hand (building it with ezdxf is slow)."""
+    header = "0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1015\n0\nENDSEC\n"
+    start = ("0\nSECTION\n2\nENTITIES\n0\nLWPOLYLINE\n8\n0\n100\nAcDbEntity\n100\nAcDbPolyline\n"
+             f"90\n{n}\n70\n0\n")
+    points = "".join(f"10\n{(i % 500) * 0.2:.1f}\n20\n{(i // 500) * 0.2:.1f}\n" for i in range(n))
+    return header + start + points + "0\nENDSEC\n0\nEOF\n"
+
+
 def test_too_many_points_are_refused(tmp_path):
-    points = [(i % 500 * 0.2, i // 500 * 0.2) for i in range(300_001)]
-    path = make(tmp_path, lambda doc, msp: msp.add_lwpolyline(points))
-    assert "more points than LUDD imports" in _quickly(path, 60)
+    assert "more points than LUDD imports" in _quickly(write(tmp_path, long_polyline(300_001), "long.dxf"), 60)
+    assert kinds(preview(write(tmp_path, long_polyline(3_000), "short.dxf"))) == ["run"]
 
 
 @pytest.mark.parametrize("cut", [0.5, 0.9])
