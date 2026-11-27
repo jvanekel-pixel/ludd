@@ -236,8 +236,9 @@ def export(motif_id: str, dest: str) -> dict[str, Any]:
     if not isinstance(dest, str) or not dest.strip() or "\0" in dest or not Path(dest).name:
         raise MotifError("Choose where to save the motif file.")
     path = Path(dest)
-    if not path.is_absolute():  # it would land wherever the engine happens to be running
-        raise MotifError("Choose where to save the motif file, folder and all.")
+    if not path.is_absolute():  # "C:foo.json" too: it would land wherever the engine is running
+        raise MotifError("Saving a motif needs a full path, from the drive or top folder down. "
+                         "Choose where to save it.")
     if path.suffix.lower() != ".json":
         path = path.with_name(path.name + ".json")  # added, never replacing: "Bob v1.2" stays whole
     if _in_data_folder(path):

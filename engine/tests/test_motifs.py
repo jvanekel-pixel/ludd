@@ -226,8 +226,10 @@ def test_export_refuses_a_destination_without_its_folder(tmp_path, monkeypatch):
     """Without the full path, the file would land wherever the engine happens to be running."""
     motifs.save("Hill", HILL)
     monkeypatch.chdir(tmp_path)
-    for relative in ["foo.json", "foo", "./foo.json", "../foo.json", "sub/foo.json", "C:foo.json"]:
-        with pytest.raises(motifs.MotifError, match="folder and all"):
+    # "C:foo.json" and "\foo.json" can look complete, but on Windows they hang on the current
+    # folder or drive: the message has to ask for a full path, not say a folder is missing.
+    for relative in ["foo.json", "foo", "./foo.json", "../foo.json", "sub/foo.json", "C:foo.json", "\\foo.json"]:
+        with pytest.raises(motifs.MotifError, match="needs a full path"):
             motifs.export("user:hill", relative)
     assert list(tmp_path.glob("*.json")) == [] and not (tmp_path.parent / "foo.json").exists()
 
