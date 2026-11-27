@@ -7,6 +7,7 @@ import time
 from collections import Counter
 
 import pytest
+import shapely
 from shapely.geometry import LineString, Point, Polygon, box
 from shapely.ops import unary_union
 
@@ -14,7 +15,7 @@ import invariants
 from snapshot_util import SNAPSHOT_DIR, check, digest_recs_steady
 from steady_util import forget_stitches, nudge_trig
 from threadline_engine import layout
-from threadline_engine.digitize import fills
+from threadline_engine.digitize import fills, paths
 from threadline_engine.digitize import stitches as dz
 from threadline_engine.digitize.fills import blackwork, lattice, motif, spiral
 from threadline_engine.digitize.stitches import JUMP, STITCH, TRIM, DigitizeError, FillParams, fill_parts, generate
@@ -231,6 +232,79 @@ def test_lines_stay_inside_the_shape(kind, name):
     # ...and what joins pieces apart goes no further out than any open fill's travel.
     apart = len(_pieces(kind, *SHAPES[name])) > 1
     invariants.assert_sane(generate(obj)[0], inside=shape, tolerance_mm=0.3 if apart else 0.05)
+
+
+# Joins between a lattice's separate pieces follow the edge, never straight across open cells
+# (Phase 7 audit, finding 5: 37 mm of thread across a 40 mm star).
+def _ring(cx, cy, r, n=48):
+    return [(cx + r * math.cos(2 * math.pi * k / n), cy + r * math.sin(2 * math.pi * k / n)) for k in range(n)]
+
+
+def _star(R, r, mid):
+    return [(mid + rr * math.cos(-math.pi / 2 + math.pi * k / 5), mid + rr * math.sin(-math.pi / 2 + math.pi * k / 5))
+            for k, rr in enumerate([R, r] * 5)]
+
+
+def _box(x, y, w, h):
+    return [(x, y), (x + w, y), (x + w, y + h), (x, y + h)]
+
+
+FOUR_HOLES = [_box(4, 4, 14, 14), _box(22, 4, 14, 14), _box(4, 22, 14, 14), _box(22, 22, 14, 14)]
+JOINED_SHAPES = {  # outline, holes
+    "audit's star": (_star(20, 9, 20), []),
+    "thin star": (_star(30, 6, 30), []),
+    "square with a big hole": (_box(0, 0, 40, 40), [_box(4, 4, 32, 32)]),
+    "four holes": (_box(0, 0, 40, 40), FOUR_HOLES),
+    "off-center donut": (_ring(20, 20, 20), [_ring(26, 20, 12)]),
+    "letter B": (_box(0, 0, 24, 40), [_box(6, 6, 12, 11), _box(6, 23, 12, 11)]),
+}
+
+
+@pytest.mark.parametrize("cell", [3, 5, 8])
+@pytest.mark.parametrize("kind", LATTICES)
+@pytest.mark.parametrize("name", list(JOINED_SHAPES))
+def test_no_joining_thread_crosses_an_open_cell(name, kind, cell):
+    outline, holes = JOINED_SHAPES[name]
+    obj = _fill(kind, _nodes(outline), [_nodes(h) for h in holes], blackwork_mm=cell, underlay="auto")
+    recs = generate(obj)[0]
+    shape = _shape_of(obj)
+    lines = []
+    for part in fill_parts(obj["geometry"]["outline"], obj["geometry"]["holes"]):
+        local, (ox, oy) = motif.own_frame(part)
+        lines += [LineString([(a[0] + ox, a[1] + oy), (b[0] + ox, b[1] + oy)])
+                  for a, b in lattice.clip_segments(lattice.tile_segments(kind, cell, local.bounds), local)]
+    lines = unary_union(lines)
+    shapely.prepare(lines)
+    samples = []
+    for a, b in _threads(recs):
+        n = max(1, math.ceil(math.dist(a, b) / 0.25))
+        samples += [(a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n) for k in range(n + 1)]
+    points = shapely.points(samples)
+    inside = points[shapely.distance(shape.boundary, points) > 0.6]  # away from every edge: on a line
+    worst = float(shapely.distance(lines, inside).max()) if len(inside) else 0.0
+    assert worst <= 0.25, f"{worst:.2f} mm from every line and edge"
+    if not holes:  # the edge reaches every piece of a shape without holes: no jumps at all
+        assert invariants.count(recs, JUMP) == 0 and invariants.count(recs, TRIM) == 0
+
+
+@pytest.mark.parametrize("seed", [1, 2, 3])
+def test_joins_do_not_hang_on_the_last_digit(seed, monkeypatch):
+    """Both ways round an edge can tie on a symmetric shape with holes: the choice, like the
+    joins' checks, must come out the same on every computer."""
+    cases = [(k, name) for k in ("diamonds", "grid") for name in ("square with a big hole", "four holes", "letter B")]
+    want = {c: _bare(c[0], _nodes(JOINED_SHAPES[c[1]][0]), [_nodes(h) for h in JOINED_SHAPES[c[1]][1]], blackwork_mm=5)
+            for c in cases}
+    forget_stitches()
+    try:
+        nudge_trig(monkeypatch, seed, dz, paths, lattice, motif, blackwork)
+        for (kind, name), recs in want.items():
+            outline, holes = JOINED_SHAPES[name]
+            got = _bare(kind, _nodes(outline), [_nodes(h) for h in holes], blackwork_mm=5)
+            assert [r[2] for r in got] == [r[2] for r in recs], (kind, name)
+            assert max(math.dist(a[:2], b[:2]) for a, b in zip(got, recs)) < 0.001, (kind, name)
+    finally:
+        monkeypatch.undo()
+        forget_stitches()
 
 
 @pytest.mark.parametrize("kind", LATTICES)

@@ -3,7 +3,9 @@ or a grid with both diagonals), every stretch sewn twice, out and back, as in ha
 
 The lattice is laid from the middle of the shape, worked out in the shape's own frame
 (motif.own_frame), so a moved or copied shape sews the same stitches. A simple shape's lattice
-hangs together, so it sews as one path with no jump; pieces apart are joined inside the shape.
+hangs together, so it sews as one path with no jump. Pieces apart are joined along the shape's
+edge, where the thread reads as part of an outline; nothing covers it, so it never runs across an
+open cell. Where the edge doesn't reach (one edge to another across the lattice), the fill jumps.
 
 Written from first principles for LUDD. Coordinates are mm. Imports from `..stitches` stay inside
 the function bodies: stitches imports this package.
@@ -13,9 +15,17 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
+import shapely
+
 from . import FillPattern, Param, register, spiral
 from .lattice import clip_segments, double_run_paths, tile_segments
 from .motif import own_frame, place
+
+#: A join may run this far in from the shape's edge, or within ON_LINE_MM of a lattice line.
+EDGE_REACH_MM = 0.6
+ON_LINE_MM = 0.05
+_SAMPLE_MM = 0.2
 
 
 def _stitch(params) -> float:
@@ -65,23 +75,63 @@ def _paths(poly, params, pos):
 
 
 def _joined(pieces: list, local) -> list:
-    """Pieces apart (a thin tip's cell, say) joined as the fill would join them (_sew_paths), but in
-    the shape's own frame, so that a moved shape travels the same way too. Only where no way
-    inside the shape is found are they left apart (the fill then jumps)."""
-    from ..stitches import STITCH, Zone, travel
+    """Pieces apart (a thin tip's cell, say) joined along the shape's edge (_along_edge), in the
+    shape's own frame, so that a moved shape travels the same way too. Where there's no such way
+    they are left apart, and the fill jumps (_jump)."""
+    from ..stitches import Zone
 
     if len(pieces) < 2:
         return pieces
     zone = Zone(local.buffer(0.3))  # as far outside the shape as the fill lets any travel go
+    lines = shapely.STRtree([shapely.LineString(p[k:k + 2]) for p in pieces for k in range(len(p) - 1)])
     joined = [list(pieces[0])]
     for piece in pieces[1:]:
-        way = travel(joined[-1][-1], piece[0], zone)
-        if all(r[2] == STITCH for r in way):
-            joined[-1] += [(x, y) for x, y, _ in way] + piece
-        else:
+        way = _along_edge(joined[-1][-1], piece[0], zone, local.boundary, lines)
+        if way is None:
             joined.append(list(piece))
+        else:
+            joined[-1] += way + piece
     return joined
 
 
+def _along_edge(a, b, zone, edge, lines) -> list | None:
+    """Running stitches from a to b along the shape's edge (or a lattice line), or None if no way
+    keeps off the open cells: round the edge first, else straight."""
+    from ..stitches import MIN_STITCH_MM, _edge_route, _route_stitches, dist
+
+    if dist(a, b) < MIN_STITCH_MM:
+        return []
+    straight = [a, b] if zone.cover.covers(shapely.LineString([a, b])) else None
+    for route in (_edge_route(a, b, zone), straight):
+        if route is None:
+            continue
+        way = [(x, y) for x, y, _ in _route_stitches(a, route)]
+        if _keeps_off_cells([a, *way], edge, lines):
+            return way
+    return None
+
+
+def _keeps_off_cells(points: list, edge, lines: shapely.STRtree) -> bool:
+    """Whether every part of this thread lies near the shape's edge or along a lattice line."""
+    samples = []
+    for (x0, y0), (x1, y1) in zip(points, points[1:]):
+        n = max(1, math.ceil(math.hypot(x1 - x0, y1 - y0) / _SAMPLE_MM))
+        samples += [(x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n) for k in range(n + 1)]
+    at = shapely.points(np.array(samples))
+    far = at[np.round(shapely.distance(edge, at), 4) > EDGE_REACH_MM]
+    if not len(far):
+        return True
+    _, off = lines.query_nearest(far, return_distance=True, all_matches=False)
+    return bool(np.round(off.max(), 4) <= ON_LINE_MM)
+
+
+def _jump(a, b, zone) -> list:
+    """Between pieces no way along the edge reaches, the needle jumps (cutting the thread when long)."""
+    from ..stitches import travel
+
+    return travel(a, b)
+
+
 register(FillPattern("blackwork", "open", params={"blackwork_mm": Param(5.0, 3.0, 12.0, "Cell size")}, paths=_paths,
-                     step_mm2=lambda p: p.value("blackwork_mm") * p.stitch_mm / 4, auto_underlay=lambda level: []))
+                     step_mm2=lambda p: p.value("blackwork_mm") * p.stitch_mm / 4, auto_underlay=lambda level: [],
+                     join=_jump))

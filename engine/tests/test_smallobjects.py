@@ -3,6 +3,7 @@ ordinary shapes, made through the engine the way the app asks for them."""
 
 import json
 import math
+import random
 
 import pyembroidery as pe
 import pytest
@@ -11,6 +12,8 @@ from shapely import affinity
 
 import invariants
 from threadline_engine import fabrics, layout
+from threadline_engine.digitize import paths
+from threadline_engine.digitize import stitches as dz
 from threadline_engine.digitize.paths import flatten
 from threadline_engine.digitize.stitches import FOLD_WARNING, generate, width_comp
 from threadline_engine.methods import dispatcher
@@ -246,3 +249,48 @@ def test_generated_objects_render_and_pass_invariants(method, params):
         invariants.assert_sane(recs, inside=_area(obj), tolerance_mm=0.55)
         invariants.assert_deterministic(lambda: generate(obj)[0])
         invariants.assert_moves_with_shape(obj, 12.3, -4.56)
+
+
+def test_a_bar_buttonhole_sews_the_same_wherever_it_is_moved():
+    """The lips' dots sit right between two rungs of their satin: which one wins must not turn on
+    the last digit of a distance (Phase 7 audit, finding 5)."""
+    rng = random.Random(0)
+    lips = _made("shape.buttonhole")["objects"][:2]
+    for k in range(400):
+        dx, dy = round(rng.uniform(-60, 60), 2), round(rng.uniform(-60, 60), 2)
+        invariants.assert_moves_with_shape(lips[k % 2], dx, dy)
+
+
+class _NoisyDistances:
+    """The math module with every hypot (and sine and cosine) one last digit off at random, the same
+    way each time for the same numbers, as another computer's maths library could."""
+
+    def __init__(self, seed):
+        self._seed = seed
+
+    def __getattr__(self, name):
+        real = getattr(math, name)
+        if name not in ("hypot", "sin", "cos"):
+            return real
+
+        def off(*args):
+            v = real(*args)
+            step = random.Random(f"{self._seed} {name} {args}").choice((-math.inf, v, math.inf))
+            return math.nextafter(v, step) if v else v
+
+        return off
+
+
+def test_the_buttonhole_sews_the_same_with_distances_a_last_digit_off(monkeypatch):
+    objects = [o for params in ({}, {"length_mm": 8, "width_mm": 3, "cut_gap_mm": 0.6}, {"style": "round"})
+               for o in _made("shape.buttonhole", **params)["objects"]]
+    want = [generate(o)[0] for o in objects]
+    for seed in range(8):
+        noisy = _NoisyDistances(seed)
+        monkeypatch.setattr(paths, "math", noisy)
+        monkeypatch.setattr(dz, "math", noisy)
+        for obj, recs in zip(objects, want):
+            got = generate(obj)[0]
+            assert [r[2] for r in got] == [r[2] for r in recs], (seed, obj["name"])
+            assert max(math.dist(a[:2], b[:2]) for a, b in zip(got, recs)) < 0.001, (seed, obj["name"])
+        monkeypatch.undo()

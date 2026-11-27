@@ -560,6 +560,12 @@ def _ribbon(nodes: Sequence, width_mm: float, spacing: float, closed: bool = Fal
     return pairs, corners
 
 
+def _nearest_rung(mids: list[Point], p: Point) -> int:
+    """The rung (by its middle) nearest `p`. A tie to a millionth goes to the first, so that a last
+    digit can't choose (a buttonhole's dots sit right between two rungs)."""
+    return min(range(len(mids)), key=lambda i: (round(dist(mids[i], p), 6), i))
+
+
 def satin_with_ends(pairs: list[tuple[Point, Point]], params: SatinParams, start: Point | None = None,
                     end: Point | None = None) -> tuple[list[Rec], list[str]]:
     """A satin that starts and stops where chosen (the green and red dots), anywhere along it.
@@ -577,7 +583,7 @@ def satin_with_ends(pairs: list[tuple[Point, Point]], params: SatinParams, start
         pairs = row_hooks.hand.satin_pairs(pairs, params.hand_pct)
         params = replace(params, hand_pct=0.0)
     mids = [((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) for a, b in pairs]
-    near = lambda p: min(range(n), key=lambda i: dist(mids[i], p))  # noqa: E731
+    near = lambda p: _nearest_rung(mids, p)  # noqa: E731
     s = near(start) if start is not None else None
     if end is not None:
         k = near(end)
@@ -657,7 +663,7 @@ def satin_ribbon(nodes: Sequence, width_mm: float, params: SatinParams, closed: 
     if closed and start is not None and len(pairs) > 2:
         # A satin border starts (and ends) at the stitch nearest the chosen point.
         n = len(pairs) - 1  # the last pair closes the loop on the first
-        k = min(range(n), key=lambda i: dist(((pairs[i][0][0] + pairs[i][1][0]) / 2, (pairs[i][0][1] + pairs[i][1][1]) / 2), start))
+        k = _nearest_rung([((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) for a, b in pairs[:n]], start)
         body = pairs[:n]
         pairs = body[k:] + body[:k] + [body[k]]
         corners = {(c - k) % n for c in corners}
@@ -1199,14 +1205,16 @@ def _stipple_seed(poly: Polygon) -> int:
     return int(round(poly.area * 10) * 31 + round((x1 - x0) * 100) * 7 + round((y1 - y0) * 100)) % 100000
 
 
-def _sew_paths(paths: Sequence[Sequence[Point]], inside: "Polygon | Zone", pos: Point | None) -> list[Rec]:
-    """Paths sewn one after another, joined by travel inside the shape."""
+def _sew_paths(paths: Sequence[Sequence[Point]], inside: "Polygon | Zone", pos: Point | None,
+               join=None) -> list[Rec]:
+    """Paths sewn one after another, joined by travel inside the shape (or by a pattern's own way,
+    `join`)."""
     out: list[Rec] = []
     here = pos
     zone = _zone(inside)
     for path in paths:
         if out:
-            out += travel(here, path[0], zone)
+            out += (join or travel)(here, path[0], zone)
         _append(out, stitch_run(path))
         here = path[-1]
     return out
@@ -1329,7 +1337,7 @@ def _fill_part(poly: Polygon, params: FillParams, end_here: bool = True) -> tupl
         paths, warnings = spec.paths(area, params, start)
         if not paths:
             raise DigitizeError(f"This shape is too small for a {params.pattern} fill; try a smaller size")
-        top = _sew_paths(paths, area.buffer(0.3), start)
+        top = _sew_paths(paths, area.buffer(0.3), start, spec.join)
         target = (top[0][0], top[0][1])
     out = fill_underlay(poly, params, spec, start, target)
     pos = (out[-1][0], out[-1][1]) if out else start

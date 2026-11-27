@@ -45,6 +45,9 @@ class FillPattern:
     # An open pattern that hides the fabric: it may have the cross-hatch underlay, and Edge pad
     # widens it as it does rows.
     covers: bool = False
+    # An open pattern's way from one of its paths to the next: (a, b, zone) -> records. None: travel
+    # inside the shape (stitches.travel).
+    join: Callable | None = None
 
 
 REGISTRY: dict[str, FillPattern] = {}
