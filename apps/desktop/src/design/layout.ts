@@ -307,10 +307,64 @@ export function duplicateItem(layout: Layout, id: string): { layout: Layout; id:
 export type RepeatSpec =
   /** Copies in a grid, `step` apart centre to centre (mm). */
   | { kind: "row"; columns: number; rows: number; step_x: number; step_y: number }
-  /** Copies round a circle below the original (a carousel), each turned to face out if `turn`. */
-  | { kind: "circle"; count: number; radius: number; turn: boolean }
+  /** Copies round a circle (a wreath), each turned to face out if `turn`. Its middle is `radius`
+   *  below the original, or (center "hoop") the middle of the hoop, as far from it as the
+   *  original is (`radius` isn't used then). `mirror`: a kaleidoscope, with an even number of
+   *  copies, every other one mirrored, so neighbors are mirror images. */
+  | { kind: "circle"; count: number; radius: number; turn: boolean; center?: "below" | "hoop"; mirror?: boolean }
+  /** One mirrored copy, half the `gap` past the design's edge: to the right of it (axis "x",
+   *  mirrored left-right) or below it ("y", top-bottom). */
+  | { kind: "mirror2"; axis: "x" | "y"; gap: number }
   /** Four-way mirror: copies mirrored left-right, top-bottom and both, `gap` apart. */
   | { kind: "mirror4"; gap: number };
+
+/** Where one repeated copy goes: mirrored about its own middle first (`flip`), then turned about
+ *  it by `turn` degrees, then moved so its middle is at `at`. */
+export type RepeatPlace = { at: [number, number]; turn: number; flip: ("x" | "y")[] };
+
+/** Where the copies of a design with this on-screen centre and size (mm) go, in sewing order
+ *  (the original not included). */
+export function repeatPlaces(center: [number, number], size: [number, number], spec: RepeatSpec): RepeatPlace[] {
+  const [cx, cy] = center;
+  const places: RepeatPlace[] = [];
+  if (spec.kind === "row") {
+    for (let r = 0; r < Math.max(1, spec.rows); r++)
+      for (let c = 0; c < Math.max(1, spec.columns); c++) if (r || c) places.push({ at: [cx + c * spec.step_x, cy + r * spec.step_y], turn: 0, flip: [] });
+  } else if (spec.kind === "circle") {
+    const [ox, oy] = spec.center === "hoop" ? [0, 0] : [cx, cy + spec.radius];
+    const count = spec.mirror ? 2 * Math.ceil(Math.max(2, spec.count) / 2) : Math.max(2, spec.count);
+    // The way from the circle's middle out to the design (straight up when it sits on it).
+    const out = Math.hypot(cx - ox, cy - oy) > 1e-6 ? (Math.atan2(cy - oy, cx - ox) * 180) / Math.PI : -90;
+    for (let k = 1; k < count; k++) {
+      const a = (2 * Math.PI * k) / count;
+      const [ca, sa] = [Math.cos(a), Math.sin(a)];
+      const at: [number, number] = [ox + (cx - ox) * ca - (cy - oy) * sa, oy + (cx - ox) * sa + (cy - oy) * ca];
+      const turn = spec.turn || spec.mirror ? (360 * k) / count : 0;
+      // A kaleidoscope's every other copy is mirrored left to right, then turned so the mirror
+      // line points out from the middle: 2 * out + 180 is 0 for a design straight above it.
+      if (spec.mirror && k % 2 === 1) places.push({ at, turn: turn + 2 * out + 180, flip: ["x"] });
+      else places.push({ at, turn, flip: [] });
+    }
+  } else {
+    const ox = cx + size[0] / 2 + spec.gap / 2;
+    const oy = cy + size[1] / 2 + spec.gap / 2;
+    if (spec.kind === "mirror2") places.push(spec.axis === "x" ? { at: [2 * ox - cx, cy], turn: 0, flip: ["x"] } : { at: [cx, 2 * oy - cy], turn: 0, flip: ["y"] });
+    else {
+      places.push({ at: [2 * ox - cx, cy], turn: 0, flip: ["x"] });
+      places.push({ at: [cx, 2 * oy - cy], turn: 0, flip: ["y"] });
+      places.push({ at: [2 * ox - cx, 2 * oy - cy], turn: 0, flip: ["x", "y"] });
+    }
+  }
+  return places;
+}
+
+/** About how many stitches the design has once `copies` more of item `index` are made. */
+export function stitchesAfterRepeat(design: Design, index: number, copies: number): number {
+  const { kind, item } = design.records;
+  let own = 0;
+  if (item) for (let r = 0; r < kind.length; r++) if (item[r] === index && kind[r] === Kind.Stitch) own++;
+  return design.info.stitches + own * copies;
+}
 
 /** Copies of one item placed by a repeat pattern, inserted after it in the sewing order.
  *  `center` and `size` are the item's on-screen centre and size (mm). */
@@ -318,35 +372,15 @@ export function repeatItem(layout: Layout, id: string, center: [number, number],
   const src = layout.items.find((it) => it.id === id);
   if (!src) return { layout, ids: [] };
   const [cx, cy] = center;
-  // Each copy: (where its centre goes, how much to turn it, which way to mirror it).
-  const places: { at: [number, number]; turn: number; flip: ("x" | "y")[] }[] = [];
-  if (spec.kind === "row") {
-    for (let r = 0; r < Math.max(1, spec.rows); r++)
-      for (let c = 0; c < Math.max(1, spec.columns); c++) if (r || c) places.push({ at: [cx + c * spec.step_x, cy + r * spec.step_y], turn: 0, flip: [] });
-  } else if (spec.kind === "circle") {
-    const ox = cx;
-    const oy = cy + spec.radius;
-    for (let k = 1; k < Math.max(2, spec.count); k++) {
-      const a = (2 * Math.PI * k) / spec.count;
-      const [ca, sa] = [Math.cos(a), Math.sin(a)];
-      places.push({ at: [ox + (cx - ox) * ca - (cy - oy) * sa, oy + (cx - ox) * sa + (cy - oy) * ca], turn: spec.turn ? (360 * k) / spec.count : 0, flip: [] });
-    }
-  } else {
-    const ox = cx + size[0] / 2 + spec.gap / 2;
-    const oy = cy + size[1] / 2 + spec.gap / 2;
-    places.push({ at: [2 * ox - cx, cy], turn: 0, flip: ["x"] });
-    places.push({ at: [cx, 2 * oy - cy], turn: 0, flip: ["y"] });
-    places.push({ at: [2 * ox - cx, 2 * oy - cy], turn: 0, flip: ["x", "y"] });
-  }
   let out = layout;
   const ids: string[] = [];
   let after = layout.items.indexOf(src);
-  for (const pl of places) {
+  for (const pl of repeatPlaces(center, size, spec)) {
     const copy: LayoutItem = { ...structuredClone(src), id: newId() };
     after += 1;
     out = { ...out, items: [...out.items.slice(0, after), copy, ...out.items.slice(after)] };
-    if (pl.turn) out = rotateBy(out, copy.id, pl.turn);
     for (const axis of pl.flip) out = mirror(out, copy.id, axis);
+    if (pl.turn) out = rotateBy(out, copy.id, pl.turn);
     out = moveBy(out, copy.id, round2(pl.at[0] - cx), round2(pl.at[1] - cy));
     ids.push(copy.id);
   }
