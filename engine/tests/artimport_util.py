@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import shapely
 from shapely.geometry import LineString, Polygon
 
 from threadline_engine.digitize.paths import flatten
@@ -63,7 +64,7 @@ def area_of(shape: dict) -> Polygon:
     """What a fill covers, the way the engine fills it."""
     g = shape["geometry"]
     parts = fill_parts(g["outline"], g.get("holes") or [])
-    return parts[0] if len(parts) == 1 else __import__("shapely").union_all(parts)
+    return parts[0] if len(parts) == 1 else shapely.union_all(parts)
 
 
 def line_of(shape: dict) -> LineString:

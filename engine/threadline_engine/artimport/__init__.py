@@ -94,7 +94,7 @@ def kind_of(path: str) -> str:
     if ext == "svgz":
         raise ArtError("LUDD doesn't read compressed .svgz files: save the drawing as a plain .svg and import that.")
     if ext not in MAX_BYTES:
-        raise ArtError("LUDD imports SVG, DXF and PDF artwork. To open a stitch file, use Open (Ctrl+O).")
+        raise ArtError("LUDD imports SVG, DXF and PDF artwork. To open a stitch file, use Open.")
     return ext
 
 

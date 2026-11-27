@@ -13,6 +13,7 @@ from artimport_util import (area_of, bounds, close, kinds, layout_of, line_of, o
                             write)
 from threadline_engine import artimport, layout
 from threadline_engine.artimport import convert as art_convert
+from threadline_engine.artimport import geometry as art_geometry
 from threadline_engine.artimport import svg as art_svg
 from threadline_engine.digitize import stitches as dz
 
@@ -274,7 +275,10 @@ def test_colors_come_across_as_they_are(tmp_path, paint, color):
 def test_invisible_paint_makes_no_shape(tmp_path, attributes):
     result = preview(write(tmp_path, svg(f'<rect width="9" height="9" {attributes}/>')))
     assert result["shapes"] == [] and result["size_mm"] == [0.0, 0.0]
-    assert any(w["code"] == "art_empty" for w in result["warnings"])
+    [empty] = [w for w in result["warnings"] if w["code"] == "art_empty"]
+    assert "below" not in empty["message"]  # nothing was left out, so nothing is listed
+    with_text = preview(write(tmp_path, svg("<text>Hi</text>")))
+    assert "left out below" in with_text["warnings"][0]["message"]
 
 
 def test_dashes_come_in_solid_and_are_counted(tmp_path):
@@ -540,6 +544,17 @@ def test_the_same_shapes_with_the_last_digit_changed(seed):
     plain = art_convert.convert(art_svg.read(ART.encode(), deadline), options, deadline)
     nudged = art_convert.convert(_nudge(art_svg.read(ART.encode(), deadline), random.Random(seed)), options, deadline)
     assert nudged == plain
+
+
+def test_geos_pieces_come_out_in_one_order_even_when_they_mirror_each_other():
+    """Two pieces touching where both start, mirror images of each other: only their own points
+    tell them apart, so that, not GEOS, sets their order."""
+    upper = [(0.0, 0.0), (10.0, -8.0), (10.0, -2.0)]
+    lower = [(0.0, 0.0), (10.0, 2.0), (10.0, 8.0)]
+    pieces = [shapely.Polygon(upper), shapely.Polygon(lower)]
+    forwards = art_geometry._ordered(shapely.MultiPolygon(pieces))
+    backwards = art_geometry._ordered(shapely.MultiPolygon(pieces[::-1]))
+    assert forwards == backwards and forwards[0][0][1][1] < 0  # the upper one first, by its points
 
 
 def test_crossing_outlines_come_out_the_same_however_they_are_drawn(tmp_path):

@@ -403,9 +403,10 @@ def _ordered(geom) -> list[Region]:
         outline = canonical_ring(p.exterior.coords, True)
         if not outline:
             continue
-        holes = sorted((r for h in p.interiors if (r := canonical_ring(h.coords, False))), key=lambda r: (r[0], len(r)))
+        holes = sorted(r for h in p.interiors if (r := canonical_ring(h.coords, False)))
         out.append((outline, holes))
-    return sorted(out, key=lambda r: (r[0][0], -round(signed_area(r[0]), 2), len(r[0])))
+    # By each ring's own points, which are different even for mirror twins touching at their start.
+    return sorted(out, key=lambda r: (r[0], r[1]))
 
 
 def region_area(region: Region) -> float:

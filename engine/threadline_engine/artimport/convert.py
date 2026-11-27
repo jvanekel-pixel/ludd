@@ -188,10 +188,11 @@ def _warning(code: str, message: str, level: str = "warning") -> dict[str, str]:
 
 
 def _result(drawing: Drawing, size, shapes, warnings) -> dict[str, Any]:
+    skipped = drawing.skipped.report()
     if not shapes:
-        warnings = [*warnings, _warning("art_empty", "LUDD found nothing to sew in this file. See what was left out "
-                                                     "below.")]
-    return {"size_mm": size, "scale_note": drawing.scale_note, "shapes": shapes, "skipped": drawing.skipped.report(),
+        why = "See what was left out below." if skipped else "It has no filled areas or lines that show."
+        warnings = [*warnings, _warning("art_empty", f"LUDD found nothing to sew in this file. {why}")]
+    return {"size_mm": size, "scale_note": drawing.scale_note, "shapes": shapes, "skipped": skipped,
             "warnings": warnings, "pages": drawing.pages}
 
 

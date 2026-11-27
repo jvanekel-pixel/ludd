@@ -4,6 +4,7 @@ every way each format can. PDFium is native code the hook can't see into, so the
 at a "secret" file whose drawing would show up in the answer if PDFium ever read it."""
 
 import json
+import os
 import subprocess
 import sys
 import textwrap
@@ -143,8 +144,6 @@ def audit(tmp_path_factory):
     home = tmp_path / "home"
     for folder in ("home", "cache", "config", "data", "cwd", "temp"):
         (tmp_path / folder).mkdir()
-    import os
-
     env = {**os.environ, "THREADLINE_DATA_DIR": str(tmp_path / "data"), "HOME": str(home), "USERPROFILE": str(home),
            "XDG_CACHE_HOME": str(tmp_path / "cache"), "XDG_CONFIG_HOME": str(tmp_path / "config"),
            "TEMP": str(tmp_path / "temp"), "TMP": str(tmp_path / "temp"), "TMPDIR": str(tmp_path / "temp")}

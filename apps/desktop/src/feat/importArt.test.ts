@@ -5,7 +5,9 @@ const picked = vi.hoisted(() => ({ path: null as string | null }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ save: async () => null, open: async () => picked.path, message: async () => "Cancel" }));
 vi.mock("@tauri-apps/api/path", () => ({ resolveResource: async (p: string) => p }));
 
+import type { Graphics } from "pixi.js";
 import { defaultsFor, setObjectParams, undoEdit, whenIdle } from "../actions";
+import { drawOverlays } from "../canvas/hooks";
 import { importOutlines } from "../canvas/importOverlay";
 import { newDoc } from "../design/layout";
 import type { LayoutItem, ObjectItem } from "../design/types";
@@ -236,6 +238,40 @@ describe("importing artwork", () => {
     expect(useStore.getState().notice?.text).toBe("This shape is too small to fill");
     setObjectParams("a", {}); // the design is as it was, and still editable
     await whenIdle();
+  });
+
+  it("the shapes show as outlines on the hoop, redrawn as ticks change and gone once closed", async () => {
+    const moves: [number, number][] = [];
+    const strokes: Record<string, unknown>[] = [];
+    const g = {} as Record<string, unknown>;
+    g.moveTo = vi.fn((x: number, y: number) => (moves.push([x, y]), g));
+    g.lineTo = vi.fn(() => g);
+    g.stroke = vi.fn((style: Record<string, unknown>) => (strokes.push(style), g));
+    const ctx = { toMm: () => [0, 0] as [number, number], pxMm: () => 0.1, redraw: vi.fn() };
+    const draw = () => {
+      moves.length = strokes.length = 0;
+      drawOverlays(g as unknown as Graphics, 0.1, ctx);
+    };
+    draw(); // nothing to import yet
+    expect(moves).toEqual([]);
+    await opened();
+    expect(ctx.redraw).toHaveBeenCalled();
+    draw();
+    // Each outline is traced twice (an edge, then its color), a satin's width a third time. The
+    // background isn't ticked, so it isn't shown; the fill's hole is.
+    expect(moves.filter(([x, y]) => x === -45 && y === 0)).toHaveLength(0);
+    expect(moves.filter(([x, y]) => x === -37 && y === 0)).toHaveLength(2);
+    expect(strokes).toContainEqual(expect.objectContaining({ width: 3, color: 0xff0000, alpha: 0.35 }));
+    ctx.redraw.mockClear();
+    toggleColor("#ff0000", false);
+    expect(ctx.redraw).toHaveBeenCalled();
+    draw();
+    expect(new Set(strokes.map((s) => s.color))).toEqual(new Set([0xffffff, 0x0000ff])); // the blue line and its edge
+    ctx.redraw.mockClear();
+    useStore.getState().setDialog(null);
+    expect(ctx.redraw).toHaveBeenCalled();
+    draw();
+    expect(moves).toEqual([]);
   });
 
   it("dropped SVG, DXF and PDF files are artwork; designs and pictures are not", () => {

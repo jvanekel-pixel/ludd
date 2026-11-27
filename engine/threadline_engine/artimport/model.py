@@ -49,15 +49,15 @@ SKIPPED = {
              "{n} pieces of text left out: LUDD doesn't import text. Turn them into outlines (paths) in your drawing "
              "program, or type them with LUDD's Text tool."),
     "picture": ("1 picture inside the file left out: artwork import brings in shapes only. To trace it, save it as an "
-                "image and use Add a picture (Ctrl+I).",
+                "image, then use Add a picture.",
                 "{n} pictures inside the file left out: artwork import brings in shapes only. To trace one, save it as "
-                "an image and use Add a picture (Ctrl+I)."),
+                "an image, then use Add a picture."),
     "link": ("1 link to another file or website left alone: LUDD reads only the file you chose.",
              "{n} links to other files or websites left alone: LUDD reads only the file you chose."),
     "gradient": ("1 gradient came in as one solid color, the gradient's first.",
                  "{n} gradients came in as solid colors, each gradient's first."),
-    "pattern": ("1 pattern fill left out: give that shape a plain color to bring it in.",
-                "{n} pattern fills left out: give those shapes a plain color to bring them in."),
+    "pattern": ("1 pattern fill or line left out: give it a plain color to bring it in.",
+                "{n} pattern fills or lines left out: give them plain colors to bring them in."),
     "clip": ("1 clip or mask ignored, so that shape comes in whole. Apply it in your drawing program first if that "
              "matters.",
              "{n} clips or masks ignored, so those shapes come in whole. Apply them in your drawing program first if "
