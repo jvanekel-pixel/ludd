@@ -105,20 +105,20 @@ Spec: docs/phases/PHASE-06-fills-and-stitch-quality.md
 Why it matters: branching is sold only in StitchArtist Level 3 ($699); freehand drawing and SVG import are what people expect from any drawing program.
 Spec: docs/phases/PHASE-07-lines-sequencing-drawing.md
 > Verify: `python scripts/check.py --all` | Done when: three touching same-thread shapes in a branch sew with no trim or jump between them, a 300-sample freehand stroke becomes 25 curve points or fewer within 0.4 mm, and an SVG imports as a fill, a line and a satin ribbon at real size after a preview
-- [ ] P7-A1 Line styles: backstitch, stem stitch, candlewicking, redwork, French knots
-- [ ] P7-A2 Blackwork fill
-- [ ] P7-A3 Which side a motif line sits on
-- [ ] P7-A4 Lock-stitch shapes: standard, triangle, back-tack
-- [ ] P7-A5 Buttonholes and eyelets
-- [ ] P7-B1 Branch: sew selected shapes as one path with one start and one end
-- [ ] P7-B2 Branch dots, commands and panel note
-- [ ] P7-B3 Optimize jumps also moves an applique's start and a text's first letter (part of L-017)
-- [ ] P7-C1 Freehand drawing with smoothing (lifts L-011)
-- [ ] P7-C2 Continue a line or satin ribbon from either end
-- [ ] P7-C3 Repeat dialog: mirror, wreath, kaleidoscope
-- [ ] P7-C4 Stitch presets: save, apply, import, export
-- [ ] P7-D1 Import SVG and DXF artwork as editable shapes
-- [ ] P7-D2 PDF artwork: vector paths if a time-boxed attempt works, else the page as a picture
+- [x] P7-A1 Line styles: backstitch, stem stitch, candlewicking, redwork, French knots
+- [x] P7-A2 Blackwork fill
+- [x] P7-A3 Which side a motif line sits on
+- [x] P7-A4 Lock-stitch shapes: standard, triangle, back-tack
+- [x] P7-A5 Buttonholes and eyelets
+- [x] P7-B1 Branch: sew selected shapes as one path with one start and one end
+- [x] P7-B2 Branch dots, commands and panel note
+- [x] P7-B3 Optimize jumps also moves an applique's start and a text's first letter (part of L-017)
+- [x] P7-C1 Freehand drawing with smoothing (lifts L-011)
+- [x] P7-C2 Continue a line or satin ribbon from either end
+- [x] P7-C3 Repeat dialog: mirror, wreath, kaleidoscope
+- [x] P7-C4 Stitch presets: save, apply, import, export
+- [x] P7-D1 Import SVG and DXF artwork as editable shapes
+- [x] P7-D2 PDF artwork: vector paths if a time-boxed attempt works, else the page as a picture
 
 ## Phase 8: Specialty & In-the-Hoop
 Why it matters: lace, puff, patches and multi-position hoops are what hobbyists buy StitchArtist Level 2-3, PatchArtist or a bigger machine for.
