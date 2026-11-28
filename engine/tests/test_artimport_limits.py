@@ -461,22 +461,27 @@ def _ordinary(tmp_path) -> list:
     return [(drawing, ["fill"]), (cad, ["run"]), (page, ["fill", "satin"])]
 
 
-def test_an_import_still_works_after_each_kind_of_refusal(tmp_path, monkeypatch):
+#: One hostile file of each kind that is refused: (name, its bytes, part of the refusal).
+REFUSALS = {
+    "closed too often": ("z.svg", lambda: svg('<path d="M0 0 L9 0 ' + "z" * 2_100 + '"/>'), CLOSED),
+    "tangled": ("star.svg", lambda: svg(f'<polygon points="{_points(_star(221))}"/>'), TANGLED),
+    "crowded": ("nest.svg", lambda: svg(f'<path d="{_squares_path(2_100)}"/>'), CROWDED),
+    "too many dxf objects": (
+        "many.dxf", lambda: "0\nSECTION\n2\nENTITIES\n" + "0\nPOINT\n8\n0\n" * 100_001 + "0\nENDSEC\n0\nEOF\n",
+        "more than 100,000 objects"),
+    "too many pages": ("pages.pdf", _lying_page_tree, "more than 2,000 pages"),
+    "too much memory": ("memory.pdf", lambda: _flate_page(20), "takes more memory"),
+    "damaged": ("broken.pdf", lambda: b"%PDF-1.7\n" + b"\x00" * 100 + b"\n%%EOF\n", "damaged"),
+}
+
+
+@pytest.mark.parametrize("what", list(REFUSALS))
+def test_an_import_still_works_after_each_kind_of_refusal(what, tmp_path, monkeypatch):
     ordinary = _ordinary(tmp_path)
     bad = tmp_path / "bad"
     bad.mkdir()
-    refusals = [
-        ("z.svg", svg('<path d="M0 0 L9 0 ' + "z" * 2_100 + '"/>'), CLOSED),
-        ("star.svg", svg(f'<polygon points="{_points(_star(221))}"/>'), TANGLED),
-        ("nest.svg", svg(f'<path d="{_squares_path(2_100)}"/>'), CROWDED),
-        ("many.dxf", "0\nSECTION\n2\nENTITIES\n" + "0\nPOINT\n8\n0\n" * 100_001 + "0\nENDSEC\n0\nEOF\n",
-         "more than 100,000 objects"),
-        ("pages.pdf", _lying_page_tree(), "more than 2,000 pages"),
-        ("memory.pdf", _flate_page(20), "takes more memory"),
-        ("broken.pdf", b"%PDF-1.7\n" + b"\x00" * 100 + b"\n%%EOF\n", "damaged"),
-    ]
+    name, data, fragment = REFUSALS[what]
     monkeypatch.setattr(child, "CHILD_MEMORY", 300 * 1024**2)
-    for name, data, fragment in refusals:
-        assert fragment in refusal(write(bad, data, name))
-        for path, expected in ordinary:
-            assert kinds(preview(path)) == expected, f"after {name}"
+    assert fragment in refusal(write(bad, data(), name))
+    for path, expected in ordinary:
+        assert kinds(preview(path)) == expected, f"after {name}"
