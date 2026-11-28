@@ -5,7 +5,9 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({ save: async () => null, open: asyn
 vi.mock("@tauri-apps/api/path", () => ({ resolveResource: async (p: string) => p }));
 
 import * as A from "../actions";
+import { withOrder } from "../ai";
 import "../cmd";
+import { addOffset, mergeSelected } from "../features";
 import { useStore } from "../store";
 import { branchOf, dissolveSingles, inSewingOrder, moveShown } from "./branches";
 import { duplicateItems, newDoc, repeatItem } from "./layout";
@@ -57,10 +59,10 @@ describe("keeping branches whole", () => {
   });
 });
 
-function fakeEngine(branches: () => BranchInfo[] | undefined = () => undefined) {
+function fakeEngine(branches: () => BranchInfo[] | undefined = () => undefined, answers: Record<string, unknown> = {}) {
   return {
     async call<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
-      if (method !== "layout.render") return null as T;
+      if (method !== "layout.render") return (answers[method] ?? null) as T;
       const layout = params.layout as Layout;
       return {
         path: "", name: "x", format: "layout", threads: [], blocks: [], records: { x: [], y: [], kind: [] }, branches: branches(),
@@ -71,10 +73,10 @@ function fakeEngine(branches: () => BranchInfo[] | undefined = () => undefined) 
   };
 }
 
-function setDoc(layout: Layout, selected: string[], branches?: () => BranchInfo[] | undefined) {
+function setDoc(layout: Layout, selected: string[], branches?: () => BranchInfo[] | undefined, answers?: Record<string, unknown>) {
   const doc: Doc = { layout, images: [] };
   useStore.setState({
-    engine: fakeEngine(branches) as never, history: { past: [], present: doc, future: [] }, savedDoc: doc,
+    engine: fakeEngine(branches, answers) as never, history: { past: [], present: doc, future: [] }, savedDoc: doc,
     selectedId: selected[0] ?? null, extraIds: selected.slice(1), selectedNode: null, notice: null, tool: "select", pen: null,
     design: { items: [], threads: [], blocks: [], records: { x: [], y: [], kind: [] }, branches: branches?.() } as never,
   });
@@ -141,6 +143,84 @@ describe("branches through the app's own commands", () => {
     await run("arrange.duplicate");
     const [, , p, q] = now().items;
     expect([branchOf(p) === "B", branchOf(p) === branchOf(q)]).toEqual([false, true]);
+  });
+});
+
+/** The second audit's sweep: every command that reorders shapes or makes new ones out of existing
+ *  ones leaves a branch's shapes together; pieces of a shape stay in it, and new shapes that are
+ *  neither pieces nor copies go after the branch, as ordinary shapes. (The knife, cut-out and Sew in
+ *  the shortest order are tested with the real engine in feat/branch.engine.test.ts; Sort and
+ *  Combine colors, which reorder what the engine sews, in engine/tests/test_branch.py.) */
+describe("new shapes and reorders keep branches whole", () => {
+  const ABC_X = () => lay([fill("a", "B"), fill("b", "B"), fill("c", "B"), fill("x", undefined, 40)], B_DOTS);
+  const ring: PathNode[] = sq(-2);
+
+  it("a satin border round a branch's shape is sewn after the branch, as an ordinary shape", async () => {
+    setDoc(ABC_X(), ["a"]);
+    await run("object.border");
+    const added = now().items[3];
+    expect(added.kind).toBe("satin");
+    expect(shape(now().items)).toBe(`a:B b:B c:B ${added.id} x`);
+  });
+
+  it("an outline round a branch's shape is sewn after the branch, as an ordinary shape", async () => {
+    setDoc(ABC_X(), ["b"], undefined, { "shape.offset": { rings: [ring] } });
+    await addOffset({ distance_mm: 2, as: "run", width_mm: 2, holes: false });
+    await A.whenIdle();
+    const added = now().items[3];
+    expect(shape(now().items)).toBe(`a:B b:B c:B ${added.id} x`);
+  });
+
+  const merge = async (layout: Layout, selected: string[]) => {
+    setDoc(layout, selected, undefined, { "shape.merge": { geometry: { outline: sq(0) } } });
+    await mergeSelected();
+    await A.whenIdle();
+  };
+
+  it("shapes merged from one branch stay in it", async () => {
+    await merge(ABC_X(), ["a", "c"]);
+    expect(shape(now().items)).toBe("a:B b:B x");
+    expect(now().branches).toEqual(B_DOTS);
+  });
+
+  it("a shape merged with one outside its branch is ordinary, sewn after the branch", async () => {
+    await merge(ABC_X(), ["a", "x"]);
+    expect(shape(now().items)).toBe("b:B c:B a");
+    await merge(ABC_X(), ["x", "b"]); // (and where the first one picked is outside it, it stays there)
+    expect(shape(now().items)).toBe("a:B c:B x");
+    await merge(lay([fill("a", "B"), fill("b", "B"), fill("y", "C"), fill("z", "C")]), ["a", "y"]);
+    expect(shape(now().items)).toBe("b a z"); // both branches left with one shape: dissolved
+    await merge(lay([fill("a", "B"), fill("b", "B"), fill("x")], B_DOTS), ["a", "x"]);
+    expect(shape(now().items)).toBe("b a");
+    expect(now()).not.toHaveProperty("branches");
+  });
+
+  it("lettering broken into shapes keeps its branch", async () => {
+    const text = { ...fill("t", "B"), kind: "text", text: "Hi" } as unknown as LayoutItem;
+    const letter = { kind: "fill", geometry: { outline: sq(0) }, params: {}, thread: RED };
+    setDoc(lay([fill("a", "B"), text, fill("c", "B")]), ["t"], undefined, { "text.to_shapes": { objects: [letter, letter] } });
+    await run("text.toShapes");
+    const [, p, q] = now().items;
+    expect(shape(now().items)).toBe(`a:B ${p.id}:B ${q.id}:B c:B`);
+  });
+
+  it("a shape turned into an applique leaves its branch in the same step", async () => {
+    setDoc(lay([fill("a", "B"), fill("b", "B"), fill("c", "B")], B_DOTS), ["b"]);
+    await A.convertObject("b", "applique");
+    await A.whenIdle();
+    expect(shape(now().items)).toBe("a:B b c:B");
+    expect(useStore.getState().history.past).toHaveLength(1);
+    setDoc(lay([fill("a", "B"), fill("b", "B")], B_DOTS), ["b"]);
+    await A.convertObject("b", "applique");
+    await A.whenIdle();
+    expect(shape(now().items)).toBe("a b");
+    expect(now()).not.toHaveProperty("branches");
+    expect(useStore.getState().history.past).toHaveLength(1);
+  });
+
+  it("an accepted AI sewing order keeps each branch's shapes together", () => {
+    const l = lay([fill("a", "B"), fill("b", "B"), fill("x"), fill("y", "C"), fill("z", "C")]);
+    expect(shape(withOrder(l, ["y", "x", "a", "z", "b"]).items)).toBe("y:C z:C x a:B b:B");
   });
 });
 

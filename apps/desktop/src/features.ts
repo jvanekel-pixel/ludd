@@ -10,7 +10,7 @@ import { addTraced, commit, currentDoc, currentLayout, defaultsFor, engine, fail
 import { holdEscape } from "./escape";
 import { exportList, typedList } from "./feat/names";
 import { slotThreads } from "./design/blend";
-import { branchOf } from "./design/branches";
+import { afterBranch, branchOf, inBranch } from "./design/branches";
 import { addObject, IDENTITY, newId } from "./design/layout";
 import type { Colorway, Guide, Layout, LayoutItem, LayoutOp, ObjectItem, PathNode, TextItem, Thread } from "./design/types";
 import { isObject, isText } from "./design/types";
@@ -175,8 +175,9 @@ export async function addOffset(spec: OffsetSpec) {
         ? ({ kind: "satin", geometry: { nodes, width_mm: spec.width_mm, closed: true }, params: defaultsFor("satin"), thread } as Omit<ObjectItem, "id" | "transform" | "threads" | "ops">)
         : ({ kind: "run", geometry: { nodes, closed: true }, params: { ...defaultsFor("run"), style: spec.as === "triple" ? "triple" : "single" }, thread } as Omit<ObjectItem, "id" | "transform" | "threads" | "ops">),
     );
+    // Sewn after the selection (after the whole branch, when its last shape is in one).
     const last = l.items.filter((it) => ids.includes(it.id)).at(-1)?.id;
-    if ((await insertObjects(objs, last)).length)
+    if ((await insertObjects(objs, last && afterBranch(l.items, last))).length)
       info(`Added ${objs.length === 1 ? "an outline" : `${objs.length} outlines`}. Change its thread in its panel.`);
   } catch (err) {
     fail(err);
@@ -296,10 +297,19 @@ export async function mergeSelected() {
     const first = items.find((it) => it.id === primary) ?? items[0];
     const l = currentLayout()!;
     const others = new Set(items.filter((it) => it.id !== first.id).map((it) => it.id));
-    const next: Layout = {
-      ...l,
-      items: l.items.filter((it) => !others.has(it.id)).map((it) => (it.id === first.id ? ({ ...it, geometry: r.geometry, transform: { ...IDENTITY } } as ObjectItem) : it)),
-    };
+    // Shapes of one branch merge into one that stays in it. Anything else gives an ordinary shape,
+    // sewn where the first one was, or after its branch's other shapes, never between them.
+    const shared = new Set(items.map(branchOf)).size === 1;
+    const joined = { ...first, geometry: r.geometry, transform: { ...IDENTITY } } as ObjectItem;
+    const merged = (shared ? joined : inBranch(joined, undefined)) as ObjectItem;
+    const kept = l.items.filter((it) => !others.has(it.id)).map((it) => (it.id === first.id ? merged : it));
+    const branch = shared ? undefined : branchOf(first);
+    const last = branch ? [...kept].reverse().find((it) => branchOf(it) === branch) : undefined;
+    if (last && kept.indexOf(last) > kept.indexOf(merged)) {
+      kept.splice(kept.indexOf(merged), 1);
+      kept.splice(kept.indexOf(last) + 1, 0, merged);
+    }
+    const next: Layout = { ...l, items: kept };
     if (await commit(next)) {
       useStore.getState().setSelection(first.id, []);
       info("Merged into one shape, with the settings of the one you selected first.");

@@ -3,6 +3,7 @@
  * proposals and Help. Nothing here changes the design unless the user accepts a proposal.
  */
 import { commit, currentDoc, currentLayout, fail, info } from "./actions";
+import { keepBranchesTogether } from "./design/branches";
 import { withoutDeadCrossHatch } from "./design/fillPatterns";
 import { updateObject } from "./design/layout";
 import { isRibbon, type Layout, type ObjectItem, type PathNode } from "./design/types";
@@ -184,7 +185,8 @@ export function withChange(o: ObjectItem, c: AdviceChange): ObjectItem {
   return { ...out, params: withoutDeadCrossHatch(p) } as ObjectItem;
 }
 
-/** Put the advised shapes in the suggested order, in the places they took before. Pure, for tests. */
+/** Put the advised shapes in the suggested order, in the places they took before; a branch's
+ *  shapes stay together. Pure, for tests. */
 export function withOrder(l: Layout, ids: string[]): Layout {
   const slots = l.items.map((it, i) => (ids.includes(it.id) ? i : -1)).filter((i) => i >= 0);
   const items = [...l.items];
@@ -192,7 +194,7 @@ export function withOrder(l: Layout, ids: string[]): Layout {
     const it = l.items.find((x) => x.id === ids[k]);
     if (it) items[slot] = it;
   });
-  return { ...l, items };
+  return { ...l, items: keepBranchesTogether(l.items, items) };
 }
 
 export function acceptProposal(p: Proposal) {

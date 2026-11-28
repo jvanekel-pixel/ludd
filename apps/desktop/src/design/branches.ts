@@ -73,6 +73,36 @@ export function addCopies(layout: Layout, copies: readonly NewCopy[]): Layout {
   return { ...layout, items };
 }
 
+/** The item a new shape that is neither a piece nor a copy of a branch's shape is sewn after, so it
+ *  doesn't land between a branch's shapes: `id`, or, when `id` is a shape of a branch with more of
+ *  it sewn later, the branch's last shape. */
+export function afterBranch(items: readonly LayoutItem[], id: string): string {
+  const at = items.findIndex((it) => it.id === id);
+  const b = at < 0 ? undefined : branchOf(items[at]);
+  if (!b) return id;
+  for (let k = items.length - 1; k > at; k--) if (branchOf(items[k]) === b) return items[k].id;
+  return id;
+}
+
+/** `after` (the same items in a new order) with each branch whose shapes sat together in `before`
+ *  sitting together again, in the order they had, where the first of them comes in `after`. */
+export function keepBranchesTogether(before: readonly LayoutItem[], after: readonly LayoutItem[]): LayoutItem[] {
+  const together = new Map<string, LayoutItem[]>();
+  for (const b of new Set(before.map(branchOf))) {
+    const spots = before.flatMap((it, i) => (b && branchOf(it) === b ? [i] : []));
+    if (b && spots[spots.length - 1] - spots[0] === spots.length - 1) together.set(b, spots.map((i) => before[i]));
+  }
+  const done = new Set<string>();
+  return after.flatMap((it) => {
+    const b = branchOf(it);
+    const members = b ? together.get(b) : undefined;
+    if (!members) return [it];
+    if (done.has(b!)) return [];
+    done.add(b!);
+    return members.map((m) => after.find((x) => x.id === m.id) ?? m);
+  });
+}
+
 /** The items as the list shows them: each branch's shapes in the order the last render sewed
  *  them (the engine chooses it), everything else as in the layout. */
 export function inSewingOrder(items: readonly LayoutItem[], branches: readonly BranchInfo[] | undefined): LayoutItem[] {

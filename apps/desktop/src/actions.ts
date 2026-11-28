@@ -39,7 +39,7 @@ import {
   updateObject,
   type History,
 } from "./design/layout";
-import { addCopies, dissolveSingles, inSewingOrder, moveShown } from "./design/branches";
+import { addCopies, afterBranch, branchOf, dissolveSingles, inBranch, inSewingOrder, moveShown } from "./design/branches";
 import type { ShapeId } from "./design/shapes";
 import { penPoints, reversePath } from "./design/simplify";
 import { visibleRecords } from "./design/player";
@@ -1282,11 +1282,11 @@ export async function textToShapes() {
     // Changed or removed meanwhile: these letters are out of date.
     const now = currentLayout();
     if (!now || !unchanged(it.id, it)) return;
-    // The letters stay together: in the text's own group if it had one, else a new group.
+    // The letters stay together: in the text's own group if it had one, else a new group. They
+    // take the lettering's place and its branch.
     const group = it.group ?? (r.objects.length > 1 ? `g${Date.now().toString(36)}` : undefined);
-    const shapes = r.objects.map(
-      (o) => ({ ...o, id: newId(), transform: { ...IDENTITY }, threads: [], ops: [], ...(group ? { group } : {}), ...(it.locked ? { locked: true } : {}) }) as ObjectItem,
-    );
+    const kept = { ...(group ? { group } : {}), ...(it.locked ? { locked: true } : {}), ...(branchOf(it) ? { branch: branchOf(it) } : {}) };
+    const shapes = r.objects.map((o) => ({ ...o, id: newId(), transform: { ...IDENTITY }, threads: [], ops: [], ...kept }) as ObjectItem);
     const at = now.items.indexOf(it);
     const items = [...now.items.slice(0, at), ...shapes, ...now.items.slice(at + 1)];
     if (await commit({ ...now, items })) {
@@ -1375,10 +1375,11 @@ export async function addSatinBorder(id?: string) {
     params: defaultsFor("satin"),
     thread,
   } as Omit<ObjectItem, "id" | "transform" | "threads" | "ops">);
-  // Sew it straight after its fill.
+  // Sew it straight after its fill (after the whole branch, for a fill in one).
   const added = withBorder.items[withBorder.items.length - 1];
   const items = withBorder.items.slice(0, -1);
-  items.splice(items.findIndex((it) => it.id === o.id) + 1, 0, added);
+  const after = afterBranch(l.items, o.id);
+  items.splice(items.findIndex((it) => it.id === after) + 1, 0, added);
   if (await commit({ ...withBorder, items })) useStore.getState().select(nid);
 }
 
@@ -1628,12 +1629,17 @@ async function satinFillFor(outline: PathNode[], way: number): Promise<SatinFill
 export async function convertObject(id: string, to: ObjectKind) {
   const o = currentLayout()?.items.find((it) => it.id === id) as ObjectItem | undefined;
   if (!o || o.kind === to) return;
+  // A branch can't hold an applique: turned into one, a shape leaves its branch (in the same undo
+  // step, and a branch left with one shape ends).
+  const left = (x: ObjectItem) => (to === "applique" ? (inBranch(x, undefined) as ObjectItem) : x);
   if (o.kind === "satin" && !isRibbon(o)) {
     const outline = columnOutline(o.geometry as { rail_a: PathNode[]; rail_b: PathNode[] });
     editObject(id, () =>
-      to === "run"
-        ? ({ ...o, kind: "run", geometry: { nodes: outline, closed: true }, params: defaultsFor("run") } as ObjectItem)
-        : ({ ...o, kind: to, geometry: { outline }, params: defaultsFor(to) } as ObjectItem),
+      left(
+        to === "run"
+          ? ({ ...o, kind: "run", geometry: { nodes: outline, closed: true }, params: defaultsFor("run") } as ObjectItem)
+          : ({ ...o, kind: to, geometry: { outline }, params: defaultsFor(to) } as ObjectItem),
+      ),
     );
     return;
   }
@@ -1662,11 +1668,13 @@ export async function convertObject(id: string, to: ObjectKind) {
   const holes = o.kind === "fill" || o.kind === "applique" ? o.geometry.holes : undefined;
   const width = isRibbon(o) ? o.geometry.width_mm : useStore.getState().satinWidth;
   editObject(id, () =>
-    to === "run"
-      ? ({ ...o, kind: "run", geometry: { nodes: pts, ...(closed ? { closed: true } : {}) }, params: defaultsFor("run") } as ObjectItem)
-      : to === "satin"
-        ? ({ ...o, kind: "satin", geometry: { nodes: pts, width_mm: width, ...(closed ? { closed: true } : {}) }, params: defaultsFor("satin") } as ObjectItem)
-        : ({ ...o, kind: to, geometry: { outline: pts, ...(holes ? { holes } : {}) }, params: defaultsFor(to) } as ObjectItem),
+    left(
+      to === "run"
+        ? ({ ...o, kind: "run", geometry: { nodes: pts, ...(closed ? { closed: true } : {}) }, params: defaultsFor("run") } as ObjectItem)
+        : to === "satin"
+          ? ({ ...o, kind: "satin", geometry: { nodes: pts, width_mm: width, ...(closed ? { closed: true } : {}) }, params: defaultsFor("satin") } as ObjectItem)
+          : ({ ...o, kind: to, geometry: { outline: pts, ...(holes ? { holes } : {}) }, params: defaultsFor(to) } as ObjectItem),
+    ),
   );
 }
 
