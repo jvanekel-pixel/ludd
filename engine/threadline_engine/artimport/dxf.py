@@ -109,7 +109,7 @@ def _check_size(data: bytes, deadline: Deadline) -> None:
     too_many = ArtError(f"This DXF has more than {MAX_OBJECTS:,} objects, too many to import. Simplify the drawing in "
                         "your CAD program (purge unused blocks too) or save it as an SVG, and import that.")
     too_big = ArtError("This DXF has far more in it than LUDD imports. Simplify the drawing in your CAD program (fewer "
-                       "objects; purge unused blocks too) or save it as an SVG, and import that.")
+                       "objects or less detail; purge unused blocks too) or save it as an SVG, and import that.")
     if data.startswith(_BINARY):
         from ezdxf.lldxf.tagger import binary_tags_loader as tags_of
 

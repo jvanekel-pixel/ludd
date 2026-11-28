@@ -188,8 +188,8 @@ def _apart_note(items: list, left: dict[int, tuple[str, str]], b: str, thread: t
     """Why the piece of branch `b` (sewn in `thread`) that starts at item `start` sews apart from the
     one before it, which ends at item `after`, and what to do. When all that's between is the
     branch's own shapes left out for what they sew in, they're named, with what to change; otherwise
-    the one thing between is named (or how many there are), to move out of the way, or, when all of
-    it can join the branch, to add to it."""
+    the one thing between is named, or how many there are ("other shapes" only when none of them is
+    the branch's own), to move out of the way, or, when all of it can join the branch, to add to it."""
     names = {"name": _name(items[start], start), "first": _name(items[first], first)}
     between = range(after + 1, start)
     for why in ("thread", "blend"):
@@ -205,7 +205,8 @@ def _apart_note(items: list, left: dict[int, tuple[str, str]], b: str, thread: t
             if items[k].get("kind") in BRANCH_KINDS and not _is_blend(items[k]) and not _bid(items[k])]
     or_add = ("" if len(free) < len(between) else
               (_OR_ADD if all(_thread_of(x) == thread for x in free) else _OR_RECOLOR_AND_ADD).format(it=it))
-    who = _name(items[between[0]], between[0]) if one else f"{len(between)} other shapes"
+    own = any(_bid(items[k]) == b for k in between)
+    who = _name(items[between[0]], between[0]) if one else f"{len(between)} {'shapes' if own else 'other shapes'}"
     return LEFT_OUT["apart"].format(who=who, is_="is" if one else "are", move=who if one else "those shapes",
                                     or_add=or_add, **names)
 

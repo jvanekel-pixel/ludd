@@ -384,7 +384,7 @@ def test_one_object_carrying_too_much_is_refused_by_the_count_before_the_read(tm
     path = write(tmp_path, _one_line_with_extra_data(450_000), "extra.dxf")
     message = refusal(path)
     assert "far more in it than LUDD imports" in message
-    assert "fewer objects" in message and "save it as an SVG" in message
+    assert "fewer objects" in message and "less detail" in message and "save it as an SVG" in message
     # Just under 450,000 is counted through and read (the count alone is checked here: the read
     # itself takes seconds).
     dxf.load_ezdxf()

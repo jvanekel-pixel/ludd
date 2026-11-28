@@ -431,9 +431,17 @@ def test_the_apart_note_names_the_shape_between_or_counts_them_and_says_what_to_
     assert blend.endswith("move Fill 3 before or after the branch in Order & colors.")
     other = between(fill("x", 40, 0, 5, br="b2"), fill("y", 50, 0, 5, br="b2"))
     assert "2 other shapes" in other and other.endswith("move those shapes before or after the branch in Order & colors.")
-    # A recolored member with something else between as well: both have to move.
-    mixed = between(fill("r", 30, 0, 5, thread=BLUE), fill("x", 40, 0, 5, br=None))
-    assert "2 other shapes" in mixed and mixed.endswith("move those shapes before or after the branch in Order & colors.")
+    # The branch's own recolored shape and one outside it: "2 shapes" (its own is no "other" shape),
+    # both to be moved; the recolored one keeps its own note.
+    items = [fill("a", 0, 0, 10), fill("b", 10, 0, 10, thread=BLUE), fill("x", 40, 0, 5, br=None), fill("c", 20, 0, 10)]
+    notes = {w["code"]: w["message"] for w in L.render(lay(*items)).warnings if w["code"].startswith("branch_")}
+    assert notes == {
+        "branch_thread_1": "Fill 2 is in a branch but sews in a different thread, so it is sewn on its own. Give it "
+                           "the branch's thread, or take it out of the branch (Alt+Shift+U).",
+        "branch_apart_3": "Fill 4 is in a branch with Fill 1, but 2 shapes are sewn between them, so Fill 4 starts a "
+                          "path of its own. To sew the branch as one path, move those shapes before or after the "
+                          "branch in Order & colors.",
+    }
 
 
 def _apart_note(items):
