@@ -366,6 +366,20 @@ def box_pairs(geoms: Sequence, limit: int, check: Callable[[], None] | None = No
     return found
 
 
+def check_crowded(rings: Sequence[list[Point]], check: Callable[[], None] | None = None) -> None:
+    """Refuse rings whose pieces lie so thick that GEOS's single-call tests of them (is a ring
+    simple, which rings touch or hold others) would take too long: more than MAX_NEAR_PAIRS pairs
+    of pieces with overlapping boxes, as a star of thousands of long spikes has (those tests take
+    about 2 s at the limit). Counting them can be stopped."""
+    n = sum(len(r) for r in rings)
+    if n * (n - 1) // 2 <= MAX_NEAR_PAIRS:  # too few pieces to lie that thick
+        return
+    ends = [np.array([*r, r[0]], dtype=float) for r in rings if len(r) > 1]
+    pieces = shapely.linestrings(np.concatenate([np.stack([e[:-1], e[1:]], axis=1) for e in ends]))
+    if box_pairs(pieces, MAX_NEAR_PAIRS, check) > MAX_NEAR_PAIRS:
+        raise ArtError(CROWDED)
+
+
 def check_tangle(lines: Sequence[tuple[Sequence[Point], bool]], check: Callable[[], None] | None = None) -> None:
     """Refuse (points, closed) lines that cross or touch one another or themselves more than
     MAX_CROSSINGS times: pairs of their straight pieces that meet, neighbors along a line aside."""
@@ -411,7 +425,14 @@ def fill_regions(rings: Sequence[list[Point]], rule: str = "nonzero", check: Cal
     lines = [LinearRing(r) for r in rings]
     if len(lines) * (len(lines) - 1) // 2 > MAX_BOX_PAIRS and box_pairs(lines, MAX_BOX_PAIRS, check) > MAX_BOX_PAIRS:
         raise ArtError(CROWDED)
-    simple = all(line.is_simple for line in lines)
+    check_crowded(rings, check)  # before the single-call tests below
+    simple = True
+    for line in lines:
+        if check:
+            check()
+        if not line.is_simple:
+            simple = False
+            break
     if check:
         check()
     if simple and not _any_touch(lines):

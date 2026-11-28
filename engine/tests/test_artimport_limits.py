@@ -447,6 +447,36 @@ def test_closed_dxf_outlines_with_too_much_to_trace_are_refused_before_they_are_
     assert TOO_DETAILED in message and "Fill closed shapes" in message
 
 
+def _burst(spikes: int, outer: float, turn: float = 0.0, cx: float = 50.0, cy: float = 50.0):
+    """A star that doesn't cross itself: points turn about the middle, out and in by turns, so
+    nearly every long edge's box overlaps nearly every other's."""
+    radius = lambda i: outer if i % 2 == 0 else outer / 10  # noqa: E731
+    return [(cx + radius(i) * math.cos(math.pi * i / spikes + turn), cy + radius(i) * math.sin(math.pi * i / spikes + turn))
+            for i in range(2 * spikes)]
+
+
+def test_a_star_of_thousands_of_spikes_is_refused_before_geos_tests_it(tmp_path):
+    """Found timing every step: a 20,000-spike star, within every limit, held the engine 17 s in
+    GEOS's one "is it simple?" call. Past MAX_NEAR_PAIRS overlapping pieces (here 24 million) it
+    is refused by a count that can be stopped."""
+    star = f'<polygon points="{_points(_burst(7_000, 28.0))}"/>'
+    _refused(tmp_path, svg(star), "burst.svg", CROWDED)
+    spiky = f'<polygon points="{_points(_burst(2_000, 28.0))}"/>'  # an ordinary spiky shape (2 million pairs)
+    assert kinds(preview(write(tmp_path, svg(spiky), "spiky.svg"))) == ["fill"]
+
+
+def test_two_spiky_dxf_outlines_across_each_other_are_refused_before_they_are_compared_and_nested(tmp_path):
+    """A DXF's closed outlines of a color are counted together before they are compared and nested
+    (calls that can't be stopped): each of these is within the crossing check's count on its own."""
+
+    def build(doc, msp):
+        msp.add_lwpolyline(_burst(4_000, 38.0), close=True)
+        msp.add_lwpolyline(_burst(4_000, 38.0, turn=math.pi / 8_000, cx=50.3), close=True)
+
+    path = make(tmp_path, build, name="bursts.dxf")
+    assert CROWDED in _quickly(GUARD_S, lambda: refusal(path, closed_as_fills=True))
+
+
 def test_ordinary_curved_drawings_are_traced_as_before(tmp_path):
     """100 circles (about 28,000 points once traced) are well within the count."""
     circles = "".join(f'<circle cx="{25 * (i % 10) + 12}" cy="{25 * (i // 10) + 12}" r="10"/>' for i in range(100))

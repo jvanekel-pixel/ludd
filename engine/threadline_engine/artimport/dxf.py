@@ -21,8 +21,8 @@ import threading
 from dataclasses import dataclass
 
 from . import MAX_COORDINATE, ArtError, Deadline, Options
-from .geometry import (CROWDED, MAX_BOX_PAIRS, MAX_TRACED_POINTS, box_pairs, check_tangle, flatten, ring_of,
-                       traced_points)
+from .geometry import (CROWDED, MAX_BOX_PAIRS, MAX_TRACED_POINTS, box_pairs, check_crowded, check_tangle, flatten,
+                       ring_of, traced_points)
 from .model import Drawing, Item, Point, Subpath, rgb_hex
 
 # The whole file, counted before ezdxf reads it: one call that can't be stopped, whose cost goes by
@@ -541,10 +541,14 @@ class _Reader:
         pairs = 0  # of outlines with overlapping boxes, in all: each pair is compared below
         for members in groups.values():
             self.deadline.check()
-            shapes = []
+            rings = []
             for i in members:
                 self.deadline.check()
-                ring = ring_of(flatten(self.found[i].item.subpaths[0], close=True)[0])
+                rings.append(ring_of(flatten(self.found[i].item.subpaths[0], close=True)[0]))
+            check_crowded(rings, self.deadline.check)  # before the single-call tests of these outlines below
+            shapes = []
+            for ring in rings:
+                self.deadline.check()
                 check_tangle([(ring, True)], self.deadline.check)
                 shapes.append(Polygon(ring) if len(ring) >= 3 else Polygon())
             pairs += box_pairs(shapes, MAX_BOX_PAIRS - pairs, self.deadline.check)
