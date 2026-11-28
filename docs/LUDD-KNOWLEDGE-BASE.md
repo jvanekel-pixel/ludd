@@ -326,14 +326,16 @@ design open, LUDD makes an empty one for the preview and takes it away if you ca
 - Also refused, so that a small file can't take minutes or gigabytes: SVG paths closed over and over,
   far beyond any drawing (over 2,000,000 steps to work the "z"s out, all copies counted); a shape whose
   outline crosses or touches itself more than 20,000 times; thousands of outlines inside or on top of
-  one another (2,000 nested squares still read, in 10 to 20 seconds); a DXF with more than 100,000
-  objects (old-style polyline points are counted apart, up to 300,000), or with more than 1,000,000
-  pairs of lines in all (about 2 million lines of text); a PDF that says it has more than 2,000 pages; a PDF, or a very wide line, that takes more than
-  2 GB of memory.
-- Two made-to-break cases aren't caught yet and can keep LUDD busy for minutes or use up the
-  computer's memory: very long curves in a drawing's first shape or in a DXF's closed outlines, and two
-  nearly identical closed DXF outlines of tens of thousands of points each. Ordinary drawings don't
-  come close.
+  one another (2,000 nested squares still read, in 10 to 20 seconds), or filled shapes whose edges
+  lie that thick, such as a star of several thousand long, thin spikes; curves that come to more than
+  750,000 points once traced, at the size the drawing comes in (about 190 m of curved line; set a
+  smaller Width or simplify it; for a DXF's closed outlines filled, at their own size, or untick Fill
+  closed shapes); two closed DXF outlines of about 10,000 points or more drawn almost, but not
+  exactly, on top of one another (exact copies are fine); a DXF with more than 20,000 objects
+  (shapes, blocks, layers and other settings; old-style polyline points are counted apart, up to
+  100,000), or with more than 450,000 pairs of lines in all (about 900,000 lines of text; about 19,000
+  lines as CAD programs write them still fit); a PDF that says it has more than 2,000 pages; a PDF, or
+  a very wide line, that takes more than 2 GB of memory.
 - PDFs, and very wide lines with many points, are worked out by a short-lived helper copy of LUDD's
   engine, stopped at the time limit, or as soon as it is seen using over 2 GB, so a bad file can't
   stall or crash LUDD (these previews take a second or two longer). A new preview (a changed setting or another file) stops the
@@ -1277,7 +1279,11 @@ their order).
   first"). The branch's thread is the one most of its shapes sew in (a tie: the shape listed first): a
   shape you recolor is sewn on its own and LUDD names it. So is one separated from the others in the
   sewing order. When a recolored (or blended) shape between them splits the branch, the note names it
-  and what to do: give it the branch's thread, or move it before or after the branch in Order & colors. Optimize jumps leaves branches alone.
+  and what to do: give it the branch's thread, or move it before or after the branch in Order & colors.
+  When something else is in between, the note names that shape (or says how many there are): move it
+  before or after the branch, or add it to the branch (when its thread differs, give it the branch's
+  thread first; an imported file, lettering, an applique, a blend or another branch's shape can only be
+  moved). Optimize jumps leaves branches alone.
 - **A branch of one is no branch**: deleting, cutting, merging or taking out all shapes but one ends
   the branch (the saved file doesn't count it, so an older LUDD can still open it).
 - **Branches stay whole**: the knife and a cut-out keep every piece in the branch, in the shape's
@@ -1288,8 +1294,9 @@ their order).
   sewn after the first one's branch); lettering broken into shapes keeps its branch; a shape made
   an applique, which a branch can't hold, leaves it in the same undo step; and an accepted AI sewing
   order keeps its shapes together. Putting the text on a line uses the line up, so it leaves the
-  branch. Moving a shape yourself (Order & colors, Sew earlier or later) puts it where you put it,
-  even inside a branch.
+  branch. A move by hand can split one: moving a shape yourself (Order & colors, Sew earlier or later)
+  puts it where you put it, even between a branch's shapes. The branch then sews as two paths, a note
+  names the shape in between, and **Undo** brings the branch back as it was.
 - **Copies** (Duplicate, Paste, Repeat): one copied shape of a branch joins it, sewn right after its
   last shape (Repeat: all its copies do). Two or more copied shapes of one branch make a new branch of
   their own, without dots you set by hand. A single shape pasted into a design without that branch is an
@@ -1553,7 +1560,7 @@ Use this to answer "did that change?" or "why is it different?". Full detail: `d
 
 | Date | Change |
 | --- | --- |
-| 2026-11-27 | **Lines, sequencing and drawing tools** (nothing already in your designs sews differently): craft line styles, Which side and **Blackwork** (F-1317); **lock-stitch shapes** (F-1320); **buttonholes and eyelets** (F-1318, `Alt+B`, `Alt+E`); **branching** (F-1808, `Alt+Shift+B`); **freehand** (F-504, `Y`; lifts L-011) and adding at a line's start (F-505); **Repeat** Mirror, Wreath and Kaleidoscope (F-1109); **stitch presets** (F-1319, `Alt+P`); **artwork import** SVG, DXF, PDF (F-209, `Ctrl+Alt+I`). Optimize jumps moves appliques and first letters (L-017 partial). FIXED: turning a line round no longer bends mixed lines (F-1805). Before release, after the phase audit: lines that would sew differently turned keep their direction (F-701, F-1317); branches say what joins without a cut (L-049), keep the majority thread, stay whole through copies, cuts, merges, borders, outlines and Sew in the shortest order, and list their sewing order (F-1808); turned candlewick, knot and hand-sewn lines say how far their stitches move (F-1805); Blackwork joins run along the edge (F-1317); triangle locks stay by fills (F-1320); buttonholes sew the same wherever moved. |
+| 2026-11-27 | **Lines, sequencing and drawing tools** (nothing already in your designs sews differently): craft line styles, Which side and **Blackwork** (F-1317); **lock-stitch shapes** (F-1320); **buttonholes and eyelets** (F-1318, `Alt+B`, `Alt+E`); **branching** (F-1808, `Alt+Shift+B`); **freehand** (F-504, `Y`; lifts L-011) and adding at a line's start (F-505); **Repeat** Mirror, Wreath and Kaleidoscope (F-1109); **stitch presets** (F-1319, `Alt+P`); **artwork import** SVG, DXF, PDF (F-209, `Ctrl+Alt+I`). Optimize jumps moves appliques and first letters (L-017 partial). FIXED: turning a line round no longer bends mixed lines (F-1805). Before release, after the phase audit: lines that would sew differently turned keep their direction (F-701, F-1317); branches say what joins without a cut (L-049), keep the majority thread, stay whole through copies, cuts, merges, borders, outlines and Sew in the shortest order, list their sewing order, and a note names what splits one (F-1808); turned candlewick, knot and hand-sewn lines say how far their stitches move (F-1805); Blackwork joins run along the edge (F-1317); triangle locks stay by fills (F-1320); buttonholes sew the same wherever moved. |
 | 2026-11-26 | **Fills and stitch quality** (nothing already in your designs sews differently): **Blend** fill, up to three colors (F-1310); **Motif** fill and **My motifs** (F-1311, `Alt+Shift+M`); **Maze, Ripple, Mesh** fills (F-1312); **Weave** (F-1303); **carved lines** (F-1313, `Shift+C`); **Hand-sewn look** (F-1314); **turning fills** (F-1315, `Shift+I`); **feathered edges** (F-1316). Lifts L-001. Push compensation is not built (L-044). |
 | 2026-11-25 | **Lettering and personalization**: several lines with alignment (F-1410), slant (F-1411), envelopes and stacked letters (F-1412), single letters (F-1413, `Alt+Shift+A`), True satin (F-1414), stitch fonts from letter files (F-1415, `Ctrl+Alt+F`), name lists and templates (F-1416, `Ctrl+Alt+P`), monogram styles and frames (F-1417), shadow and outline (F-1418), placement guides (F-1419, `Alt+Shift+G`). Installed-font letters that sew under 6 mm tall (resizing counts) now sew without underlay (F-1420). The lettering panel's Advanced fold is now **More options**. Lifts L-003 and L-005; L-014 is now PARTIAL. |
 | 2026-11-25 | **Repair bought designs** (a stitch file with no repair sews as before): **Repair this design** (F-1902, `Ctrl+Alt+D`, with before and after numbers and Show on the design); **Remove tiny stitches** and **Thin out dense spots** (F-1903); **Limit density for this fabric** (F-1904); **Rebuild stitches at this size** (F-1905); **Fix it** on three checks; insert stitches and jumps and lock a jump (F-1906); needle path view (F-407); **Don't sew what's hidden under shapes on top** for drawn shapes (F-1207). Removing hidden stitches under another stitch file is not built (L-030). |

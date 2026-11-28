@@ -127,8 +127,9 @@ The shapes arrive in the file's order, grouped and selected, with your usual set
 Ctrl+Z takes them all out. A file with no real size is read at 96 pixels per inch (SVG) or in
 millimeters (DXF), and LUDD says so. Very large, tangled or damaged files, password-protected PDFs and
 `.svgz` files are refused with a message that says what to do. That covers files that would take minutes
-or fill the computer's memory, such as a shape crossing itself thousands of times or a PDF that claims
-more than 2,000 pages. PDFs are read by a short-lived helper copy of LUDD's engine, so a bad one can't
+or fill the computer's memory, such as a shape crossing itself thousands of times, far more curve detail
+than a hoop could show, a DXF with more than 20,000 objects, or a PDF that claims more than 2,000
+pages. PDFs are read by a short-lived helper copy of LUDD's engine, so a bad one can't
 stall LUDD; changing a setting stops the preview before and starts a new one. LUDD never fetches or
 opens anything a drawing links to.
 
@@ -904,8 +905,10 @@ it starts and ends. **Alt+Shift+U** takes shapes out of the branch, and a branch
   its dots; **Sew in the shortest order** moves it as one piece, and Sort and Combine colors sew it as
   one block; a satin border or outline round one of its shapes is sewn after it; shapes merged from
   one branch stay in it (merged with anything else, the result is an ordinary shape, sewn after it);
-  lettering broken into shapes keeps its branch; a shape made an applique leaves it. Moving a shape
-  yourself (Order & colors, Sew earlier or later) puts it where you put it, even inside a branch.
+  lettering broken into shapes keeps its branch; a shape made an applique leaves it. A move by hand
+  can split one: moving a shape yourself (Order & colors, Sew earlier or later) puts it where you put
+  it, even between a branch's shapes. LUDD then names the shape in between and says what to do: move it
+  before or after the branch, or add it to the branch. **Undo** brings the branch back as it was.
 - **Order & colors** lists a branch's shapes in the order they sew. The branch chooses that order, so a
   row you move inside it may go back; take the shape out to place it yourself.
 - Copying shapes of a branch: see **Copying and repeating**.
