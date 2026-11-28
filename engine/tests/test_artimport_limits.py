@@ -11,7 +11,7 @@ import pytest
 from artimport_util import kinds, preview, refusal, svg, write
 from test_artimport_dxf import make, minimal
 from test_artimport_pdf import PROOF, build_pdf, document, stream
-from threadline_engine.artimport import Deadline, child, dxf, pdf, svg as art_svg, svgclean
+from threadline_engine.artimport import Deadline, Options, child, dxf, pdf, svg as art_svg, svgclean
 
 SQUARE = '<rect x="10" y="10" width="20" height="20" fill="#ff0000"/>'
 
@@ -339,28 +339,27 @@ def test_a_dxf_with_too_many_objects_is_refused_before_ezdxf_reads_it(tmp_path, 
     """49 MB of lines took ezdxf 70 s. The records are counted as ezdxf reads them, however their
     codes are written."""
     one = f"{code}{newline}LINE{newline}8{newline}0{newline}10{newline}1{newline}20{newline}2{newline}"
-    text = f"0{newline}SECTION{newline}2{newline}ENTITIES{newline}" + one * 100_001 + \
+    text = f"0{newline}SECTION{newline}2{newline}ENTITIES{newline}" + one * 20_001 + \
            f"0{newline}ENDSEC{newline}0{newline}EOF{newline}"
     _never_read(monkeypatch)
-    _refused(tmp_path, text.encode(), "many.dxf", "more than 100,000 objects")
+    _refused(tmp_path, text.encode(), "many.dxf", "more than 20,000 objects")
 
 
 def test_objects_in_unused_blocks_count_too(tmp_path, monkeypatch):
     _never_read(monkeypatch)
-    unused = _block("UNUSED", "0\nPOINT\n8\n0\n10\n1\n20\n1\n" * 100_001)
+    unused = _block("UNUSED", "0\nPOINT\n8\n0\n10\n1\n20\n1\n" * 20_001)
     _refused(tmp_path, _gen_dxf(_line(), unused), "blocks.dxf", "purge unused blocks")
 
 
 def test_a_binary_dxf_with_too_many_objects_is_refused_too(tmp_path, monkeypatch):
-    # An R12 line is a short record (9 pairs, with 1-byte codes), so 100,001 of them stay under the
-    # limit on pairs and reach the one on objects.
-    path = make(tmp_path, lambda doc, msp: msp.add_line((0, 0), (1, 1)), binary=True, name="bin.dxf", version="R12")
+    path = make(tmp_path, lambda doc, msp: msp.add_line((0, 0), (1, 1)), binary=True, name="bin.dxf")
     data = path.read_bytes()
-    start = data.index(b"\x00LINE\x00", data.index(b"ENTITIES"))
-    end = data.index(b"\x00ENDSEC\x00", start)
-    path.write_bytes(data[:start] + data[start:end] * 100_001 + data[end:])
+    start = data.index(b"\x00\x00LINE\x00")
+    end = data.index(b"\x00\x00ENDSEC\x00", start)
+    path.write_bytes(data[:start] + data[start:end] * 20_001 + data[end:])
     _never_read(monkeypatch)
-    assert "more than 100,000 objects" in _quickly(GUARD_S, lambda: refusal(path))
+    message = _quickly(GUARD_S, lambda: refusal(path))
+    assert "more than 20,000 objects" in message and "save it as an SVG" in message
 
 
 def test_a_dxf_with_far_too_much_in_it_is_refused_by_its_length(tmp_path, monkeypatch):
@@ -379,15 +378,31 @@ def _one_line_with_extra_data(pieces: int) -> bytes:
 
 def test_one_object_carrying_too_much_is_refused_by_the_count_before_the_read(tmp_path, monkeypatch):
     """The second Phase 7 audit: one LINE with 2.95 million pieces of extended data was let through,
-    and ezdxf's one read of it took over half a minute, which nothing can stop. Over a million pairs
-    of lines is refused by the count."""
+    and ezdxf's one read of it took over half a minute, which nothing can stop. Over 450,000 pairs
+    of lines is refused by the count (the counts of records and old-style points limit the rest)."""
     _never_read(monkeypatch)
-    path = write(tmp_path, _one_line_with_extra_data(1_000_000), "extra.dxf")
-    assert "far more in it than LUDD imports" in refusal(path)
-    # Just under a million is counted through and read (the count alone is checked here: the read
+    path = write(tmp_path, _one_line_with_extra_data(450_000), "extra.dxf")
+    message = refusal(path)
+    assert "far more in it than LUDD imports" in message
+    assert "fewer objects" in message and "save it as an SVG" in message
+    # Just under 450,000 is counted through and read (the count alone is checked here: the read
     # itself takes seconds).
     dxf.load_ezdxf()
-    assert dxf._check_size(_one_line_with_extra_data(999_000), Deadline()) is None
+    assert dxf._check_size(_one_line_with_extra_data(449_900), Deadline()) is None
+
+
+def test_an_ordinary_large_drawing_still_reads(tmp_path):
+    """5,000 lines as ezdxf (like CAD programs) writes them are within every count, so they are all
+    read; only LUDD's own limit on shapes then asks for less."""
+
+    def build(doc, msp):
+        for i in range(5_000):
+            x, y = 2 * (i % 100), 2 * (i // 100)
+            msp.add_line((x, y), (x + 1.5, y + 1))
+
+    path = make(tmp_path, build, name="large.dxf")
+    assert len(dxf.read(path.read_bytes(), Options(), Deadline()).items) == 5_000
+    assert "more than 2,000 shapes" in refusal(path)
 
 
 def _old_polyline(vertices: int, layer: str = "8\n0\n") -> str:
@@ -398,14 +413,13 @@ def _old_polyline(vertices: int, layer: str = "8\n0\n") -> str:
 
 def test_old_style_polylines_are_counted_by_their_points(tmp_path, monkeypatch):
     """Each vertex of an old-style (R12) polyline is a record of its own, so they are counted apart:
-    a drawing with more than 100,000 of them (within LUDD's 300,000 points) gets past the count
-    (reading it all takes a while), and one with more than 300,000 is refused before ezdxf. (Only
-    records of three pairs reach that many within the limit on pairs.)"""
+    a drawing with up to 100,000 of them gets past the count (reading it all takes a while), and
+    one with more is refused before ezdxf."""
     assert kinds(preview(write(tmp_path, _old_polyline(50), "old.dxf"))) == ["run"]
     dxf.load_ezdxf()
-    dxf._check_size(_old_polyline(100_500).encode(), Deadline())
+    dxf._check_size(_old_polyline(99_500).encode(), Deadline())
     _never_read(monkeypatch)
-    _refused(tmp_path, _old_polyline(300_001, layer=""), "older.dxf", "more points than LUDD imports")
+    _refused(tmp_path, _old_polyline(100_001, layer=""), "older.dxf", "more points than LUDD imports")
 
 
 def test_a_dxf_closed_outline_that_crosses_itself_thousands_of_times_is_refused(tmp_path):
@@ -514,8 +528,8 @@ REFUSALS = {
     "tangled": ("star.svg", lambda: svg(f'<polygon points="{_points(_star(221))}"/>'), TANGLED),
     "crowded": ("nest.svg", lambda: svg(f'<path d="{_squares_path(2_100)}"/>'), CROWDED),
     "too many dxf objects": (
-        "many.dxf", lambda: "0\nSECTION\n2\nENTITIES\n" + "0\nPOINT\n8\n0\n" * 100_001 + "0\nENDSEC\n0\nEOF\n",
-        "more than 100,000 objects"),
+        "many.dxf", lambda: "0\nSECTION\n2\nENTITIES\n" + "0\nPOINT\n8\n0\n" * 20_001 + "0\nENDSEC\n0\nEOF\n",
+        "more than 20,000 objects"),
     "too many pages": ("pages.pdf", _lying_page_tree, "more than 2,000 pages"),
     "too much memory": ("memory.pdf", lambda: _flate_page(20), "takes more memory"),
     "damaged": ("broken.pdf", lambda: b"%PDF-1.7\n" + b"\x00" * 100 + b"\n%%EOF\n", "damaged"),

@@ -24,10 +24,14 @@ from . import MAX_COORDINATE, ArtError, Deadline, Options
 from .geometry import CROWDED, MAX_BOX_PAIRS, box_pairs, check_tangle, flatten, ring_of
 from .model import Drawing, Item, Point, Subpath, rgb_hex
 
-# The whole file, counted before ezdxf reads it (one call that can't be stopped).
-MAX_OBJECTS = 100_000  # records: shapes, blocks, layers and other settings (old-style vertices apart)
-MAX_VERTICES = 300_000  # old-style polyline vertex records (more points than MAX_POINTS anyway)
-MAX_TAGS = 1_000_000  # pairs of lines (a code and its value): a full one takes ezdxf about 12 s here
+# The whole file, counted before ezdxf reads it: one call that can't be stopped, whose cost goes by
+# records and pairs of lines together, so the three counts are set as a set. The slowest mixes of them
+# take ezdxf about 12 s here (blocks, lines that share a handle or references to missing blocks, then
+# old-style vertices, then extra data); the time limit is 60 s. A drawing of about 19,000 lines as CAD
+# programs write them still fits. (BACKLOG: read DXFs in the helper, which can be stopped.)
+MAX_OBJECTS = 20_000  # records: shapes, blocks, layers and other settings (old-style vertices apart)
+MAX_VERTICES = 100_000  # old-style polyline vertex records
+MAX_TAGS = 450_000  # pairs of lines (a code and its value)
 MAX_ENTITIES = 50_000  # in the drawing, once every block is expanded
 MAX_BLOCK_DEPTH = 16  # blocks inside blocks
 MAX_POINTS = 300_000  # vertices and control points, once every block is expanded
@@ -93,9 +97,9 @@ def _check_size(data: bytes, deadline: Deadline) -> None:
     partway and takes minutes and gigabytes for a big enough file. The records are counted by
     ezdxf's own tag readers, so they're counted as ezdxf will read them."""
     too_many = ArtError(f"This DXF has more than {MAX_OBJECTS:,} objects, too many to import. Simplify the drawing in "
-                        "your CAD program (purge unused blocks too) and save it again.")
-    too_big = ArtError("This DXF has far more in it than LUDD imports. Simplify the drawing in your CAD program (purge "
-                       "unused blocks too) and save it again.")
+                        "your CAD program (purge unused blocks too) or save it as an SVG, and import that.")
+    too_big = ArtError("This DXF has far more in it than LUDD imports. Simplify the drawing in your CAD program (fewer "
+                       "objects; purge unused blocks too) or save it as an SVG, and import that.")
     if data.startswith(_BINARY):
         from ezdxf.lldxf.tagger import binary_tags_loader as tags_of
 

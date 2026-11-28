@@ -450,8 +450,17 @@ def long_polyline(n: int) -> str:
 
 
 def test_too_many_points_are_refused(tmp_path):
-    # About 9 s here: a guard with ten times the room for slower computers (the words name the rule).
-    assert "more points than LUDD imports" in _quickly(write(tmp_path, long_polyline(300_001), "long.dxf"), 120)
+    # One polyline that long is over the cap on pairs of lines before it is read...
+    assert "far more in it" in _quickly(write(tmp_path, long_polyline(300_001), "long.dxf"))
+
+    # ...so the cap on points is reached by copies: a block of 10,000 points, placed 31 times.
+    def build(doc, msp):
+        doc.blocks.new("MANY").add_lwpolyline([(i % 100 * 0.2, i // 100 * 0.2) for i in range(10_000)])
+        for k in range(31):
+            msp.add_blockref("MANY", (30 * k, 0))
+
+    # A guard with room for slower computers (the words name the rule).
+    assert "more points than LUDD imports" in _quickly(make(tmp_path, build, name="copies.dxf"), 120)
     assert kinds(preview(write(tmp_path, long_polyline(3_000), "short.dxf"))) == ["run"]
 
 
