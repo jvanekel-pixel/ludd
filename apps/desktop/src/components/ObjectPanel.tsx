@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { command, convertObject, hasOwnDefaults, resetDefaults, saveAppliqueSvg, setObjectParams, setObjectThread, setSatinWidth } from "../actions";
 import { FILL_PATTERN_DEFS, fillPatternDef, type Field } from "../design/fillPatterns";
-import { LINE_STYLE_DEFS, MOTIF_FIELDS } from "../design/lineStyles";
+import { LINE_STYLE_DEFS, lineStyleDef } from "../design/lineStyles";
 import { angleLines, followedText } from "../feat/angleLines";
 import { isRibbon, type LayoutItemInfo, type ObjectItem, type Thread } from "../design/types";
 import { useStore } from "../store";
@@ -63,11 +63,88 @@ function PatternRows({ item, p, set }: { item: ObjectItem; p: Record<string, unk
       </Row>
       {pattern === "motif" && <MotifSelect item={item} />}
       {!!def.threads && <BlendThreads item={item} />}
+      {def.choices?.map((c) => (
+        <Row key={c.key} label={c.label} hint={c.title}>
+          <select value={(p[c.key] as string | undefined) ?? c.def} onChange={(e) => set({ [c.key]: e.target.value })} aria-label={c.label}>
+            {c.options.map((o) => (
+              <option key={o.id} value={o.id} title={o.title}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </Row>
+      ))}
       <FieldSteppers fields={def.fields} p={p} set={set} />
       {def.hint && <p className="hint">{def.hint}</p>}
     </>
   );
 }
+
+const MOTIF_SIDES = [
+  { id: "center", label: "Centered", title: "The motif sits on the line, as drawn" },
+  { id: "left", label: "Left", title: "All to the left of the line, walking it the way you drew it (above, for a line drawn left to right)" },
+  { id: "right", label: "Right", title: "All to the right of the line, walking it the way you drew it (below, for a line drawn left to right)" },
+];
+
+/** A line's style (the everyday four as buttons, the rest under More styles) and the settings the
+ *  chosen one has. */
+function LineStyleRows({ item, p, set }: { item: ObjectItem; p: Record<string, unknown>; set: (patch: Record<string, unknown>) => void }) {
+  const style = (p.style as string | undefined) ?? "single";
+  const def = lineStyleDef(style);
+  const side = (p.motif_side as string | undefined) ?? "center";
+  return (
+    <>
+      <Row label="Style">
+        <div className="seg" role="group" aria-label="Line style">
+          {LINE_STYLE_DEFS.filter((st) => !st.more).map((st) => (
+            <button key={st.id} aria-pressed={style === st.id} onClick={() => set({ style: st.id })} title={st.title}>
+              {st.label}
+            </button>
+          ))}
+        </div>
+        <select
+          value={def.more ? def.id : ""}
+          onChange={(e) => e.target.value && set({ style: e.target.value })}
+          aria-label="More styles"
+          title={def.more ? def.title : "Backstitch, stem stitch and other hand embroidery looks"}
+        >
+          <option value="" disabled>
+            More styles…
+          </option>
+          {LINE_STYLE_DEFS.filter((st) => st.more).map((st) => (
+            <option key={st.id} value={st.id} title={st.title}>
+              {st.label}
+            </option>
+          ))}
+        </select>
+      </Row>
+      {style === "motif" && <MotifSelect item={item} />}
+      <FieldSteppers fields={def.fields} p={p} set={set} />
+      {def.hint && <p className="hint">{def.hint}</p>}
+      {style === "motif" && (
+        <Row label="Which side" hint="Which side of the line the motif sits on. For blanket stitch round an applique, pick the side that points its teeth onto the applique.">
+          <div className="seg" role="group" aria-label="Which side">
+            {MOTIF_SIDES.map((m) => (
+              <button key={m.id} aria-pressed={side === m.id} onClick={() => set({ motif_side: m.id === "center" ? undefined : m.id })} title={m.title}>
+                {m.label}
+              </button>
+            ))}
+          </div>
+        </Row>
+      )}
+    </>
+  );
+}
+
+/** The shapes of lock stitches (the engine's digitize/ties.py). */
+const TIE_STYLES = [
+  { id: "standard", label: "Standard", title: "A short stitch back and forth" },
+  { id: "triangle", label: "Triangle", title: "A tiny triangle: holds better on knits and slippery thread" },
+  { id: "backtack", label: "Back-tack", title: "Back and forth twice: the strongest" },
+];
+
+/** The line styles the hand-sewn look moves; the others sew as they are. */
+const HAND_LINE_STYLES = ["single", "triple", "bean"];
 
 const WEAVES = [
   { id: "standard", label: "Standard", title: "Each row a third of a stitch along: the usual fill" },
@@ -124,7 +201,7 @@ function HandSlider({ value, set }: { value: number; set: (patch: Record<string,
 function RowLook({ item, p, set }: { item: ObjectItem; p: Record<string, unknown>; set: (patch: Record<string, unknown>) => void }) {
   const fillDef = item.kind === "fill" ? fillPatternDef(p.pattern as string | undefined) : undefined;
   const rowsFill = item.kind === "fill" && !fillDef!.open;
-  const hand = item.kind === "satin" || rowsFill || (item.kind === "run" && p.style !== "motif");
+  const hand = item.kind === "satin" || rowsFill || (item.kind === "run" && HAND_LINE_STYLES.includes((p.style as string | undefined) ?? "single"));
   const feather = (p.feather as string | undefined) ?? "none";
   return (
     <>
@@ -201,7 +278,10 @@ export function objectSummary(item: ObjectItem): string {
   const p = item.params as Record<string, unknown>;
   const spacing = (p.spacing_mm as number | undefined) ?? 0.4;
   const dens = DENSITY.reduce((b, d) => (Math.abs(d.fill - spacing) < Math.abs(b.fill - spacing) ? d : b)).label;
-  if (item.kind === "run") return `${((p.style as string) ?? "single").replace(/^./, (c) => c.toUpperCase())} · ${(p.stitch_mm as number | undefined) ?? 2.5} mm`;
+  if (item.kind === "run") {
+    const style = lineStyleDef(p.style as string | undefined);
+    return style.noLength ? style.label : `${style.label} · ${(p.stitch_mm as number | undefined) ?? 2.5} mm`;
+  }
   if (item.kind === "fill") {
     const { summary, label } = fillPatternDef(p.pattern as string | undefined);
     if (summary) return summary === "label+density" ? `${label} · ${dens}` : label;
@@ -262,6 +342,11 @@ export function ObjectSections({ item, info, sel }: { item: ObjectItem; info: La
             </div>
           </Row>
         )}
+        {item.branch && (
+          <Row label="In a branch" hint="Sewn with the other shapes of its branch as one path">
+            <Cmd id="layout.unbranch" label="Take it out (Alt+Shift+U)" />
+          </Row>
+        )}
         {(item.kind === "fill" || item.kind === "applique") && (
           <div className="btn-row">
             <Cmd id="object.hole" label="✂ Cut a hole (O)" />
@@ -272,23 +357,7 @@ export function ObjectSections({ item, info, sel }: { item: ObjectItem; info: La
             <Cmd id="satin.otherWay" label="↻ Turn the stitches another way (Shift+W)" />
           </div>
         )}
-        {item.kind === "run" && (
-          <Row label="Style">
-            <div className="seg" role="group" aria-label="Line style">
-              {LINE_STYLE_DEFS.map((st) => (
-                <button key={st.id} aria-pressed={(p.style ?? "single") === st.id} onClick={() => set({ style: st.id })} title={st.title}>
-                  {st.label}
-                </button>
-              ))}
-            </div>
-          </Row>
-        )}
-        {item.kind === "run" && p.style === "motif" && (
-          <>
-            <MotifSelect item={item} />
-            <FieldSteppers fields={MOTIF_FIELDS} p={p} set={set} />
-          </>
-        )}
+        {item.kind === "run" && <LineStyleRows item={item} p={p} set={set} />}
         {isRibbon(item) && (
           <Stepper
             label="Width"
@@ -364,7 +433,7 @@ export function ObjectSections({ item, info, sel }: { item: ObjectItem; info: La
           {item.kind === "applique" && (
             <Stepper label="Spacing" value={spacing} step={0.05} min={0.2} max={1.5} suffix="mm" onCommit={(v) => set({ spacing_mm: v })} title="Distance between the border's stitches: smaller is denser" />
           )}
-          {(item.kind === "run" || (item.kind === "fill" && !fillDef?.noLength)) && (
+          {((item.kind === "run" && !lineStyleDef(p.style as string | undefined).noLength) || (item.kind === "fill" && !fillDef?.noLength)) && (
             <Stepper
               label="Length"
               value={(p.stitch_mm as number | undefined) ?? (item.kind === "fill" ? 3.5 : 2.5)}
@@ -413,8 +482,22 @@ export function ObjectSections({ item, info, sel }: { item: ObjectItem; info: La
             <>
               <Check label="Lock stitches at the start" checked={(p.tie_in as boolean | undefined) ?? true} onChange={(v) => set({ tie_in: v })} />
               <Check label="Lock stitches at the end" checked={(p.tie_off as boolean | undefined) ?? true} onChange={(v) => set({ tie_off: v })} />
+              {(((p.tie_in as boolean | undefined) ?? true) || ((p.tie_off as boolean | undefined) ?? true)) && (
+                <Row label="Lock stitches" hint="The shape of the tiny stitches that keep the thread from unraveling">
+                  <select value={(p.tie_style as string | undefined) ?? "standard"} onChange={(e) => set({ tie_style: e.target.value === "standard" ? undefined : e.target.value })} aria-label="Lock stitches">
+                    {TIE_STYLES.map((t) => (
+                      <option key={t.id} value={t.id} title={t.title}>
+                        {t.label}
+                      </option>
+                    ))}
+                  </select>
+                </Row>
+              )}
             </>
           )}
+          <div className="btn-row">
+            <Cmd id="presets.open" label="Presets… (Alt+P)" />
+          </div>
           <AdvisorButton />
           <RememberedNote kind={item.kind} />
         </Sub>
@@ -426,6 +509,10 @@ export function ObjectSections({ item, info, sel }: { item: ObjectItem; info: La
           <Cmd id="draw.continue" label="Add points (K)" />
           {(item.kind === "fill" || item.kind === "applique") && <Cmd id="object.hole" label="Add a hole (O)" />}
         </div>
+        {/* K can start at either end only of an open line or ribbon. */}
+        {(item.kind === "run" || isRibbon(item)) && !(item.geometry as { closed?: boolean }).closed && (
+          <p className="hint">Select the first point to add at the start.</p>
+        )}
         <p className="hint">Drag a point to reshape; right-click a point to switch it between curve, straight and sharp corner; double-click the outline to add a point.</p>
       </Section>
       <ThreadPickerFor open={picking} current={sewn} onPick={(t) => setObjectThread(item.id, t)} onClose={() => setPicking(false)} />

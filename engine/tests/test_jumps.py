@@ -5,6 +5,8 @@ import math
 from threadline_engine import layout as L
 from threadline_engine.jumps import optimize_jumps
 
+from test_lettering import font_path  # noqa: F401  (a tiny font built in the test)
+
 I = {"x": 0, "y": 0, "rotate": 0, "scale_x": 1, "scale_y": 1, "flip_x": False, "flip_y": False}
 RED = {"color": "#cc2222", "name": "Red", "catalog": "", "brand": ""}
 BLUE = {"color": "#2222cc", "name": "Blue", "catalog": "", "brand": ""}
@@ -78,3 +80,25 @@ def test_a_fill_starts_at_the_edge_nearest_the_piece_before():
     r = optimize_jumps(lay)
     assert r["changes"]["b"]["params"]["start_mm"] is not None
     assert r["after_mm"] < r["before_mm"]
+
+
+def test_optimize_jumps_sets_the_first_letters_start(font_path):  # noqa: F811
+    text = {"id": "t", "kind": "text", "text": "IO", "font": {"path": font_path, "index": 0}, "size_mm": 15,
+            "spacing_mm": 0, "style": "fill", "thread": RED, "transform": {**I, "x": 30, "y": 0}, "threads": [], "ops": []}
+    # A line ending below the first letter's right side, then the lettering.
+    lay = layout_of(obj("a", "run", {"nodes": [[0, 30, "c"], [28, 12, "c"]]}), text)
+    r = optimize_jumps(lay)
+    assert list(r["changes"]) == ["t"] and set(r["changes"]["t"]) == {"letters"}
+    start = r["changes"]["t"]["letters"]["0"]["start_mm"]
+    assert len(start) == 2 and all(isinstance(v, float) for v in start)
+    moved = layout_of(lay["items"][0], {**text, "letters": r["changes"]["t"]["letters"]})
+    assert same_thread_jumps(moved) < same_thread_jumps(lay) - 1
+    assert r["after_mm"] < r["before_mm"]
+
+
+def test_shapes_in_a_branch_are_left_to_it():
+    lay = layout_of(
+        {**obj("a", "run", {"nodes": [[30, 0, "c"], [0, 0, "c"]]}), "branch": "b1"},
+        {**obj("b", "fill", {"outline": sq(40, -5, 10)[2:] + sq(40, -5, 10)[:2]}), "branch": "b1"},
+    )
+    assert optimize_jumps(lay)["changes"] == {}

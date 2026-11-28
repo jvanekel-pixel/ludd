@@ -72,6 +72,33 @@ describe("sewing-order row drag", () => {
   });
 });
 
+describe("Order & colors: a branch's shapes", () => {
+  // The audit's case: shapes d, a, c, b of one branch, in that order in the design, sew d, c, a, b.
+  it("are listed in the order they sew, and the arrows step through that order", () => {
+    const d = newDoc();
+    const items = ["d", "a", "c", "b"].map((id) => ({ ...fill(id), name: `Shape ${id}`, branch: "B" }));
+    const doc: Doc = { layout: { ...d.layout, items }, images: [] };
+    useStore.setState({
+      history: { past: [], present: doc, future: [] }, savedDoc: doc, selectedId: null, extraIds: [],
+      design: {
+        path: "", name: "x", format: "layout", threads: [], blocks: [], records: { x: [], y: [], kind: [] },
+        info: { stitches: 1, jumps: 0, trims: 0, stops: 0, color_changes: 0, colors: 1, width_mm: 1, height_mm: 1, bounds_mm: [0, 0, 1, 1] },
+        branches: [{ id: "B", items: ["d", "c", "a", "b"], start: [0, 0], end: [1, 1], hidden_mm: 0, cuts: 0 }],
+      } as never,
+    });
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    act(() => root!.render(<InfoPanel />));
+    const rows = [...host.querySelectorAll<HTMLElement>("li[data-row]")];
+    expect(rows.map((r) => r.dataset.row)).toEqual(["d", "c", "a", "b"]);
+    expect(rows.map((r) => r.querySelector(".name")!.textContent)).toEqual(["1. Shape d", "2. Shape c", "3. Shape a", "4. Shape b"]);
+    const arrows = (label: string) => rows.map((r) => r.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!.disabled);
+    expect(arrows("Sew earlier")).toEqual([true, false, false, false]);
+    expect(arrows("Sew later")).toEqual([false, false, false, true]);
+  });
+});
+
 describe("Design panel: sewing time and thread", () => {
   it("shows about how long the design sews on this machine and how much thread it uses", () => {
     const d = newDoc();

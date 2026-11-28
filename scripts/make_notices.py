@@ -24,6 +24,9 @@ ROOT = Path(__file__).resolve().parent.parent
 DESKTOP = ROOT / "apps" / "desktop"
 OUT = DESKTOP / "src-tauri" / "binaries" / "THIRD-PARTY-NOTICES.txt"
 LICENCE_FILE = re.compile(r"(^|[/\\])(LICEN[CS]E|COPYING|NOTICE|ThirdPartyNotices|OFL)[^/\\]*$", re.I)
+# Everything in a wheel's licenses folder is a licence text, whatever it's called: pypdfium2 names
+# PDFium's, and its libraries', after the licence ("LICENSES/Apache-2.0.txt").
+LICENCES_FOLDER = re.compile(r"\.dist-info[/\\]licenses[/\\]", re.I)
 
 
 class Notices:
@@ -90,6 +93,17 @@ def python_dists() -> list[md.Distribution]:
     return sorted(found.values(), key=lambda d: d.metadata["Name"].lower())
 
 
+def licence_files(dist: md.Distribution) -> list[tuple[str, Path]]:
+    """The licence texts a library's wheel carries, as (name, file)."""
+    found = []
+    for f in dist.files or []:
+        if LICENCE_FILE.search(str(f)) or LICENCES_FOLDER.search(str(f)):
+            p = Path(dist.locate_file(f))
+            if p.is_file():
+                found.append((str(f).replace("\\", "/"), p))
+    return found
+
+
 def add_python(n: Notices) -> None:
     import platform
 
@@ -100,13 +114,7 @@ def add_python(n: Notices) -> None:
         meta = dist.metadata
         licence = meta.get("License-Expression") or (meta.get("License") or "").splitlines()[0:1]
         licence = licence if isinstance(licence, str) else (licence[0] if licence else "")
-        texts = []
-        for f in dist.files or []:
-            if LICENCE_FILE.search(str(f)):
-                p = Path(dist.locate_file(f))
-                if p.is_file():
-                    texts.append((str(f).replace("\\", "/"), read(p)))
-        n.add(f"{meta['Name']} {dist.version} (Python)", licence, texts)
+        n.add(f"{meta['Name']} {dist.version} (Python)", licence, [(name, read(p)) for name, p in licence_files(dist)])
 
 
 # --- npm (the window's code and fonts) ----------------------------------------------------------

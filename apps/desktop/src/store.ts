@@ -79,7 +79,7 @@ export type TraceModel = { installed: boolean; runtime: boolean; size_mb: number
 export type NodeRef = { id: string; list: string | number; index: number };
 
 /** A shape being drawn: clicks so far. A satin's clicks alternate between its two sides. */
-export type Pen = { kind: ObjectKind; a: PathNode[]; b: PathNode[]; replaceId?: string; /** Drawing a hole in this fill (O). */ holeFor?: string; /** The tool to go back to once the hole is done. */ holeBack?: Tool; /** Carving lines into this fill (Shift+C). */ carveFor?: string; /** The tool to go back to once carving is done. */ carveBack?: Tool; /** The line goes all the way round (a satin fitted round an edge). */ closed?: boolean };
+export type Pen = { kind: ObjectKind; a: PathNode[]; b: PathNode[]; replaceId?: string; /** Drawing a hole in this fill (O). */ holeFor?: string; /** The tool to go back to once the hole is done. */ holeBack?: Tool; /** Carving lines into this fill (Shift+C). */ carveFor?: string; /** The tool to go back to once carving is done. */ carveBack?: Tool; /** The line goes all the way round (a satin fitted round an edge). */ closed?: boolean; /** Continuing from the first point (K): the pen holds the points reversed; finishing turns them back. */ prepend?: boolean };
 
 type State = {
   engineStatus: EngineStatus;

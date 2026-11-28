@@ -6,11 +6,10 @@ import {
   addImage,
   addItem,
   centreItem,
-  moveItem,
   addObject,
   clearRecolors,
   deleteColor,
-  duplicateItem,
+  duplicateItems,
   repeatItem,
   setGroup,
   transformTogether,
@@ -25,7 +24,6 @@ import {
   newDoc,
   newId,
   objectCenter,
-  reorder,
   pushHistory,
   shapeNodes,
   recolor,
@@ -41,7 +39,9 @@ import {
   updateObject,
   type History,
 } from "./design/layout";
+import { addCopies, afterBranch, branchOf, dissolveSingles, inBranch, inSewingOrder, moveShown } from "./design/branches";
 import type { ShapeId } from "./design/shapes";
+import { penPoints, reversePath } from "./design/simplify";
 import { visibleRecords } from "./design/player";
 import type {
   Chart,
@@ -309,7 +309,10 @@ type Merge = boolean | "start";
 
 /** Apply an edit to the whole document: render it, and only then add it to the undo history.
  *  `merge`: part of the same gesture as the last edit (one undo step for the lot). */
-export async function commitDoc(next: Doc, merge: Merge = false) {
+export async function commitDoc(edited: Doc, merge: Merge = false) {
+  // No edit leaves a branch of one behind (a deleted, cut or merged member, say).
+  const layout = dissolveSingles(edited.layout);
+  const next = layout === edited.layout ? edited : { ...edited, layout };
   const h = latestHistory();
   if (merge === false) gesture = null; // any other edit ends a gesture
   // Nothing changed (a value set to what it was, a click that moved nothing): no undo step, and
@@ -825,29 +828,38 @@ function removeItems(ids: string[]) {
 
 /** Ctrl+D: a copy of everything selected (one undo step); the copies end up selected. */
 export function duplicateSelected() {
-  let l = currentLayout();
+  const l = currentLayout();
   const ids = selectionIds();
   if (!l || !ids.length) return;
-  const copies: string[] = [];
-  for (const id of ids) {
-    const r = duplicateItem(l, id);
-    l = r.layout;
-    copies.push(r.id);
-  }
-  const out = l;
+  const { layout: out, ids: copies } = duplicateItems(l, ids);
   void commit(out).then((ok) => ok && useStore.getState().setSelection(copies[0], copies.slice(1)));
 }
 
-/** Drag and drop in Order & colors: sew `id` at position `to`. */
-export function moveItemTo(id: string, to: number) {
+/** Order & colors lists the items as they sew: a branch's shapes in the order it sews them. */
+const shownRows = (l: Layout) => inSewingOrder(l.items, useStore.getState().design?.branches);
+
+/** Drag and drop in Order & colors: sew `id` at place `to` of the list as shown. */
+export async function moveItemTo(id: string, to: number) {
   const l = currentLayout();
-  if (l) void commit(moveItem(l, id, to));
+  if (!l) return;
+  const rows = shownRows(l);
+  const from = rows.findIndex((it) => it.id === id);
+  if (from < 0) return;
+  const wanted = rows.map((it) => it.id).filter((x) => x !== id);
+  wanted.splice(Math.max(0, Math.min(rows.length - 1, Math.round(to))), 0, id);
+  if (!(await commit(moveShown(l, rows, id, to)))) return;
+  const now = currentLayout();
+  // A branch sews its shapes in the order it picks, which needn't be the one arranged.
+  if (now && shownRows(now).map((it) => it.id).join() !== wanted.join())
+    info("A branch sews its shapes in the order LUDD picks. To choose a shape's place yourself, take it out of the branch (Alt+Shift+U).");
 }
 
 /** Sew an item one place earlier (-1) or later (1), building on the newest version. */
 export function reorderItem(id: string, dir: -1 | 1) {
   const l = currentLayout();
-  if (l) void commit(reorder(l, id, dir));
+  if (!l) return;
+  const i = shownRows(l).findIndex((it) => it.id === id);
+  if (i >= 0 && i + dir >= 0 && i + dir < l.items.length) void moveItemTo(id, i + dir);
 }
 
 /** Whether the selected item can be sewn earlier (-1) or later (1). */
@@ -855,7 +867,7 @@ function canMoveInOrder(dir: -1 | 1): boolean {
   const l = currentLayout();
   const id = targetId();
   if (!l || !id || !canEdit() || drawing() || useStore.getState().extraIds.length) return false;
-  const i = l.items.findIndex((it) => it.id === id);
+  const i = shownRows(l).findIndex((it) => it.id === id);
   return dir < 0 ? i > 0 : i >= 0 && i < l.items.length - 1;
 }
 
@@ -864,8 +876,8 @@ function sewAt(to: -1 | 1 | "first" | "last") {
   const l = currentLayout();
   const id = targetId();
   if (!l || !id) return;
-  if (to === "first") moveItemTo(id, 0);
-  else if (to === "last") moveItemTo(id, l.items.length - 1);
+  if (to === "first") void moveItemTo(id, 0);
+  else if (to === "last") void moveItemTo(id, l.items.length - 1);
   else reorderItem(id, to);
 }
 
@@ -1086,12 +1098,15 @@ export async function penFinish(opts: { close?: boolean } = {}) {
   const thread = s.drawThread;
   // A satin fitted all the way round an edge is closed too.
   const closed = opts.close || pen.closed ? { closed: true } : {};
+  // Continued from its first point (K), the line keeps its direction, with the new points before its
+  // old start: exactly the points the canvas has been drawing.
+  const points = penPoints(pen.a, pen.prepend);
   const obj =
     pen.kind === "run"
-      ? { kind: "run" as const, geometry: { nodes: pen.a, ...closed }, params: defaultsFor("run"), thread }
+      ? { kind: "run" as const, geometry: { nodes: points, ...closed }, params: defaultsFor("run"), thread }
       : pen.kind === "satin"
-        ? { kind: "satin" as const, geometry: { nodes: pen.a, width_mm: s.satinWidth, ...closed }, params: defaultsFor("satin"), thread }
-        : { kind: "fill" as const, geometry: { outline: pen.a }, params: defaultsFor("fill"), thread };
+        ? { kind: "satin" as const, geometry: { nodes: points, width_mm: s.satinWidth, ...closed }, params: defaultsFor("satin"), thread }
+        : { kind: "fill" as const, geometry: { outline: points }, params: defaultsFor("fill"), thread };
   s.setPen(null);
   // A hole (O): add it to the fill it was drawn in.
   if (pen.holeFor && layout.items.some((it) => it.id === pen.holeFor)) {
@@ -1108,7 +1123,7 @@ export async function penFinish(opts: { close?: boolean } = {}) {
   if (pen.replaceId && layout.items.some((it) => it.id === pen.replaceId)) {
     const id = pen.replaceId;
     // Keep what the pen doesn't draw (a fill's holes, a closed line, a satin's width).
-    const drawn = pen.kind === "fill" ? { outline: pen.a } : { nodes: pen.a, ...closed };
+    const drawn = pen.kind === "fill" ? { outline: points } : { nodes: points, ...closed };
     const next = updateObject(layout, id, (o) => ({ ...o, geometry: { ...o.geometry, ...drawn } }) as ObjectItem);
     if (await commit(next)) useStore.getState().select(id);
     return;
@@ -1119,7 +1134,8 @@ export async function penFinish(opts: { close?: boolean } = {}) {
   else if (!useStore.getState().pen && useStore.getState().tool === pen.kind) useStore.getState().setPen(pen);
 }
 
-/** Pick the selected shape back up in the pen to add more points ("continue digitizing"). */
+/** Pick the selected shape back up in the pen to add more points ("continue digitizing"): at its
+ *  end, or, for an open line or ribbon with its first point selected, before its start. */
 export function continueDrawing() {
   const s = useStore.getState();
   const o = currentLayout()?.items.find((it) => it.id === s.selectedId);
@@ -1129,10 +1145,12 @@ export function continueDrawing() {
   const b: PathNode[] = [];
   // An applique is drawn like a fill (a closed outline); it stays an applique.
   const kind = o.kind === "applique" ? "fill" : o.kind;
-  s.setTool(kind);
-  s.setPen({ kind, a: [...a], b: [...b], replaceId: o.id });
+  const open = (o.kind === "run" || o.kind === "satin") && !(o.geometry as { closed?: boolean }).closed;
+  const fromStart = open && a.length > 1 && s.selectedNode?.id === o.id && s.selectedNode.list === "nodes" && s.selectedNode.index === 0;
+  s.setTool(kind); // (lets go of the selected point, so it's looked at first)
+  s.setPen({ kind, a: fromStart ? reversePath(a) : [...a], b: [...b], replaceId: o.id, ...(fromStart ? { prepend: true } : {}) });
   s.setDrawThread(o.thread);
-  info("Keep clicking to add points to this shape; Enter when done.");
+  info(fromStart ? "Keep clicking to add points before this shape's start; Enter when done." : "Keep clicking to add points to this shape; Enter when done.");
 }
 
 /** Add a ready-made shape (as a fill) in the middle of the hoop, selected, ready to reshape.
@@ -1264,11 +1282,11 @@ export async function textToShapes() {
     // Changed or removed meanwhile: these letters are out of date.
     const now = currentLayout();
     if (!now || !unchanged(it.id, it)) return;
-    // The letters stay together: in the text's own group if it had one, else a new group.
+    // The letters stay together: in the text's own group if it had one, else a new group. They
+    // take the lettering's place and its branch.
     const group = it.group ?? (r.objects.length > 1 ? `g${Date.now().toString(36)}` : undefined);
-    const shapes = r.objects.map(
-      (o) => ({ ...o, id: newId(), transform: { ...IDENTITY }, threads: [], ops: [], ...(group ? { group } : {}), ...(it.locked ? { locked: true } : {}) }) as ObjectItem,
-    );
+    const kept = { ...(group ? { group } : {}), ...(it.locked ? { locked: true } : {}), ...(branchOf(it) ? { branch: branchOf(it) } : {}) };
+    const shapes = r.objects.map((o) => ({ ...o, id: newId(), transform: { ...IDENTITY }, threads: [], ops: [], ...kept }) as ObjectItem);
     const at = now.items.indexOf(it);
     const items = [...now.items.slice(0, at), ...shapes, ...now.items.slice(at + 1)];
     if (await commit({ ...now, items })) {
@@ -1357,10 +1375,11 @@ export async function addSatinBorder(id?: string) {
     params: defaultsFor("satin"),
     thread,
   } as Omit<ObjectItem, "id" | "transform" | "threads" | "ops">);
-  // Sew it straight after its fill.
+  // Sew it straight after its fill (after the whole branch, for a fill in one).
   const added = withBorder.items[withBorder.items.length - 1];
   const items = withBorder.items.slice(0, -1);
-  items.splice(items.findIndex((it) => it.id === o.id) + 1, 0, added);
+  const after = afterBranch(l.items, o.id);
+  items.splice(items.findIndex((it) => it.id === after) + 1, 0, added);
   if (await commit({ ...withBorder, items })) useStore.getState().select(nid);
 }
 
@@ -1610,12 +1629,17 @@ async function satinFillFor(outline: PathNode[], way: number): Promise<SatinFill
 export async function convertObject(id: string, to: ObjectKind) {
   const o = currentLayout()?.items.find((it) => it.id === id) as ObjectItem | undefined;
   if (!o || o.kind === to) return;
+  // A branch can't hold an applique: turned into one, a shape leaves its branch (in the same undo
+  // step, and a branch left with one shape ends).
+  const left = (x: ObjectItem) => (to === "applique" ? (inBranch(x, undefined) as ObjectItem) : x);
   if (o.kind === "satin" && !isRibbon(o)) {
     const outline = columnOutline(o.geometry as { rail_a: PathNode[]; rail_b: PathNode[] });
     editObject(id, () =>
-      to === "run"
-        ? ({ ...o, kind: "run", geometry: { nodes: outline, closed: true }, params: defaultsFor("run") } as ObjectItem)
-        : ({ ...o, kind: to, geometry: { outline }, params: defaultsFor(to) } as ObjectItem),
+      left(
+        to === "run"
+          ? ({ ...o, kind: "run", geometry: { nodes: outline, closed: true }, params: defaultsFor("run") } as ObjectItem)
+          : ({ ...o, kind: to, geometry: { outline }, params: defaultsFor(to) } as ObjectItem),
+      ),
     );
     return;
   }
@@ -1644,11 +1668,13 @@ export async function convertObject(id: string, to: ObjectKind) {
   const holes = o.kind === "fill" || o.kind === "applique" ? o.geometry.holes : undefined;
   const width = isRibbon(o) ? o.geometry.width_mm : useStore.getState().satinWidth;
   editObject(id, () =>
-    to === "run"
-      ? ({ ...o, kind: "run", geometry: { nodes: pts, ...(closed ? { closed: true } : {}) }, params: defaultsFor("run") } as ObjectItem)
-      : to === "satin"
-        ? ({ ...o, kind: "satin", geometry: { nodes: pts, width_mm: width, ...(closed ? { closed: true } : {}) }, params: defaultsFor("satin") } as ObjectItem)
-        : ({ ...o, kind: to, geometry: { outline: pts, ...(holes ? { holes } : {}) }, params: defaultsFor(to) } as ObjectItem),
+    left(
+      to === "run"
+        ? ({ ...o, kind: "run", geometry: { nodes: pts, ...(closed ? { closed: true } : {}) }, params: defaultsFor("run") } as ObjectItem)
+        : to === "satin"
+          ? ({ ...o, kind: "satin", geometry: { nodes: pts, width_mm: width, ...(closed ? { closed: true } : {}) }, params: defaultsFor("satin") } as ObjectItem)
+          : ({ ...o, kind: to, geometry: { outline: pts, ...(holes ? { holes } : {}) }, params: defaultsFor(to) } as ObjectItem),
+    ),
   );
 }
 
@@ -1873,16 +1899,17 @@ function copySelected(cut: boolean) {
 function pasteClipboard() {
   const l = currentLayout();
   if (!l || !clipboard.length) return;
-  let out = l;
-  const pasted: string[] = [];
   // Pasted copies keep their own group, apart from the originals.
   const group = clipboard.some((it) => it.group) ? `g${Date.now().toString(36)}` : undefined;
-  for (const src of clipboard) {
-    const copy = { ...structuredClone(src), id: newId(), group: src.group ? group : undefined } as LayoutItem;
-    out = { ...out, items: [...out.items, copy] };
-    out = moveBy(out, copy.id, ADD_OFFSET_MM, ADD_OFFSET_MM);
-    pasted.push(copy.id);
-  }
+  const copies = clipboard.map((src) => ({
+    item: { ...structuredClone(src), id: newId(), group: src.group ? group : undefined } as LayoutItem,
+    source: src.id,
+    after: null,
+  }));
+  // At the end, except where a copied branch shape joins its branch (addCopies).
+  let out = addCopies(l, copies);
+  for (const c of copies) out = moveBy(out, c.item.id, ADD_OFFSET_MM, ADD_OFFSET_MM);
+  const pasted = copies.map((c) => c.item.id);
   void commit(out).then((ok) => ok && useStore.getState().setSelection(pasted[0], pasted.slice(1)));
 }
 

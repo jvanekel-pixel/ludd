@@ -458,7 +458,10 @@ dialog.modal .warnings li .why { display: block; color: var(--muted); font-size:
 /* M8 */
 .applique-steps { margin: 0.4rem 0; padding-left: 1.2rem; font-size: 12px; color: var(--muted); }
 .applique-steps li { margin-bottom: 0.15rem; }
-dialog.modal.repeat { width: min(460px, calc(100vw - 32px)); }
+/* Docked at the right, as narrow as the repair window peeking at the design, so the hoop and the
+   boxes where copies will land stay in view. */
+dialog.modal.repeat { width: min(340px, calc(100vw - 32px)); }
+dialog.modal.repeat .seg { flex-wrap: wrap; }
 dialog.modal.repeat .size-row { display: flex; gap: 0.75rem; flex-wrap: wrap; margin: 0.5rem 0; }
 dialog.modal.repeat .field input { width: 6rem; }
 dialog.modal.repeat .row small { color: var(--muted); }

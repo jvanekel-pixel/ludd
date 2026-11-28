@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 
 from ..paths import cumulative, flatten, resample
-from ..patterns import motif_points
+from ..patterns import motif_points, motif_repeats
 from . import MAX_LINE_STITCHES, MOTIF_UNITS, LineStyle, motif_stitches, register, register_motif, sewn_unit
 
 
@@ -59,7 +59,7 @@ def _refuse_too_many(nodes, params, closed, unit, stitch: float) -> None:
     if shape is None or len(poly) < 2:
         return  # (motif_points refuses an unknown motif itself)
     total = cumulative(poly)[-1]
-    repeats = max(1, round(total / params.motif_mm))  # as motif_points lays them
+    repeats = motif_repeats(total, params.motif_mm)  # as motif_points lays them
     stitches = motif_stitches(shape, repeats, total / repeats, params.motif_width_mm, stitch)
     if stitches > MAX_LINE_STITCHES:
         raise DigitizeError(f"This line would need about {stitches:,.0f} stitches, far more than any design. "
@@ -72,7 +72,8 @@ def _motif(nodes, params, closed=False, start=None):
     unit = sewn_unit(params.motif_unit, params.motif_mm, params.motif_width_mm)
     stitch = max(params.stitch_mm, 1.0)
     _refuse_too_many(nodes, params, closed, unit, stitch)
-    pts = motif_points(nodes, params.motif, params.motif_mm, params.motif_width_mm, closed, unit=unit)
+    pts = motif_points(nodes, params.motif, params.motif_mm, params.motif_width_mm, closed, unit=unit,
+                       side=params.motif_side)
     return resample(pts, stitch, list(range(len(pts))))
 
 

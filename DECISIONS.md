@@ -118,3 +118,9 @@ Durable log so future sessions do not re-litigate these. Newest decisions go bel
 - Why: the owner confirmed the Phase 5 spec's recommended answers.
 - Alternatives rejected: examining a BX font; True satin as the default before it has been sewn; keeping underlay on tiny letters.
 - Revisit if: the Phase 15 stitch-outs show True satin sews better than Satin look, or small letters unravel without underlay.
+
+### D-022: Phase 7 decisions: lines, sequencing and drawing tools (2026-11-26)
+- Decision: artwork import uses svgelements and ezdxf (with pyparsing) for SVG and DXF, and pypdfium2 (PDFium) for PDF; in a branch LUDD chooses each shape's start and end and the order of shapes that don't overlap, and Branch moves the shapes next to each other in the sewing order; the five built-in stitch presets ship.
+- Why: the owner answered yes to the two new-library questions and confirmed the Phase 7 spec's recommended answers to the rest.
+- Alternatives rejected: a hand-written SVG-only reader and no DXF; no PDF library; no built-in presets.
+- Revisit if: one of the libraries stops shipping wheels for a platform LUDD builds for, or the Phase 15 stitch-outs show a branch's hidden travel shows through.

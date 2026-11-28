@@ -16,9 +16,10 @@ from shapely import affinity
 from shapely.geometry import LineString, Point as ShapelyPoint, Polygon
 from shapely.ops import substring
 
-from . import fills, lines
+from . import fills, lines, ties
 from . import rows as row_hooks  # "rows" names tatami's own rows
 from .fills import turning
+from .fills.lattice import LATTICES
 from .paths import Point, corner_indices, cumulative, dist, flatten, point_at, resample, sharp_points
 from .patterns import (FILL_PATTERNS, MOTIFS, contour_paths, cross_paths, gradient_ys, motif_points, nearest_rotation,
                        polygons, stipple_paths, wave_offset)
@@ -226,18 +227,22 @@ def _zone(inside: "Polygon | Zone") -> Zone:
     return inside if isinstance(inside, Zone) else Zone(inside)
 
 
-def _edge_route(a: Point, b: Point, inside: "Polygon | Zone") -> list[Point] | None:
+def _edge_route(a: Point, b: Point, inside: "Polygon | Zone", steady: bool = False) -> list[Point] | None:
     """A path from a to b that follows one edge of the shape (outside or a hole), staying inside,
-    or None. Used to travel around holes instead of jumping over them."""
+    or None. Used to travel around holes instead of jumping over them. `steady`: see _ring_route."""
     z = _zone(inside)
     # 0.3 mm in from the edge first; only when that can't connect a and b (they sit either side
     # of a neck narrower than 0.6 mm) hug the edge itself, which still crosses the neck.
-    return _ring_route(a, b, z, 0.3) or _ring_route(a, b, z, 0.05)
+    return _ring_route(a, b, z, 0.3, steady) or _ring_route(a, b, z, 0.05, steady)
 
 
-def _ring_route(a: Point, b: Point, z: "Zone", inset: float) -> list[Point] | None:
+def _ring_route(a: Point, b: Point, z: "Zone", inset: float, steady: bool = False) -> list[Point] | None:
+    """The shortest way from a to b along one ring. With `steady`, lengths are compared to 0.001 mm
+    and a tie goes to the way whose points come first, so neither the order the geometry library
+    gives the rings in nor a last digit chooses (round a symmetric hole, both ways are as long)."""
     pa, pb = ShapelyPoint(a), ShapelyPoint(b)
     best: list[Point] | None = None
+    best_key = None
     for line in z.rings(inset):
         total = line.length
         # Step straight onto the ring, follow it, step straight off. The coverage check below
@@ -253,8 +258,11 @@ def _ring_route(a: Point, b: Point, z: "Zone", inset: float) -> list[Point] | No
         for path in (arc(sa, sb), arc(sb, sa)[::-1]):
             route = [a, *path, b]
             ls = LineString(route)
-            if z.cover.covers(ls) and (best is None or ls.length < LineString(best).length):
-                best = route
+            if not z.cover.covers(ls):
+                continue
+            key = (round(ls.length, 3), [(round(x, 3), round(y, 3)) for x, y in route]) if steady else ls.length
+            if best_key is None or key < best_key:
+                best, best_key = route, key
     return best
 
 
@@ -296,16 +304,22 @@ def _route_stitches(a: Point, route: list[Point]) -> list[Rec]:
 # ---------------------------------------------------------------- running stitch
 
 
+MOTIF_SIDES = ("center", "left", "right")
+
+
 @dataclass
 class RunParams:
-    style: str = "single"  # single | triple (whole line 3x) | bean (each stitch 3x) | motif
+    style: str = "single"  # single | triple (whole line 3x) | bean (each stitch 3x) | motif | a craft style
     stitch_mm: float = 2.5
     motif: str = "wave"  # for style "motif": wave | zigzag | scallop | blanket
     motif_mm: float = 4.0  # length of one repeat
     motif_width_mm: float = 2.5
     hand_pct: float = 0.0  # the hand-sewn look, 0 to 100
     motif_unit: list | None = None  # a motif of your own, carried with the line (lines.carried_unit)
+    motif_side: str = "center"  # for style "motif": which side of the line it sits on (patterns.motif_points)
     extra: dict[str, float] = field(default_factory=dict)  # a registered style's own settings (fills.Param)
+    # Not a setting: what the style wants to tell the user about this line (French knots left out).
+    notes: list[str] = field(default_factory=list, compare=False)
 
     def value(self, key: str) -> float:
         """A setting by name: one of the fields above, else one of the style's own (`extra`)."""
@@ -320,7 +334,8 @@ class RunParams:
         p = cls(style=style, stitch_mm=_finite(d, "stitch_mm", 2.5),
                 motif=str(d.get("motif", "wave")), motif_mm=_finite(d, "motif_mm", 4.0),
                 motif_width_mm=_finite(d, "motif_width_mm", 2.5), hand_pct=_hand_pct(d),
-                motif_unit=lines.carried_unit(d.get("motif_unit")) if style == "motif" else None)
+                motif_unit=lines.carried_unit(d.get("motif_unit")) if style == "motif" else None,
+                motif_side=_choice(d, "motif_side", MOTIF_SIDES, "motif side") if style == "motif" else "center")
         if p.style not in lines.REGISTRY:
             raise DigitizeError(f"Unknown running stitch style: {p.style}")
         if p.style == "motif":
@@ -350,7 +365,11 @@ def running(nodes: Sequence, params: RunParams, closed: bool = False, start: Poi
     """A running-stitch line in its style (digitize/lines: single, triple, bean, motif, ...).
     The hand-sewn look (rows/hand.py) works on single, triple and bean lines: the line's needle
     points are moved, then sewn once, three times or each stitch three times as the style does.
-    Other styles (motif) are sewn as they are."""
+    Other styles (motif) are sewn as they are. A style with `recs` makes its own records (it needs
+    jumps)."""
+    style = lines.REGISTRY[params.style]
+    if style.recs is not None:
+        return style.recs(nodes, params, closed, start)
     if params.hand_pct and params.style in HAND_LINE_STYLES:
         pts = row_hooks.hand.line(lines.REGISTRY["single"].points(nodes, params, closed, start), params.hand_pct)
         if len(pts) >= 2 and params.style == "triple":
@@ -358,7 +377,7 @@ def running(nodes: Sequence, params: RunParams, closed: bool = False, start: Poi
         elif len(pts) >= 2 and params.style == "bean":
             pts = [pts[0], *(p for a, b in zip(pts, pts[1:]) for p in (b, a, b))]  # each stitch three times
         return stitch_run(pts)
-    return stitch_run(lines.REGISTRY[params.style].points(nodes, params, closed, start))
+    return stitch_run(style.points(nodes, params, closed, start))
 
 
 HAND_LINE_STYLES = ("single", "triple", "bean")  # the line styles the hand-sewn look moves
@@ -548,6 +567,12 @@ def _ribbon(nodes: Sequence, width_mm: float, spacing: float, closed: bool = Fal
     return pairs, corners
 
 
+def _nearest_rung(mids: list[Point], p: Point) -> int:
+    """The rung (by its middle) nearest `p`. A tie to a millionth goes to the first, so that a last
+    digit can't choose (a buttonhole's dots sit right between two rungs)."""
+    return min(range(len(mids)), key=lambda i: (round(dist(mids[i], p), 6), i))
+
+
 def satin_with_ends(pairs: list[tuple[Point, Point]], params: SatinParams, start: Point | None = None,
                     end: Point | None = None) -> tuple[list[Rec], list[str]]:
     """A satin that starts and stops where chosen (the green and red dots), anywhere along it.
@@ -565,7 +590,7 @@ def satin_with_ends(pairs: list[tuple[Point, Point]], params: SatinParams, start
         pairs = row_hooks.hand.satin_pairs(pairs, params.hand_pct)
         params = replace(params, hand_pct=0.0)
     mids = [((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) for a, b in pairs]
-    near = lambda p: min(range(n), key=lambda i: dist(mids[i], p))  # noqa: E731
+    near = lambda p: _nearest_rung(mids, p)  # noqa: E731
     s = near(start) if start is not None else None
     if end is not None:
         k = near(end)
@@ -645,7 +670,7 @@ def satin_ribbon(nodes: Sequence, width_mm: float, params: SatinParams, closed: 
     if closed and start is not None and len(pairs) > 2:
         # A satin border starts (and ends) at the stitch nearest the chosen point.
         n = len(pairs) - 1  # the last pair closes the loop on the first
-        k = min(range(n), key=lambda i: dist(((pairs[i][0][0] + pairs[i][1][0]) / 2, (pairs[i][0][1] + pairs[i][1][1]) / 2), start))
+        k = _nearest_rung([((a[0] + b[0]) / 2, (a[1] + b[1]) / 2) for a, b in pairs[:n]], start)
         body = pairs[:n]
         pairs = body[k:] + body[:k] + [body[k]]
         corners = {(c - k) % n for c in corners}
@@ -778,6 +803,7 @@ class FillParams:
     ripple_center: tuple[float, float] | None = None  # ripple: where the rings spread from, mm
     motif: str = "wave"  # motif fill: which motif
     motif_unit: list | None = None  # motif fill: a motif of your own, carried with the shape
+    blackwork_lattice: str = "diamonds"  # blackwork fill: diamonds | grid | honeycomb | crossed
     carve: tuple = ()  # not a setting: the shape's carved lines (geometry.carve) as polylines, mm
     extra: dict[str, float] = field(default_factory=dict)  # a registered pattern's own settings (fills.Param)
 
@@ -836,6 +862,7 @@ class FillParams:
             ripple_center=_start_point(d.get("ripple_center")),
             motif=str(d.get("motif") or "wave"),
             motif_unit=lines.carried_unit(d.get("motif_unit")) if pattern == "motif" else None,
+            blackwork_lattice=_choice(d, "blackwork_lattice", LATTICES, "blackwork lattice"),
         )
         if not 0 <= p.pull_comp_mm <= 2:
             raise DigitizeError("Pull compensation must be between 0 and 2 mm")
@@ -1185,14 +1212,16 @@ def _stipple_seed(poly: Polygon) -> int:
     return int(round(poly.area * 10) * 31 + round((x1 - x0) * 100) * 7 + round((y1 - y0) * 100)) % 100000
 
 
-def _sew_paths(paths: Sequence[Sequence[Point]], inside: "Polygon | Zone", pos: Point | None) -> list[Rec]:
-    """Paths sewn one after another, joined by travel inside the shape."""
+def _sew_paths(paths: Sequence[Sequence[Point]], inside: "Polygon | Zone", pos: Point | None,
+               join=None) -> list[Rec]:
+    """Paths sewn one after another, joined by travel inside the shape (or by a pattern's own way,
+    `join`)."""
     out: list[Rec] = []
     here = pos
     zone = _zone(inside)
     for path in paths:
         if out:
-            out += travel(here, path[0], zone)
+            out += (join or travel)(here, path[0], zone)
         _append(out, stitch_run(path))
         here = path[-1]
     return out
@@ -1315,7 +1344,7 @@ def _fill_part(poly: Polygon, params: FillParams, end_here: bool = True) -> tupl
         paths, warnings = spec.paths(area, params, start)
         if not paths:
             raise DigitizeError(f"This shape is too small for a {params.pattern} fill; try a smaller size")
-        top = _sew_paths(paths, area.buffer(0.3), start)
+        top = _sew_paths(paths, area.buffer(0.3), start, spec.join)
         target = (top[0][0], top[0][1])
     out = fill_underlay(poly, params, spec, start, target)
     pos = (out[-1][0], out[-1][1]) if out else start
@@ -1414,6 +1443,8 @@ def fill_in_parts(outline: Sequence, holes: Sequence[Sequence],
         recs, part_warnings = _fill_part(poly, params, end_here=k == len(parts) - 1)
         warnings += [w for w in part_warnings if w not in warnings]
         out = join_pieces(out, recs)
+    if spec.notes:
+        warnings += spec.notes(out)
     return [(out, warnings, 0)]
 
 
@@ -1442,11 +1473,15 @@ def generate_parts(obj: dict[str, Any]) -> list[tuple[list[Rec], list[str], int]
                 raise DigitizeError("This shape has a point that isn't a number") from None
     if kind in ("fill", "satin") and p.get("push_comp_mm"):
         raise DigitizeError(row_hooks.push.NOT_BUILT)
+    # The lock stitches' shape (digitize/ties.py); appliques lock their own parts the usual way.
+    locks = ties.style_of(p) if kind in ("run", "satin", "fill") else "standard"
     if kind == "run":
         nodes = g.get("nodes") or []
         if len(nodes) < 2:
             raise DigitizeError("A running stitch needs at least two points")
-        parts = [(running(nodes, RunParams.from_dict(p), bool(g.get("closed")), _start_point(p.get("start_mm"))), [], 0)]
+        line = RunParams.from_dict(p)
+        recs = running(nodes, line, bool(g.get("closed")), _start_point(p.get("start_mm")))
+        parts = [(recs, list(line.notes), 0)]
     elif kind == "satin" and g.get("nodes") is not None:
         # A ribbon: a centre line and a width (what the Satin tool draws).
         parts = [(*satin_ribbon(g["nodes"], _finite(g, "width_mm", 3.0), SatinParams.from_dict(p), bool(g.get("closed")),
@@ -1470,12 +1505,15 @@ def generate_parts(obj: dict[str, Any]) -> list[tuple[list[Rec], list[str], int]
         recs, warnings, slot = parts[0]
         parts[0] = (recs, [*warnings, "This is shorter than one stitch, so it sews as a single needle drop. "
                                       "Make it bigger or delete it."], slot)
+    # A fill's triangle locks turn to stay by its outline.
+    shape = (shapely.union_all(fill_parts(g.get("outline") or [], g.get("holes") or []))
+             if kind == "fill" and locks == "triangle" else None)
     out = []
     for recs, warnings, slot in parts:
         if p.get("tie_in", True):
-            recs = tie_in(recs)
+            recs = ties.tie_in(recs, locks, shape)
         if p.get("tie_off", True):
-            recs = tie_off(recs)
+            recs = ties.tie_off(recs, locks, shape)
         out.append((recs, warnings, slot))
     return out
 

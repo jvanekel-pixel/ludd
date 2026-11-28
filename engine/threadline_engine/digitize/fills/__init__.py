@@ -45,6 +45,11 @@ class FillPattern:
     # An open pattern that hides the fabric: it may have the cross-hatch underlay, and Edge pad
     # widens it as it does rows.
     covers: bool = False
+    # An open pattern's way from one of its paths to the next: (a, b, zone) -> records. None: travel
+    # inside the shape (stitches.travel).
+    join: Callable | None = None
+    # What a pattern says about a whole fill once it's sewn: (records) -> list[str].
+    notes: Callable | None = None
 
 
 REGISTRY: dict[str, FillPattern] = {}
@@ -70,3 +75,4 @@ def get(name: str) -> FillPattern:
 from . import builtin  # noqa: E402,F401  (registers the six, in today's order)
 from . import spiral  # noqa: E402,F401
 from . import blend, motif, maze, ripple, mesh  # noqa: E402,F401  (in the panel's order)
+from . import blackwork  # noqa: E402,F401  (lattices sewn as double runs, fills/lattice.py)

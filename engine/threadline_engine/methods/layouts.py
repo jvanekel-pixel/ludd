@@ -56,3 +56,12 @@ def layout_optimize_jumps(layout: dict) -> dict:
 @dispatcher.method("layout.optimize_order")
 def layout_optimize_order(layout: dict) -> dict:
     return layout_module.optimize_order(layout)
+
+
+@dispatcher.method("layout.branch_plan")
+def layout_branch_plan(layout: dict, ids: list) -> dict:
+    """Can the shapes `ids` be sewn as one path? {ok, reason, order} (order: every item id, the
+    branch's members moved next to each other)."""
+    from ..layout.branch import branch_plan
+
+    return branch_plan(layout, ids)

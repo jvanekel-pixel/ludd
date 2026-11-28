@@ -10,6 +10,7 @@ import { addTraced, commit, currentDoc, currentLayout, defaultsFor, engine, fail
 import { holdEscape } from "./escape";
 import { exportList, typedList } from "./feat/names";
 import { slotThreads } from "./design/blend";
+import { afterBranch, branchOf, inBranch } from "./design/branches";
 import { addObject, IDENTITY, newId } from "./design/layout";
 import type { Colorway, Guide, Layout, LayoutItem, LayoutOp, ObjectItem, PathNode, TextItem, Thread } from "./design/types";
 import { isObject, isText } from "./design/types";
@@ -174,8 +175,9 @@ export async function addOffset(spec: OffsetSpec) {
         ? ({ kind: "satin", geometry: { nodes, width_mm: spec.width_mm, closed: true }, params: defaultsFor("satin"), thread } as Omit<ObjectItem, "id" | "transform" | "threads" | "ops">)
         : ({ kind: "run", geometry: { nodes, closed: true }, params: { ...defaultsFor("run"), style: spec.as === "triple" ? "triple" : "single" }, thread } as Omit<ObjectItem, "id" | "transform" | "threads" | "ops">),
     );
+    // Sewn after the selection (after the whole branch, when its last shape is in one).
     const last = l.items.filter((it) => ids.includes(it.id)).at(-1)?.id;
-    if ((await insertObjects(objs, last)).length)
+    if ((await insertObjects(objs, last && afterBranch(l.items, last))).length)
       info(`Added ${objs.length === 1 ? "an outline" : `${objs.length} outlines`}. Change its thread in its panel.`);
   } catch (err) {
     fail(err);
@@ -255,7 +257,8 @@ export async function finishKnife(a: [number, number], b: [number, number]) {
     // The shape changed meanwhile (an undo, a nudge): the cut was worked out for the old one.
     if (!stillSame([o])) return info("The design changed while cutting: try the cut again.");
     // Each piece keeps everything of the original but its shape and name: colour changes, stops
-    // and trims (left out by the engine if they no longer fit), pin and group.
+    // and trims (left out by the engine if they no longer fit), pin, group and branch (the pieces
+    // take the shape's place, so the branch stays whole).
     const parts = r.geometries.map(
       (g, i) =>
         ({
@@ -270,6 +273,7 @@ export async function finishKnife(a: [number, number], b: [number, number]) {
           ops: o.ops,
           ...(o.locked ? { locked: true } : {}),
           ...(o.group ? { group: o.group } : {}),
+          ...(branchOf(o) ? { branch: branchOf(o) } : {}),
         }) as NewObject,
     );
     if ((await insertObjects(parts, o.id, [o.id])).length) info(`Cut into ${parts.length} pieces.`);
@@ -293,10 +297,19 @@ export async function mergeSelected() {
     const first = items.find((it) => it.id === primary) ?? items[0];
     const l = currentLayout()!;
     const others = new Set(items.filter((it) => it.id !== first.id).map((it) => it.id));
-    const next: Layout = {
-      ...l,
-      items: l.items.filter((it) => !others.has(it.id)).map((it) => (it.id === first.id ? ({ ...it, geometry: r.geometry, transform: { ...IDENTITY } } as ObjectItem) : it)),
-    };
+    // Shapes of one branch merge into one that stays in it. Anything else gives an ordinary shape,
+    // sewn where the first one was, or after its branch's other shapes, never between them.
+    const shared = new Set(items.map(branchOf)).size === 1;
+    const joined = { ...first, geometry: r.geometry, transform: { ...IDENTITY } } as ObjectItem;
+    const merged = (shared ? joined : inBranch(joined, undefined)) as ObjectItem;
+    const kept = l.items.filter((it) => !others.has(it.id)).map((it) => (it.id === first.id ? merged : it));
+    const branch = shared ? undefined : branchOf(first);
+    const last = branch ? [...kept].reverse().find((it) => branchOf(it) === branch) : undefined;
+    if (last && kept.indexOf(last) > kept.indexOf(merged)) {
+      kept.splice(kept.indexOf(merged), 1);
+      kept.splice(kept.indexOf(last) + 1, 0, merged);
+    }
+    const next: Layout = { ...l, items: kept };
     if (await commit(next)) {
       useStore.getState().setSelection(first.id, []);
       info("Merged into one shape, with the settings of the one you selected first.");
@@ -328,7 +341,8 @@ export async function cutOutSelected() {
     const extra: ObjectItem[] = [];
     for (const g of more) {
       const add = addObject(next, { kind: target.kind, name: target.name, geometry: g, params: withoutDots(target.params), thread: target.thread } as Omit<ObjectItem, "id" | "transform" | "threads" | "ops">);
-      const piece = { ...(add.layout.items[add.layout.items.length - 1] as ObjectItem), threads: target.threads, ...(target.locked ? { locked: true } : {}), ...(target.group ? { group: target.group } : {}) } as ObjectItem;
+      const kept = { ...(target.locked ? { locked: true } : {}), ...(target.group ? { group: target.group } : {}), ...(branchOf(target) ? { branch: branchOf(target) } : {}) };
+      const piece = { ...(add.layout.items[add.layout.items.length - 1] as ObjectItem), threads: target.threads, ...kept } as ObjectItem;
       next = { ...add.layout, items: add.layout.items.map((it) => (it.id === piece.id ? piece : it)) };
       extra.push(piece);
     }
@@ -378,7 +392,8 @@ export async function optimizeJumps() {
   const l = currentLayout();
   if (!l) return;
   try {
-    const r = await engine().call<{ changes: Record<string, { geometry?: unknown; params?: Record<string, unknown> }>; before_mm: number; after_mm: number }>(
+    type Change = { geometry?: unknown; params?: Record<string, unknown>; letters?: TextItem["letters"] };
+    const r = await engine().call<{ changes: Record<string, Change>; before_mm: number; after_mm: number }>(
       "layout.optimize_jumps",
       { layout: l },
       LONG_MS,
@@ -393,6 +408,8 @@ export async function optimizeJumps() {
       ...now,
       items: now.items.map((it) => {
         const c = r.changes[it.id];
+        // A text's change is where its first letter now starts.
+        if (c?.letters && isText(it)) return { ...it, letters: c.letters };
         if (!c || !isObject(it)) return it;
         return { ...it, ...(c.geometry ? { geometry: c.geometry } : {}), ...(c.params ? { params: c.params } : {}) } as ObjectItem;
       }),

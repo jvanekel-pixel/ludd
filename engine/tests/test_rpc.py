@@ -200,6 +200,9 @@ def _sample_params(tmp: Path) -> dict[str, dict]:
     hoop = {"id": "h", "width_mm": 100, "height_mm": 100}
     proj = {"title": "t", "layout": lay, "images": []}
     saved = str(tmp / "p.ludd")
+    art = tmp / "art.svg"
+    art.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="20mm" height="20mm" viewBox="0 0 20 20">'
+                   '<rect x="2" y="2" width="16" height="16" fill="#cc0000"/></svg>', encoding="utf-8")
     return {
         "ping": {}, "engine.info": {}, "engine.shutdown": {}, "formats.list": {},
         "design.open": {"path": str(pes)},
@@ -221,6 +224,15 @@ def _sample_params(tmp: Path) -> dict[str, dict]:
         "applique.export_svg": {"layout": lay, "dest": str(tmp / "cut.svg")},
         "layout.optimize_order": {"layout": lay},
         "layout.optimize_jumps": {"layout": lay},
+        "layout.branch_plan": {"layout": {**lay, "items": [fill, fill2]}, "ids": ["a", "b"]},
+        "presets.list": {},
+        "presets.save": {"preset": {"name": "Mine", "kind": "fill", "params": {"spacing_mm": 0.6}}},
+        "presets.export": {"id": "mine", "dest": str(tmp / "mine.luddpreset")},
+        "presets.import": {"path": str(tmp / "mine.luddpreset")},
+        "presets.delete": {"id": "mine"},
+        "shape.buttonhole": {},
+        "shape.eyelet": {},
+        "art.preview": {"path": str(art), "options": {}},
         "repair.preview": {"layout": lay, "item_id": "a", "ops": []},
         "fonts.scan_letter_files": {"folder": str(tmp / "folder")},
         "fonts.build_from_files": {"letters": [{"path": str(pes), "char": "A"}], "name": "Mine"},

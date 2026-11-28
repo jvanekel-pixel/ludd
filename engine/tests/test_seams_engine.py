@@ -328,9 +328,12 @@ def test_a_covering_open_pattern_may_have_cross_hatch_and_edge_pad(throwaway_pat
 
 
 def test_line_styles_and_motifs_registered():
-    assert list(lines.REGISTRY) == ["single", "triple", "bean", "motif"]
+    assert list(lines.REGISTRY) == ["single", "triple", "bean", "motif",  # LUDD 1.0's, then the craft styles
+                                    "backstitch", "stem", "candlewick", "redwork", "knots"]
     assert list(lines.MOTIF_UNITS) == ["wave", "zigzag", "scallop", "blanket", "leaf"]  # LUDD 1.0's four, then Phase 5's
-    assert all(callable(s.points) for s in lines.REGISTRY.values())
+    # Each gives its needle points, but French knots (which jump) their records instead.
+    assert all(callable(s.points) and s.recs is None for name, s in lines.REGISTRY.items() if name != "knots")
+    assert callable(lines.REGISTRY["knots"].recs) and lines.REGISTRY["knots"].points is None
 
 
 # ---------------------------------------------------------------- methods
@@ -338,7 +341,7 @@ def test_line_styles_and_motifs_registered():
 
 def test_rpc_method_list_matches_the_manifest():
     names = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    assert len(names) == 71
+    assert len(names) == 80
     assert sorted(dispatcher._methods) == names
 
 

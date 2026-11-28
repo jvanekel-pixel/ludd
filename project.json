@@ -33,16 +33,16 @@
     "monthlyCapUsd": 0,
     "spentThisMonthUsd": 0
   },
-  "phase": 7,
+  "phase": 8,
   "status": "active",
-  "nextAction": "Phase 7 (lines, sequencing and drawing tools) in a fresh session once Phase 6 is merged: answer its spec's Owner decisions first",
-  "blockedOnHuman": "Answer the Phase 7 spec's Owner decisions",
-  "lastSessionAt": "2026-11-27T01:28:00Z",
+  "nextAction": "Phase 8 (specialty and in-the-hoop) build from docs/phases/PHASE-08-specialty-in-the-hoop.md in a fresh session, once Phase 7 is merged; its owner decisions were answered on 2026-11-27",
+  "blockedOnHuman": null,
+  "lastSessionAt": "2026-11-28T07:10:00Z",
   "health": {
     "tests": "passing",
     "build": "passing",
-    "lastAuditedPhase": 6,
-    "lastAuditedAt": "2026-11-27T01:28:00Z"
+    "lastAuditedPhase": 7,
+    "lastAuditedAt": "2026-11-28T07:10:00Z"
   },
   "deploy": {
     "target": "local",

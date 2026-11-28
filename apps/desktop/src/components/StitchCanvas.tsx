@@ -28,6 +28,7 @@ import { hitTest, itemLabel, moveBy, rotateBy, scaleBy, transformTogether } from
 import { heatColor } from "../design/heat";
 import { hoopFit } from "../design/machine";
 import { flatten, spanAt, type Pt } from "../design/paths";
+import { penPoints } from "../design/simplify";
 import { chunkBlocks, visibleRecords, type Chunk } from "../design/player";
 import { threadLayers } from "../design/threadLook";
 import { buildThreadChunk, showUpTo, type ThreadChunk } from "./threadRender";
@@ -798,11 +799,12 @@ function snapDirection(o: ObjectItem, p: Pt): Pt {
   return nearestOnLine(columnRing(o.geometry as { rail_a: PathNode[]; rail_b: PathNode[] }), p, true);
 }
 
-/** Where a drawn shape's stitching starts and ends (its first and last needle drop), mm. */
+/** Where a drawn shape's stitching starts and ends (its first and last needle drop), mm. A shape
+ *  sewn in a branch has none of its own: the branch's dots show (canvas/branchOverlay.ts). */
 function stitchEnds(scene: Scene, o: ObjectItem): { start: Pt; end: Pt } | null {
   const d = scene.design;
   const idx = useStore.getState().history.present?.layout.items.indexOf(o) ?? -1;
-  if (!d?.records.item || idx < 0) return null;
+  if (!d?.records.item || idx < 0 || d.branches?.some((b) => b.items.includes(o.id))) return null;
   const { x, y, kind, item } = d.records;
   let first = -1;
   let last = -1;
@@ -827,6 +829,8 @@ function drawPen(g: Graphics, pen: Pen, cursor: Pt | null, px: number) {
   const color = parseInt(useStore.getState().drawThread.color.slice(1), 16);
   // The rubber band shows the kind of point the next click makes (curve, or line with Ctrl, cusp with Shift).
   const withCursor = (nodes: PathNode[]) => (cursor ? [...nodes, [cursor[0], cursor[1], cursorKind] as PathNode] : nodes);
+  // Continued from its first point (K), the pen holds the line backwards: draw it as it will be saved.
+  const saved = (nodes: PathNode[]) => penPoints(nodes, pen.prepend);
   const line = (poly: Pt[], width: number, alpha: number) => {
     if (poly.length < 2) return;
     g.moveTo(poly[0][0], poly[0][1]);
@@ -840,16 +844,16 @@ function drawPen(g: Graphics, pen: Pen, cursor: Pt | null, px: number) {
     }
     line(poly, 1.5 * px, 1);
   } else if (pen.kind === "run") {
-    line(flatten(withCursor(pen.a)), 1.5 * px, 1);
+    line(flatten(saved(withCursor(pen.a))), 1.5 * px, 1);
   } else {
     // A satin ribbon: its centre line, and a band as wide as the satin will be.
-    const poly = pen.closed ? flatten(pen.a, true) : flatten(withCursor(pen.a));
+    const poly = pen.closed ? flatten(pen.a, true) : flatten(saved(withCursor(pen.a)));
     if (pen.closed && poly.length) poly.push(poly[0]);
     line(poly, useStore.getState().satinWidth, 0.3);
     line(poly, 1.5 * px, 1);
   }
   const r = 3 * px;
-  for (const n of [...pen.a, ...pen.b]) nodeMark(g, n, r);
+  for (const n of [...saved(pen.a), ...pen.b]) nodeMark(g, n, r);
   g.fill(0xffffff).stroke({ width: px, color: C.select });
 }
 let cursorMm: Pt | null = null;
@@ -2111,6 +2115,13 @@ export function StitchCanvas() {
       // Another pointer coming up doesn't end (or drop) this drag.
       if (drag && e.pointerId !== dragPointer) return;
       if (scene && runCanvasTool("up", e, hookCtx(scene))) return;
+      // A tool that drew its own stroke (freehand) kept the pointer's moves from the canvas: the
+      // pen's preview line reaches to where the button was let go, not where it was last seen.
+      if (scene && !drag && useStore.getState().pen) {
+        const [sx, sy] = local(e);
+        cursorMm = snapped(scene, toWorld(scene, sx, sy), e);
+        drawOverlay(scene);
+      }
       if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
       el.classList.remove("panning");
       releaseEsc?.();

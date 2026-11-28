@@ -190,7 +190,15 @@ LAYOUT_FEATURES: dict[str, Callable[[dict], bool]] = {
     "trim_jumps_all": lambda layout: layout.get("jumps_to_trims") is not None,  # "Trim jumps longer than…" for the whole layout
     # "Don't sew what's hidden under shapes on top".
     "remove_overlap": lambda layout: isinstance(layout.get("remove_overlap"), dict) and bool(layout["remove_overlap"].get("enabled")),
+    # Shapes sewn as one path. A branch of one sews as an ordinary shape, so it needs nothing.
+    "branches": lambda layout: _shared_branch(layout),
 }
+
+
+def _shared_branch(layout: dict) -> bool:
+    """Whether some branch id is held by two or more items."""
+    ids = [it["branch"] for it in layout.get("items") or [] if isinstance(it, dict) and isinstance(it.get("branch"), str) and it["branch"]]
+    return len(ids) != len(set(ids))
 
 
 def _is_fill(item: dict) -> bool:
@@ -200,6 +208,17 @@ def _is_fill(item: dict) -> bool:
 def _has_op(item: dict, names) -> bool:
     ops = item.get("ops")
     return isinstance(ops, list) and any(isinstance(o, dict) and isinstance(o.get("op"), str) and o["op"] in names for o in ops)
+
+
+def _line_style(item: dict, params: dict, style: str) -> bool:
+    return item.get("kind") == "run" and params.get("style") == style
+
+
+def _shaped_locks(item: dict, params: dict) -> bool:
+    """Lock stitches shaped another way than the usual one, on a shape that sews some: appliques and
+    lettering always lock the usual way, and with both lock boxes unticked there are none."""
+    return (item.get("kind") in ("run", "satin", "fill") and params.get("tie_style") not in (None, "", "standard")
+            and (params.get("tie_in") is not False or params.get("tie_off") is not False))
 
 
 def _new_text_layout(item: dict) -> bool:
@@ -258,6 +277,16 @@ ITEM_FEATURES: dict[str, Callable[[dict, dict, dict], bool]] = {  # (item, param
     # A motif of your own, carried with the line or fill that uses it.
     "user_motifs": lambda it, p, g: bool(p.get("motif_unit")) and (
         (it.get("kind") == "run" and p.get("style") == "motif") or (_is_fill(it) and p.get("pattern") == "motif")),
+    # Lines, sequencing and drawing tools. Buttonholes, eyelets, freehand shapes, repeats, presets
+    # and imported artwork are ordinary shapes and need no flag.
+    "line_backstitch": lambda it, p, g: _line_style(it, p, "backstitch"),
+    "line_stem": lambda it, p, g: _line_style(it, p, "stem"),
+    "line_candlewick": lambda it, p, g: _line_style(it, p, "candlewick"),
+    "line_redwork": lambda it, p, g: _line_style(it, p, "redwork"),
+    "line_knots": lambda it, p, g: _line_style(it, p, "knots"),
+    "fill_blackwork": lambda it, p, g: _is_fill(it) and p.get("pattern") == "blackwork",
+    "motif_side": lambda it, p, g: _line_style(it, p, "motif") and p.get("motif_side") not in (None, "", "center"),
+    "tie_styles": lambda it, p, g: _shaped_locks(it, p),
 }
 KNOWN_FEATURES = set(LAYOUT_FEATURES) | set(ITEM_FEATURES)
 

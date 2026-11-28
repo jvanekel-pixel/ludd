@@ -110,6 +110,31 @@ checks), so you rarely need to open one just to look.
   keep yours.
 - **New** (Ctrl+N, or Shift+D as in Embrilliance): an empty design on the fabric you used last.
 
+### Importing artwork (SVG, DXF, PDF)
+Drawings made in other programs come in as shapes you can edit: choose **⋯ → Import artwork…**
+(Ctrl+Alt+I) or drop an `.svg`, `.dxf` or `.pdf` onto the window. A window shows what it will become,
+with outlines on the hoop, for example "1 fill, 1 line, 1 satin · 49 × 25 mm". **Nothing is added until
+you press Add.**
+- **Width** starts at the drawing's real size and keeps its proportions.
+- **Lines as**: Automatic (thinner than 1 mm: a running stitch; 1 to 12 mm: a satin of that width;
+  wider: a filled shape), Running stitch, or Satin.
+- Tick the colors you want. A background rectangle behind everything starts unticked.
+- DXF drawings have **Fill closed shapes**; a PDF with several pages lets you choose the page.
+- Separate lines and arcs (in a DXF or an SVG) come in one by one, even where their ends meet, so join
+  an outline into one piece first (in AutoCAD: PEDIT, Join).
+- **Match colors to my threads** picks your closest spools.
+- **Left out** says what didn't come in, such as text (turn it into outlines in your drawing program, or
+  type it in LUDD), pictures, gradients, clipping and dashes.
+The shapes arrive in the file's order, grouped and selected, with your usual settings for each kind;
+Ctrl+Z takes them all out. A file with no real size is read at 96 pixels per inch (SVG) or in
+millimeters (DXF), and LUDD says so. Very large, tangled or damaged files, password-protected PDFs and
+`.svgz` files are refused with a message that says what to do. That covers files that would take minutes
+or fill the computer's memory, such as a shape crossing itself thousands of times, far more curve detail
+than a hoop could show, a DXF with more than 20,000 objects, or a PDF that claims more than 2,000
+pages. PDFs are read by a short-lived helper copy of LUDD's engine, so a bad one can't
+stall LUDD; changing a setting stops the preview before and starts a new one. LUDD never fetches or
+opens anything a drawing links to.
+
 ### Projects
 - **Save** (Ctrl+S) keeps a **LUDD project** (`.ludd`): drawn shapes, lettering, placed designs,
   pictures you trace and all settings, with the designs, pictures and the lettering's fonts
@@ -252,7 +277,7 @@ The bar at the bottom plays the design as the machine would sew it.
 | **Fill** | F | A filled area (tatami): click around its edge; it closes by itself. |
 | **Text** | Shift+T | Lettering: click where it goes, then type. |
 | **Auto-trace** | Shift+A | Click a shape (or a line) in a picture: LUDD finds its outline for you. |
-| **Shapes** | | Opens a menu beside the rail: rectangle (Ctrl+Alt+1), circle (Ctrl+Alt+2), star (Ctrl+Alt+3), rounded rectangle (Ctrl+Alt+4), oval (Ctrl+Alt+5), triangle (Ctrl+Alt+6), polygon (Ctrl+Alt+7), heart (Ctrl+Alt+8), monogram (Ctrl+Alt+M), and cutting holes (below). |
+| **Shapes** | | Opens a menu beside the rail: rectangle (Ctrl+Alt+1), circle (Ctrl+Alt+2), star (Ctrl+Alt+3), rounded rectangle (Ctrl+Alt+4), oval (Ctrl+Alt+5), triangle (Ctrl+Alt+6), polygon (Ctrl+Alt+7), heart (Ctrl+Alt+8), buttonhole (Alt+B), eyelet (Alt+E), monogram (Ctrl+Alt+M), and cutting holes (below). |
 | **Picture** | Ctrl+I | A picture to trace over. |
 
 A ready-made shape is added as a fill in the middle of the hoop, selected, ready to move, resize or
@@ -267,6 +292,15 @@ after a shape, a traced guess or a piece of text you can go straight on to the n
 Text tool, clicking a text that's already there selects it. After **Cut a hole** (O) you're back in
 the tool you were using (Esc while drawing the hole drops it and goes back too). With a shape
 selected, the arrow keys nudge it even while a drawing tool is chosen.
+
+### Buttonholes and eyelets
+**Shapes → Buttonhole…** (Alt+B) makes a buttonhole in the middle of the hoop: **Bar tacks** (two satin
+sides and a bar across each end) or **Rounded ends** (one satin ribbon round a slot). Set **Length** (8
+to 40 mm) and **Width** (3 to 8 mm); under More options, the **Cut gap** (0.6 to 2 mm) and **Angle**.
+Make the length the button's width plus its thickness plus 3 mm (the window gives the number for
+rounded ends). Keep **Fewer jumps & trims** on (it is in new designs) so the two sides hand over without
+a jump. **Shapes → Eyelet…** (Alt+E) makes a small ring: **Hole** 2 to 12 mm, **Ring** 1 to 3 mm; punch
+the hole after sewing. Both are ordinary grouped shapes you can move and reshape.
 
 ### Placing points (as in Embrilliance)
 | Do this | Makes |
@@ -285,6 +319,17 @@ selected, the arrow keys nudge it even while a drawing tool is chosen.
 The line from your last point to the pointer shows what the next click will make. Points near
 another shape's points snap to them, so shapes meet exactly. On screen, curve points are circles,
 straight points squares, corners diamonds.
+
+### Drawing freehand
+Press **Y** with Line, Satin or Fill chosen (or any tool: it picks Line) and drag to draw. Letting go
+turns your stroke into ordinary points, so you can keep adding clicks or strokes; Enter finishes. The
+bar at the top has **Smoothing** from 1 to 5: more gives fewer points, less follows your hand more
+closely. A fill stroke let go where it started closes the shape. Esc drops the stroke, then the shape.
+Zoom in to draw small details. A pen tablet works; pressure isn't used. Press Y again to turn it off.
+
+### Adding points to a line
+**K** picks the selected shape back up to add points at its end. To add at the **start** of a line or
+satin ribbon, select its first point, then press K; the line keeps its direction.
 
 ### Editing a shape's points
 Select the shape, then:
@@ -313,7 +358,9 @@ Select the shape, then:
     way along, it's sewn in two parts that meet at your stop; the moves between run along its
     middle, under satin sewn afterwards, so they don't show.
   - **An open running line** starts and stops at its ends: drag a dot to move that end, or drop
-    it on the other end to sew the line the other way round.
+    it on the other end to sew the line the other way round. If the line would sew differently from
+    there (its curve would change, or a motif's pattern would, as on a centered blanket stitch),
+    LUDD keeps its direction and says why: draw it again from that end instead.
 - **Drag the purple dots** to set the stitch direction:
   - **A fill**: the purple line between them is the direction of the rows. Each dot slides round
     the outline; the angle in the panel follows (typing an angle there puts the line back across
@@ -322,8 +369,9 @@ Select the shape, then:
   - **A satin column or satin fill**: the purple dots, just past each end, are its two tips. Slide
     them round the outline and the satin is rebuilt to run from one to the other, its stitches
     straight across the shape between them (Shift+W still tries LUDD's own suggestions).
-  - The dots move, turn and resize with the shape. **Optimize jumps** (Ctrl+Alt+J) chooses all
-    the starts and ends again for fewer jumps. A shape cut with the knife or cut out gets fresh
+  - The dots move, turn and resize with the shape. **Optimize jumps** (Ctrl+Alt+J) chooses
+    the starts and ends again for fewer jumps (it leaves a satin with both its dots set as it is,
+    and branches to the branch; it also picks where an applique and a text's first letter start). A shape cut with the knife or cut out gets fresh
     dots on each piece.
   - A **pinned** shape shows its outline only: its points and dots can't be moved until you unpin
     it. With several things selected the dots aren't shown.
@@ -469,7 +517,8 @@ also ignores the arrow keys, R, Alt+H / Alt+V and the resize handles (a note tel
 selected, a set distance out from its stitches: a border around lettering, an edge for a patch,
 an outline round a design (several things close together get one outline). Sew it as a **Satin
 border** (with its width), a **Line** or a **Triple line**; tick **Also around the inside of holes**
-for the middle of an O. It's sewn right after what it goes around. A negative distance makes an
+for the middle of an O. It's sewn right after what it goes around (after the whole branch, for a
+shape in one). A negative distance makes an
 inset inside the stitches instead; if nothing is left that far in, try a smaller inset (closer
 to 0).
 
@@ -477,7 +526,7 @@ to 0).
 - **Knife** (Shift+K, or ⋯ → Knife at the top of the panel): with a fill, line or satin ribbon
   selected, click two points (they snap to points, guides and the grid); it's cut along that line
   (extended right across the shape) into separate pieces, each with the same settings and thread,
-  colors changed in Order & colors, stops and trims, pin and group. One cut across a closed line or ring
+  colors changed in Order & colors, stops and trims, pin, group and branch. One cut across a closed line or ring
   gives two pieces. Holes stay with the piece they're in. It cuts the shape where you see it, even
   after it's been moved, turned or resized. A cut that misses leaves the knife ready to try again.
 - **Cut out** (Shift+O): see *Cut out with a shape* above.
@@ -490,8 +539,14 @@ to 0).
 ### Copying and repeating
 - **Ctrl+C / Ctrl+X / Ctrl+V** copy, cut and paste (pasted a little down and right).
 - **Ctrl+D** duplicates.
-- **Repeat…** (Ctrl+Shift+D, or ⋯ → Repeat at the top of the panel): copies in a **row or grid**, round a
-  **circle** (a carousel, each copy turned to follow it), or **mirrored ×4** like a quilt block.
+- **Repeat…** (Ctrl+Shift+D, or ⋯ → Repeat at the top of the panel) makes copies as a **Row** (or grid);
+  a **Wreath** (round a circle below the design, or round the middle of the hoop, each copy turned to
+  follow it); a **Kaleidoscope** (a wreath where every other copy is mirrored; choose 2 to 12 pairs); or
+  a **Mirror** image left–right, top–bottom or both. Outlines show where the copies will go. Ctrl+Z takes
+  them out. Very large results are warned about, and over 400,000 stitches aren't made.
+- **Copies of a shape in a branch** (paste, duplicate, repeat): one copied shape joins the branch, sewn
+  after its last shape; two or more copied shapes of one branch make a new branch of their own. A single
+  shape pasted into a design without that branch is an ordinary shape.
 
 ### Editing stitches of a stitch file
 Placed stitch files (PES, JEF, DST…) are edited stitch by stitch. Select the design, then **Edit
@@ -639,9 +694,10 @@ A fill's **Pattern** (in its section) changes how the area is stitched:
 | **Maze** | One path that winds into the shape and back out, never crossing itself. | **Path spacing** (0.8 to 6 mm, normally 2). |
 | **Ripple** | Rings spreading from the middle, like a drop in water. | **Ring spacing** (0.6 to 8 mm, normally 2). |
 | **Mesh** | A net of two sets of lines. | **Cell size** (1 to 10 mm, normally 3), **Crossing angle** (45 to 90°) and Angle. |
+| **Blackwork** | A lattice of double lines, like hand blackwork (below). | **Lattice** and **Cell size**. |
 
 Tatami, Gradient, Wave and Blend are **fills sewn in rows**. Contour, Stipple, Cross-stitch,
-Spiral, Motif, Maze, Ripple and Mesh are **open patterns**: they skip the cross-hatch underlay
+Spiral, Motif, Maze, Ripple, Mesh and Blackwork are **open patterns**: they skip the cross-hatch underlay
 (it would show through) and have no Random or Edge pad. Only Motif and Mesh have an Angle, and
 only Contour has Density. A Gradient and a Blend skip the cross-hatch too, so they really fade;
 on **Auto**, Blend, Motif, Maze, Ripple and Mesh have no underlay at all. A project that uses any
@@ -777,16 +833,87 @@ outside of a bend it can step straight to a row that starts far away. Check the 
 sewing; **Back to one angle** sews it as a plain fill. Other patterns don't use the lines, but they
 come back with Tatami.
 
+### Line styles
+A line's **Style** buttons are Single, Triple, Bean and Motif; **More styles…** adds:
+- **Backstitch**: forward a stitch and back half of one, a firm outline.
+- **Stem stitch**: slanted, overlapping stitches like a rope (**Width** 0.3 to 2.5 mm).
+- **Candlewicking**: a line with little knots (**Knot size** 1 to 3 mm, **Between knots** 2 to 15 mm).
+- **Redwork**: out and back, so the line is smooth and ends where it started.
+- **French knots**: a knot at every point of the line, with a jump from each knot to the next, marked
+  to be cut when over 3 mm. If your machine cuts only at color changes (like the PE550D), that thread
+  stays from knot to knot for you to snip by hand, unless you tick **Have the machine cut jump
+  threads** when saving for the machine: then it stops at each cut, and you press Start.
+Stitch length (Advanced) sets the others; knot sizes don't grow when you resize.
+
+### Blackwork
+**Pattern → Blackwork** fills a shape with a lattice of double lines. Choose the **Lattice** (Diamonds,
+Grid, Honeycomb or Crossed) and the **Cell size** (3 to 12 mm). It needs no angle or underlay. Where
+the lattice falls into separate pieces, the thread between them runs along the shape's edge, never
+across the open squares. A shape with holes can need a few jumps where no edge leads from piece to
+piece; the fill says how many. On a machine that cuts only at color changes, like the PE550D, each
+jump is a thread you snip. A fill over 60,000 stitches warns you that it will take a long time to sew.
+
 ### Motif lines
 A line's **Style → Motif** repeats a little pattern along it: **Wave**, **Zigzag**, **Scallop**,
 **Blanket stitch** (the applique edge stitch), **Leaves** or one of **My motifs** (above), with
 its **Repeat** length and **Width**. Use it for decorative borders, or round an applique with
 blanket stitch. A motif line that would take more than about 60,000 stitches (a whole design is
 usually 5,000 to 30,000) is refused: make the motif longer (Repeat) or simpler.
+**Which side** puts the motif **Centered** on the line, or all to the **Left** or **Right**, seen walking
+the line the way you drew it (Left is above a line drawn left to right). For blanket stitch round an
+applique, choose the side that points the teeth onto the applique. Mirroring keeps them on the mirrored
+side. LUDD sews a motif line from its other end (Optimize jumps, a branch, or a dragged dot) only when
+it sews the same from there: blanket, scallop and zigzag set to one side, and a centered wave. The
+others keep the direction you drew them.
+
+Candlewicking, French-knot and **Hand-sewn look** lines are turned too: the line keeps its shape and
+look, but its stitches may sit up to this far along it: 0.5 mm for candlewicking and French knots with
+the usual 1.6 mm knots (0.93 mm with 3 mm ones); 0.9 mm for the hand-sewn look at 100% with 2.5 mm
+stitches (more with longer stitches, up to 3.6 mm at 12 mm). French-knot points closer than a knot
+may leave out the other of the two, moving that knot by up to about 2 mm.
 
 ### Size and points
 Size (W, H), **Add points (K)** and **Add a hole (O)** for fills. Turn, mirror, duplicate,
 Repeat…, Pin and Remove are at the top of the panel.
+
+### Lock stitches
+Under Advanced, when a lock box is ticked, **Lock stitches** chooses their shape: **Standard**,
+**Triangle** (holds better on knits and slippery thread) or **Back-tack** (the strongest). Appliques and
+lettering always use Standard. On a fill, a triangle stays by the outline; where it can't, that end
+gets the Standard lock.
+
+### Stitch presets
+Keep a shape's stitch settings under a name: **Alt+P**, **⋯ → Stitch presets…**, right-click → Stitch
+presets…, or **Presets…** under Advanced. Choose a preset and **Apply to selection**, or **Use for new
+shapes**. **Save current as…** keeps the selected shape's settings; **Import…** and **Export…** move
+presets between computers as `.luddpreset` files. Five come built in: Light sketch fill, Bold outline,
+Redwork line, Narrow satin border and Felt applique. A preset never changes a shape's angle lines,
+start and end dots or carved lines. A file with a setting its kind of shape doesn't have is refused
+(lock settings on an applique preset are just left out), and an exported file's name can't have ":".
+
+### Branch: sew shapes as one path
+Select shapes in one thread (lines, satins and fills) and press **Alt+Shift+B** (or right-click →
+**Branch: sew as one path**). LUDD sews them as one path: one start, one end, and the moves between them
+hidden under stitching sewn later. Fills that touch or overlap, lines that meet end to end, and satins
+that continue one another in a line sew with no cut. Lines that cross or meet in a T, satins meeting at a corner, and a satin laid
+across fills' edges still cut or jump. Where the thread can't stay hidden, LUDD tells you which two
+shapes and what helps: over 3 mm it is cut there; 3 mm or less is jumped, leaving a short thread.
+Select a shape of the branch to see the branch's **green and red dots**, and drag them to choose where
+it starts and ends. **Alt+Shift+U** takes shapes out of the branch, and a branch down to one shape ends.
+- The branch sews in the thread most of its shapes have: a shape you recolor sews on its own (one in
+  the middle splits the branch, and the note names it: give it the branch's thread, or move it before
+  or after the branch in Order & colors).
+- **A branch stays whole**: every piece of a shape cut with the knife or **Cut out** stays in it, with
+  its dots; **Sew in the shortest order** moves it as one piece, and Sort and Combine colors sew it as
+  one block; a satin border or outline round one of its shapes is sewn after it; shapes merged from
+  one branch stay in it (merged with anything else, the result is an ordinary shape, sewn after it);
+  lettering broken into shapes keeps its branch; a shape made an applique leaves it. A move by hand
+  can split one: moving a shape yourself (Order & colors, Sew earlier or later) puts it where you put
+  it, even between a branch's shapes. LUDD then names the shape in between and says what to do: move it
+  before or after the branch, or add it to the branch. **Undo** brings the branch back as it was.
+- **Order & colors** lists a branch's shapes in the order they sew. The branch chooses that order, so a
+  row you move inside it may go back; take the shape out to place it yourself.
+- Copying shapes of a branch: see **Copying and repeating**.
 
 ### Satin ribbons
 A satin is a band of smooth, shiny stitches sewn straight across from edge to edge: ideal for
@@ -800,7 +927,8 @@ outlines, borders and details over a fill. In LUDD you draw a satin like a line:
 
 Ways to get a satin without drawing it:
 - **Add a satin border** (Shift+B, or the button in a fill's section): a closed ribbon along the
-  fill's edge, sewn right after it. This is the "fill blob, then satin outline" look.
+  fill's edge, sewn right after it (after the whole branch, for a fill in one). This is the "fill
+  blob, then satin outline" look.
 - **Stitch as → Satin** turns an open line into a ribbon, and a fill (or a line drawn all the way
   round) into a **satin fill** (below).
 
@@ -1085,8 +1213,8 @@ machine.
   on machines like the PE550D that only cut at color changes).
 - **Sew in the shortest order** (Ctrl+Alt+O): shapes in the same thread (fills, satins and lines
   alike) are put in the order that keeps the moves between them shortest. Shapes whose stitches
-  overlap keep their order, since it decides which is on top; the others move around them. If
-  nothing can be shortened, LUDD says so.
+  overlap keep their order, since it decides which is on top; the others move around them. A branch
+  moves as one piece. If nothing can be shortened, LUDD says so.
 - **Optimize jumps** (Ctrl+Alt+J, in the Design section and ⋯): keeps the sewing order, and instead
   chooses where each piece **starts and ends**, so that pieces in the same thread hand over to each
   other like magnets: each piece ends next to the one after it, and that one starts right there. A
@@ -1261,6 +1389,11 @@ Shortcuts are also shown in every menu and on every button's tooltip.
 | Draw another angle line, so the rows turn (turning fill) | Shift+I |
 | Carve lines into the selected fill | Shift+C |
 | Motifs window (My motifs) | Alt+Shift+M |
+| Freehand drawing on or off | Y |
+| Add a buttonhole / an eyelet | Alt+B / Alt+E |
+| Branch the selected shapes / take them out | Alt+Shift+B / Alt+Shift+U |
+| Stitch presets | Alt+P |
+| Import artwork (SVG, DXF, PDF) | Ctrl+Alt+I |
 | Remove the selected point | Delete |
 | Rectangle / circle / star / monogram | Ctrl+Alt+1 / 2 / 3 / M |
 

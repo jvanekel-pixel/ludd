@@ -10,7 +10,7 @@ change, in the same commit as docs/CHANGELOG.md. Never edited by the help agent.
 | --- | --- |
 | Product | **LUDD** (formerly *Threadline*), free embroidery digitizing software |
 | Version described | **1.0.1** (in development; installers built from the working copy) |
-| Last updated | **2026-11-26** |
+| Last updated | **2026-11-28** |
 | Owner | One hobbyist user (the person asking questions), with a **Brother PE550D** (4" × 4" hoop) |
 | Source of truth, in order | 1. this file · 2. `docs/USER-MANUAL.md` · 3. `docs/CHANGELOG.md` · 4. the app's own Help (F1) |
 | Developer | Claude Code, in the LUDD repository chat. The help agent never changes code or files. |
@@ -55,7 +55,7 @@ change, in the same commit as docs/CHANGELOG.md. Never edited by the help agent.
 | Can't open | Embrilliance working files (`.be`, `.bt`): they're a closed format. Open the PES/JEF Embrilliance saved, or recreate. See L-012. |
 | Project file | `.ludd`: everything embedded (shapes, lettering, placed designs, traced pictures, the lettering's fonts). Old `.thl` projects and `.tlfont` stitch fonts still open. |
 | Data folder (Windows) | `%APPDATA%\Ludd` (older installs: the old `Threadline` folder still works). Holds threads, settings, `fonts` (stitch fonts, including fonts made from letter files), `templates` (name templates), `motifs` (My motifs), `recovery`, `project-files` (private copies of added pictures/designs; unused 90 days → deleted), `machines` (extra machine profiles). |
-| Installer location (developer builds) | `C:\Users\Copper Felix\HTML Stuffs\threadline\apps\desktop\src-tauri\target\release\bundle\nsis\LUDD_<version>_x64-setup.exe` |
+| Installer location (developer builds) | `%USERPROFILE%\HTML Stuffs\threadline\apps\desktop\src-tauri\target\release\bundle\nsis\LUDD_<version>_x64-setup.exe` |
 | Releases | GitHub `jvanekel-pixel/ludd` → Releases. Installers aren't code-signed yet (Windows SmartScreen / macOS Gatekeeper warning; see T-001). |
 | Shortcuts | Embrilliance's keys wherever Embrilliance has one. Every menu item and button tooltip shows its key. |
 
@@ -164,7 +164,17 @@ One line per common question. Status, then where to read more.
 | import a thread chart (CSV)? | YES | F-1604 |
 | design for a bigger hoop than 4"×4"? | YES (pick a Janome hoop, or split) | F-303, section 1 |
 | add my own machine? | PARTIAL (JSON file, advanced) | section 1 |
-| freehand / pen tablet drawing? | PARTIAL (mouse or pen clicks; no freehand brush) | L-011 |
+| freehand / pen tablet drawing? | YES (`Y`; no pen pressure) | F-504, L-048 |
+| keep drawing a line from either end? | YES (`K`; first point selected: from the start) | F-505 |
+| craft stitches: backstitch, stem stitch, candlewicking, redwork, French knots? | YES (More styles) | F-1317 |
+| blackwork? | YES (the Blackwork fill) | F-1317 |
+| blanket stitch on one side of a line? | YES (Which side) | F-1317 |
+| choose how the lock stitches are shaped (knits, slippery thread)? | YES | F-1320 |
+| make buttonholes and eyelets? | YES (`Alt+B`, `Alt+E`) | F-1318 |
+| sew shapes as one path with one start and end (branching)? | YES, drawn shapes in one thread (`Alt+Shift+B`) | F-1808, L-045 |
+| wreaths, kaleidoscopes and mirror images? | YES (Repeat) | F-1109 |
+| save a shape's stitch settings and reuse them (presets)? | YES (`Alt+P`) | F-1319 |
+| import SVG, DXF or PDF artwork? | YES (`Ctrl+Alt+I`) | F-209, L-046, L-047 |
 | 3D puff, sequins, chenille, cutwork? | NO | L-009 |
 
 ---
@@ -290,6 +300,54 @@ removed designs).
 ### F-208 New design — YES
 `Ctrl+N` or `Shift+D`: empty design on the fabric used last.
 
+### F-209 Import artwork (SVG, DXF, PDF) — YES (added 2026-11-27)
+`Ctrl+Alt+I`, ⋯ → **Import artwork…**, or drop an `.svg`, `.dxf` or `.pdf` on the window. A window
+previews it: outlines on the hoop and a line such as "1 fill, 1 line, 1 satin · 49 × 25 mm". **Nothing
+is added until Add.** Choices: **Width** (keeps the proportions; starts at the file's real size);
+**Lines as** Automatic (under 1 mm wide: running stitch; 1 to 12 mm: a satin of that width; wider: a
+filled shape), Running stitch, or Satin (every line a satin, at least 1 mm wide); a tick per color; the
+**Background rectangle** (a filled rectangle at the bottom covering nearly the whole drawing), unticked, and
+left out of the size unless ticked; for DXF **Fill closed shapes** (closed outlines become fills, one
+inside another is its hole); for a PDF of several pages, the page; **Match colors to my threads** (needs
+spools in My threads). **Left out** lists what was skipped and why. Add makes ordinary shapes with your
+settings for each kind, in the file's drawing order, grouped and selected, in one undo step. With no
+design open, LUDD makes an empty one for the preview and takes it away if you cancel.
+- Filled paths become fills (holes by the file's fill rule); pieces under 1 mm² and lines under 1 mm
+  long are dropped and counted. A fill with a stroke gives the fill, then its line or satin on top.
+- A DXF's separate lines and arcs come in one by one, even where their ends meet (L-046). So an outline
+  drawn that way in CAD comes in as separate lines, which **Fill closed shapes** doesn't fill, and a
+  curve saved as many very short lines can come in as nothing (the window says how many tiny pieces
+  were left out). The same goes for an SVG made of separate `<line>` pieces. What helps: join them in
+  your CAD program (in AutoCAD: PEDIT, Join), or save the drawing as an SVG that keeps each outline as
+  one unbroken path.
+- Sizes: an SVG with no real size is read at 96 pixels per inch, a DXF with no units as millimeters,
+  and LUDD says so. DXF: only the drawing's model space.
+- PDF: the drawn paths of a page (and of one level of grouped forms) come in like SVG paths. Text,
+  pictures, shadings and deeper groups are left out; clips that cut a shape are only listed (L-047).
+- Refused, with a message saying what to do: SVG over 20 MB, DXF or PDF over 50 MB; over 2,000 shapes
+  (over 200 warns); over 1,000 mm at the chosen width; more than about 400,000 stitches; a file that
+  takes over 60 seconds; an SVG that declares XML entities; compressed `.svgz` (save as plain SVG);
+  DWG (save as DXF); a password-protected, cut-off or damaged PDF or DXF; a DXF block that inserts itself.
+- An SVG class attribute longer than 500 characters is ignored (drawing programs write short ones).
+- Also refused, so that a small file can't take minutes or gigabytes: SVG paths closed over and over,
+  far beyond any drawing (over 2,000,000 steps to work the "z"s out, all copies counted); a shape whose
+  outline crosses or touches itself more than 20,000 times; thousands of outlines inside or on top of
+  one another (2,000 nested squares still read, in 10 to 20 seconds), or filled shapes whose edges
+  lie that thick, such as a star of several thousand long, thin spikes; curves that come to more than
+  750,000 points once traced, at the size the drawing comes in (about 190 m of curved line; set a
+  smaller Width or simplify it; for a DXF's closed outlines filled, at their own size, or untick Fill
+  closed shapes); two closed DXF outlines of about 10,000 points or more drawn almost, but not
+  exactly, on top of one another (exact copies are fine); a DXF with more than 20,000 objects
+  (shapes, blocks, layers and other settings; old-style polyline points are counted apart, up to
+  100,000), or with more than 450,000 pairs of lines in all (about 900,000 lines of text, or about
+  220,000 polyline points; about 19,000 lines as CAD programs write them still fit); a PDF that says
+  it has more than 2,000 pages; a PDF, or a very wide line, that takes more than 2 GB of memory.
+- PDFs, and very wide lines with many points, are worked out by a short-lived helper copy of LUDD's
+  engine, stopped at the time limit, or as soon as it is seen using over 2 GB, so a bad file can't
+  stall or crash LUDD (these previews take a second or two longer). A new preview (a changed setting or another file) stops the
+  one before it. If LUDD gets no answer in time, it says so and what to do.
+- Nothing is ever fetched or followed: pictures and files a drawing links to are not opened.
+
 ---
 
 ## 5. Saving for the machine
@@ -374,7 +432,7 @@ changes. (Very pale threads are drawn grey so they show.)
 | Fill | `F` | tatami fill: click around the edge; closes itself |
 | Text | `Shift+T` | lettering (click where it goes) |
 | Auto-trace | `Shift+A` | traces a picture (F-901) |
-| Shapes | menu | rectangle `Ctrl+Alt+1`, circle `Ctrl+Alt+2`, star `Ctrl+Alt+3`, rounded rectangle `Ctrl+Alt+4`, oval `Ctrl+Alt+5`, triangle `Ctrl+Alt+6`, polygon `Ctrl+Alt+7`, heart `Ctrl+Alt+8`, monogram `Ctrl+Alt+M`, holes |
+| Shapes | menu | rectangle `Ctrl+Alt+1`, circle `Ctrl+Alt+2`, star `Ctrl+Alt+3`, rounded rectangle `Ctrl+Alt+4`, oval `Ctrl+Alt+5`, triangle `Ctrl+Alt+6`, polygon `Ctrl+Alt+7`, heart `Ctrl+Alt+8`, buttonhole `Alt+B` and eyelet `Alt+E` (F-1318), monogram `Ctrl+Alt+M`, holes |
 | Picture | `Ctrl+I` | a picture to trace over |
 
 **Ready-made shapes** (Shapes menu, the empty canvas's right-click menu, or the keys): each adds a
@@ -382,6 +440,8 @@ fill in the middle of the hoop, selected, up to 60 mm wide (smaller on a small h
 settings. **Polygon** asks how many sides (3 to 12; it starts at the number used last, 6 the first
 time): Enter adds it, Esc cancels. The rounded rectangle and the oval are 0.7 as tall as wide, the
 heart about 0.9; a triangle or polygon has a corner at the top. Then edit them like any fill (F-601).
+
+`Y` turns freehand drawing on or off (F-504).
 
 Embrilliance create keys: `D` toggle drawing/Select, `X` last tool again, `Q` same kind as the last
 shape, `W` the kind before that.
@@ -398,10 +458,27 @@ Draw a satin along an existing shape's edge: after a couple of clicks LUDD offer
 satin**. Tab cycles: all the way round centered on the edge → just outside the edge → only between
 your first and last click. Shift+Tab back, Enter keeps, Esc restores your clicks.
 
+### F-504 Freehand drawing — YES (added 2026-11-27)
+Press `Y` with Line, Satin or Fill chosen (with another tool, `Y` picks Line) and the hint bar shows
+**Freehand · Smoothing** with − and + (1 to 5, starts at 3, remembered). Press and drag; letting go
+turns the stroke into ordinary pen points, so you can add clicks or more strokes and finish with
+`Enter` as usual. A drag under 2 mm is a click. A **Fill** stroke let go near where it started (within 12
+screen pixels, after going further away) closes and finishes the shape. `Esc` drops the stroke first,
+then the shape. Right-click, double-click, panning (Space or middle button) and the wheel work as
+before. More smoothing gives fewer points; less stays closer to your hand: the line keeps within 0.15,
+0.25, 0.4, 0.6 or 0.9 mm of your stroke (1 to 5), but never closer than 1.5 screen pixels, so zoom in
+for fine detail. Pen pressure isn't used (L-048). Replaces L-011.
+
+### F-505 Continue a shape from either end — YES (added 2026-11-27)
+`K` (Add points in Size and points) picks the shape back up. For an open line or satin ribbon with its
+**first point selected**, `K` adds at the **start**; the shape keeps its direction, start and end, and
+the pen's preview is the line `Enter` saves. Otherwise it adds at the end. Freehand strokes continue a
+shape the same way.
+
 ### F-601 Editing points — YES
 Drag a point (thread fades while held) · right-click a point: curve → straight → corner ·
 double-click the outline to add a point · double-click a point (or Delete) to remove it · `K` add
-more points to the shape · a hole with fewer than 3 points is removed.
+more points to the shape (F-505: from the start when a line's first point is selected) · a hole with fewer than 3 points is removed.
 
 ### F-602 Resize, stretch, turn handles — YES
 Corner handles resize evenly; **side handles stretch one way** (opposite side stays put; appear
@@ -421,7 +498,7 @@ magnet), and stays exactly where you let go.
 | Fill | Start anywhere on the outside edge; stop anywhere on any edge (holes too). The rows are planned so the last one finishes there; moves between parts run under rows sewn later. |
 | Closed line / satin border (ribbon loop) | Anywhere along it (start = stop). |
 | Satin (ribbon, two-sided column, satin fill) | Start and stop **anywhere along it**. To stop part way, it's sewn in two parts meeting at the stop; moves run along its middle, under satin sewn later. A wide satin finishes on the side the dot is on. |
-| Open running line | At its ends only: dragging a dot moves that end point; dropping it on the other end sews the line the other way round (L-004). |
+| Open running line | At its ends only: dragging a dot moves that end point; dropping it on the other end sews the line the other way round (L-004), unless it would sew differently from there: its curve would change, or a motif's pattern would (a centered blanket, a leaf; F-1317). Then LUDD says why and keeps the direction. |
 | Lettering | Each letter has its own small dots (F-1405). |
 | Applique, stitch files | No dots to move. |
 | Turning fill (F-1315) | Start movable; it finishes at the end of the row nearest the red dot. |
@@ -531,8 +608,19 @@ unpin it first). A pinned picture ignores the arrow keys too.
 Double-click a name (list or panel top), `F2`, or ⋯ → Rename. Saved in the project.
 
 ### F-1108 Copy, paste, duplicate, repeat — YES
-`Ctrl+C/X/V` (pasted down-right; with nothing selected they act on the only shape), `Ctrl+D`; **Repeat…** `Ctrl+Shift+D`: row/grid, circle
-(carousel), mirrored ×4.
+`Ctrl+C/X/V` (pasted down-right; with nothing selected they act on the only shape), `Ctrl+D`; **Repeat…** `Ctrl+Shift+D`: row or grid, wreath,
+kaleidoscope, mirror (F-1109). Copies of shapes in a branch: F-1808.
+
+### F-1109 Mirror, wreath and kaleidoscope — YES (added 2026-11-27)
+Repeat… (`Ctrl+Shift+D`) has **Row** (a row or grid), **Wreath** (copies round a circle, each turned to
+follow it; its center **Below the design**, as before, or **The middle of the hoop**, so a motif placed
+off center repeats round it), **Kaleidoscope** (a wreath with every other copy mirrored, 2 to 12
+**Pairs**) and **Mirror** (**Left–right**, **Top–bottom** or **Both**, the old mirrored ×4). Outlines on
+the design show where every copy will land while the window is open; the window is narrow, at the
+right, so the hoop stays in view. One `Ctrl+Z` takes them out. Mirrored copies of a one-sided motif
+line keep their teeth mirrored. Over about 60,000 stitches the window warns; over 400,000 it won't
+repeat. Repeating a shape of a branch adds its copies to the branch, after its last shape; where
+copies don't join, the branch cuts there and says so (F-1808).
 
 ---
 
@@ -573,11 +661,12 @@ the shapes while knife, merge, outline or Optimize jumps is working, LUDD drops 
 
 ### F-1205 Outline / offset — YES
 `Ctrl+Shift+K`: a ring a set distance from the selection's stitches, sewn as satin border, line or
-triple line; optional round holes; negative = inset.
+triple line; optional round holes; negative = inset. Sewn after what it goes round (after the whole
+branch, for a shape in one).
 
 ### F-1206 Add a satin border — YES
 `Shift+B` (or the fill's button): a closed satin ribbon along a fill's (or closed line's) edge, sewn
-right after it.
+right after it (after the whole branch, for a shape in one).
 
 ---
 
@@ -641,12 +730,17 @@ runs across the rings and only a light outline shows on most shapes (L-026). The
 shows the outer pieces being sewn area by area, not strictly from the middle out. A project with a
 Spiral fill needs this version of LUDD or newer to open.
 
+**Blackwork** (added 2026-11-27), a lattice of double lines: F-1317.
+
 ### F-1306 Line styles and motifs — YES
 Single, Triple (three passes), Bean (each stitch three times), **Motif**: Wave, Zigzag, Scallop,
 Blanket stitch, Leaves, or one of **your own** (My motifs, F-1311), with Repeat length and Width.
 The same motifs fill shapes with the Motif fill pattern. A motif line that would take more than
 about 60,000 stitches (a whole design is usually 5,000 to 30,000) is refused with a message: make
 the motif longer (Repeat) or simpler.
+
+More line styles (Backstitch, Stem stitch, Candlewicking, Redwork, French knots) and which side a
+motif sits on: F-1317.
 
 ### F-1307 Satin ribbons — YES
 Draw like a line along the middle; width 1–12 mm (new ones start at the last width); Ctrl+right-click
@@ -781,6 +875,84 @@ feathered into each other). **Left and right are as the rows run at 0°** (the p
 picture). Turning or mirroring the fill keeps the ragged side on the same side of the shape. With
 underlay on Auto there's no edge run (it would show), and the cross-hatch stays back from the
 ragged side. A very short row keeps at least 1 mm.
+
+### F-1317 Craft stitches, blackwork, which side — YES (added 2026-11-27)
+**Line → Style**: Single, Triple, Bean and Motif are buttons; **More styles…** has:
+- **Backstitch**: forward a stitch, back half of one, so there's a hole every half stitch and the line is
+  three threads thick.
+- **Stem stitch**: slanted stitches that overlap by half, like a rope. **Width** 0.3 to 2.5 mm (0.8).
+- **Candlewicking**: a line with little knots. **Knot size** 1 to 3 mm (1.6), **Between knots** 2 to
+  15 mm (4); knots closer than the knot size plus 1 mm are refused with the smallest gap that works.
+- **Redwork**: out along the line and back, the way back filling between the holes; it ends where it
+  started (a closed line goes round twice).
+- **French knots**: a knot at every point of the line, with a jump between knots, marked to be cut
+  when over 3 mm. A machine that cuts only at color changes (the PE550D) leaves that thread from knot
+  to knot to snip by hand, unless **Have the machine cut jump threads** is ticked when saving for the
+  machine (F-302): it then stops at each cut, and you press Start. The panel says this. Points closer
+  than the knot size are left out with a warning. No stitch length.
+Stitch length is in Advanced for the others. Backstitch and Stem stitch start again at corners sharper
+than 35°. Knot and stitch sizes are millimeters and don't grow when you resize the shape. A line that
+would take over about 60,000 stitches is refused.
+
+**Motif → Which side**: **Centered** (as before), **Left** or **Right**, seen walking the line the way you
+drew it (Left is above a line drawn left to right). The motif's flat edge sits on the line and its teeth
+point away; for blanket stitch round an applique, pick the side that points the teeth onto the applique.
+Scallop sits on the line; one of your own motifs that is all on one side moves to the side you pick.
+Mirroring a line keeps the teeth on the mirrored side.
+
+**Turning a motif line round** (Optimize jumps, a branch, or dropping an end dot on the other end)
+happens only when it sews the same stitching from there (within 0.05 mm): a blanket, scallop or
+zigzag set to Left or Right (its teeth stay where they were), or a centered wave. A centered blanket,
+scallop or zigzag, leaves, a wave set to a side, and a motif of your own that is lopsided keep the
+direction you drew them. (Before 2026-11-27's audit fix, turning could move their teeth or bumps.)
+Candlewick, French-knot and hand-sewn-look lines are turned although their stitches then sit a little
+differently along them (how far: F-1805).
+
+**Fill → Pattern → Blackwork**: a lattice of double lines (every line sewn twice, and the lattice joins
+itself). **Lattice**: Diamonds (standard), Grid, Honeycomb or Crossed (grid and both diagonals).
+**Cell size** 3 to 12 mm (5). No angle, spacing or underlay on Auto. Where the lattice falls into
+separate pieces, the thread between them runs along the shape's edge, never across open cells; shapes
+without holes need no jump. A shape with holes can need a few jumps, where no edge leads from one
+piece to the next: the fill says how many, and on a machine that cuts only at color changes (the
+PE550D) each is a thread to snip. In tests (every lattice, 3 to 12 mm cells) a donut needed up to 3, a
+letter B up to 2, a star with a hole up to 4 and a square with four holes up to 14. Over 60,000
+stitches it warns; very large shapes with small cells are refused.
+
+### F-1318 Buttonholes and eyelets — YES (added 2026-11-27)
+Shapes menu → **Buttonhole…** (`Alt+B`) or **Eyelet…** (`Alt+E`). They arrive in the middle of the hoop,
+grouped and selected, in one undo step, as ordinary shapes you can move and reshape; the sizes are
+remembered. **Buttonhole**: **Bar tacks** (two satin sides sewn down one and back up the other, then a
+bar tack across each end) or **Rounded ends** (one satin ribbon round a slot). **Length** 8 to 40 mm
+(16), **Width** 3 to 8 (5); More options: **Cut gap** 0.6 to 2 mm (1) and **Angle**. Sides thinner than
+1 mm are refused ("Make the buttonhole wider or the cut narrower"). Choose Length = the button's width +
+its thickness + 3 mm (the window shows the right number for rounded ends); with bar tacks the slit
+between them is the Length less 3 mm. The bar buttonhole's sides hand over under a tack with no jump
+when **Fewer jumps & trims** is on (it is in new designs); off, there's a short jump, no cut. **Eyelet**:
+**Hole** 2 to 12 mm (4), **Ring** 1 to 3 mm (1.6): a triple run round the hole, then a satin ring; a ring
+wider than the hole gets a warning. Punch or cut the hole after sewing.
+
+### F-1319 Stitch presets — YES (added 2026-11-27)
+`Alt+P`, ⋯ → **Stitch presets…**, a shape's right-click menu, or **Presets…** in the panel's Advanced
+fold. A preset is one shape's stitch settings under a name (a satin ribbon's width too, as it sews);
+it leaves out what belongs to one shape: its angle and angle lines, carved lines, start and end dots, a
+ripple's middle and which way a turned blend runs. The window lists presets for the selected shape's
+kind (all kinds with nothing selected): **Apply to selection** (every selected shape of that kind, one
+undo step), **Use for new shapes**, **Save current as…**, **Import…**, **Export…**, **Delete**. Five
+are built in and can't be deleted: **Light sketch fill** (Tatami, rows 1 mm apart, stitches 3.5 mm, no
+underlay, hand-sewn look 40%), **Bold outline** (Bean line, 2.5 mm), **Redwork line** (Redwork, 2.5 mm),
+**Narrow satin border** (satin 2 mm wide, rows 0.4 mm, center underlay) and **Felt applique** (2.5 mm
+border, straight tack-down, placement line). Files are `.luddpreset` in the data folder's `presets`.
+Import checks every setting and refuses a damaged file, a setting out of range, a setting another kind
+of shape has (it names it), or one a newer LUDD made; lock settings in an applique preset are left out,
+since appliques always lock the usual way. A name you already have gets "(2)". Export refuses a file
+name with ":".
+
+### F-1320 Lock-stitch shapes — YES (added 2026-11-27)
+Advanced → **Lock stitches** (shown when either lock box is ticked), for lines, satins and fills:
+**Standard** (as before), **Triangle** (a tiny triangle: holds better on knits and slippery thread) or
+**Back-tack** (back and forth twice: the strongest). Appliques and lettering keep Standard. On a fill
+the triangle turns to the side that stays within 0.1 mm of the outline; where neither side does, that
+end gets the Standard lock. On a line or satin it reaches up to about 0.5 mm to one side.
 
 ---
 
@@ -1053,7 +1225,8 @@ the stitch file under the spot (or the only one).
 cover become small travel stitches instead of jump + trim.
 
 ### F-1804 Sew in the shortest order — YES
-`Ctrl+Alt+O`: reorders same-thread shapes for the shortest moves; overlapping shapes keep their order.
+`Ctrl+Alt+O`: reorders same-thread shapes for the shortest moves; overlapping shapes keep their order,
+and a branch moves as one piece (F-1808).
 
 ### F-1805 Optimize jumps — YES
 `Ctrl+Alt+J` (Design section, ⋯): keeps the order; chooses each piece's start and end so same-thread
@@ -1061,12 +1234,81 @@ pieces hand over like magnets (lines/satins turned round, borders started neares
 nearest edge); reports the saving (e.g. 132 mm → 45 mm). Stitch files, lettering and appliques are
 left alone. Replaces hand-set starts/ends.
 
+Since 2026-11-27 it also starts each applique's edges nearest where the piece before ended, and picks
+where a text's first letter starts. Shapes in a branch are left to the branch, a satin with both its
+start and end set (dots, or a buttonhole's sides) isn't turned round, and a line is turned round only
+when it sews the same from its other end (F-1317, F-701). **FIXED 2026-11-27** (older bugs): turning a
+line round (here or by dragging its dot onto the other end) could bend a line that mixes curves and
+straight parts or move a lopsided motif's pattern, and a turned piece could lose either its new shape
+or its dots.
+
+**Candlewicking, French knots and the hand-sewn look** are turned too (fewer jumps matter more than
+half a millimeter along the line): the line keeps its shape and look, and its stitches may sit up to
+this far along it. Candlewicking and French knots, whose knots point the other way: 0.5 mm with the
+usual 1.6 mm knots, 0.93 mm with 3 mm ones. Where French-knot points are closer than a knot, the
+other of two such points may be the one left out, moving that knot by up to about 2 mm (1.6 mm
+knots). The hand-sewn look at 100% (Single, Triple and Bean lines), whose irregularities fall in
+other places: 0.9 mm with 2.5 mm stitches, more with longer ones (up to 3.6 mm at 12 mm), less at
+lower strength.
+
 ### F-1806 Stops and trims at the needle — YES
 `Ctrl+Shift+P` stop / `Ctrl+Shift+T` trim at the stitch-out bar's position. In drawn shapes/lettering
 it's dropped (with a note) once the shape changes.
 
 ### F-1807 Trim jumps longer than 3 mm — YES
 `Ctrl+Shift+J` (⋯): one setting for the whole design, including designs added later.
+
+### F-1808 Branching: sew shapes as one path — YES (added 2026-11-27)
+Select two or more drawn lines, satins or fills in one thread and press `Alt+Shift+B` (or right-click →
+**Branch: sew as one path**). LUDD puts them next to each other in the sewing order and sews them as one
+path with one start and one end, choosing each shape's start, end and order (shapes that overlap keep
+their order).
+- **What sews with no cut or jump**: fills that share an edge, overlap or meet at corners; lines that
+  meet end to end, and satin ribbons that continue one another in a line; a fill and a line that starts
+  on its edge; and any gap that stitching
+  sewn later covers (two later shapes whose stitching meets count as one cover). Between shapes the
+  thread runs on, hidden under what is sewn after it, whatever **Fewer jumps & trims** is set to, with
+  no lock stitches there; where shapes only touch, the hand-over can sew up to about 1 mm across the
+  edge. What still cuts or jumps is in L-049.
+- **Where the thread can't stay hidden**, LUDD says so ("Branch: the thread can't get from A to B hidden
+  under stitching…") and what helps: over 3 mm it cuts the thread there; 3 mm or less it jumps and
+  leaves a short thread on top. In tests three touching fills showed no joining thread. Across 120
+  random branches of 3 to 6 shapes, mostly with gaps, 281 snips by hand were left on a machine that
+  cuts only at color changes (cuts and short jumps), and 6.6 mm of joining stitches in all weren't
+  covered (the most in one branch 0.75 mm).
+- **Dots**: select a shape of the branch: one green dot (the branch starts) and one red (it ends); drag
+  them to choose. The shapes show no dots of their own. The panel says **In a branch**; **Take it out**
+  (`Alt+Shift+U`, or right-click) takes the selected shapes out.
+- **Refused** with a reason: fewer than two drawn shapes; different threads; lettering, an applique, a
+  stitch file or a blend in the selection; a shape sewn between them that overlaps one ("… move it
+  first"). The branch's thread is the one most of its shapes sew in (a tie: the shape listed first): a
+  shape you recolor is sewn on its own and LUDD names it. So is one separated from the others in the
+  sewing order. When a recolored (or blended) shape between them splits the branch, the note names it
+  and what to do: give it the branch's thread, or move it before or after the branch in Order & colors.
+  When something else is in between, the note names that shape (or says how many there are): move it
+  before or after the branch, or add it to the branch (when its thread differs, give it the branch's
+  thread first; an imported file, lettering, an applique, a blend or another branch's shape can only be
+  moved). Optimize jumps leaves branches alone.
+- **A branch of one is no branch**: deleting, cutting, merging or taking out all shapes but one ends
+  the branch (the saved file doesn't count it, so an older LUDD can still open it).
+- **Branches stay whole**: the knife and a cut-out keep every piece in the branch, in the shape's
+  place, with the branch's dots; **Sew in the shortest order** moves a branch as one piece (its shapes
+  keep their order, and a shape lying on any of them stays after it); Sort and Combine colors sew it
+  as one block; a satin border or outline round one of its shapes is sewn after the branch; shapes
+  merged from one branch stay in it (merged with anything else, the result is an ordinary shape,
+  sewn after the first one's branch); lettering broken into shapes keeps its branch; a shape made
+  an applique, which a branch can't hold, leaves it in the same undo step; and an accepted AI sewing
+  order keeps its shapes together. Putting the text on a line uses the line up, so it leaves the
+  branch. A move by hand can split one: moving a shape yourself (Order & colors, Sew earlier or later)
+  puts it where you put it, even between a branch's shapes. The branch then sews as two paths, a note
+  names the shape in between, and **Undo** brings the branch back as it was.
+- **Copies** (Duplicate, Paste, Repeat): one copied shape of a branch joins it, sewn right after its
+  last shape (Repeat: all its copies do). Two or more copied shapes of one branch make a new branch of
+  their own, without dots you set by hand. A single shape pasted into a design without that branch is an
+  ordinary shape.
+- **Order & colors** lists a branch's shapes in the order they sew. Moving a row inside a branch changes
+  the design, but the branch picks its own order; when the list doesn't end up as you arranged it, LUDD
+  says so: take the shape out (`Alt+Shift+U`) to choose its place yourself.
 
 ---
 
@@ -1198,20 +1440,20 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | L-001 | **Two-color gradient / color blend** (one color fading into another by interleaved rows) | YES since 2026-11-26 (limit lifted; F-1310, up to three colors). The fade runs across the rows only (L-040) | — | Done. |
 | L-002 | **Fill with holes may show a travel line on top**: when holes split a tatami fill into regions, the needle can travel across rows already sewn. With **Don't sew what's hidden** on (F-1207) a lower fill can get such a line too (in the tests: about 19 mm across a square under a square, 35 mm under lettering). **Turning fills (F-1315) show these lines often, even without holes:** when they move between groups of rows, and where, on the outside of a bend, the next row starts far away and the needle steps straight to it. These lines can be several centimetres on big shapes; in tests, most turning fills showed some. | Known weakness | Cut the fill into hole-free bands with cuts parallel to the rows (Knife), or use Contour/Stipple. For a turning fill, check the stitch preview before sewing; **Back to one angle** sews it as a plain fill. | Yes (engine route planning). |
 | L-003 | **Multi-line text** in one lettering object | YES since 2026-11-25 (limit lifted; F-1410). A circle or a drawn line still takes one line (L-037) | — | Done. |
-| L-004 | **Open running line starting mid-line** | NO (ends only) | Split it with the Knife, or close it into a loop. | Possibly. |
+| L-004 | **Open running line starting mid-line** | NO (ends only; and the other end only when the line sews the same from there, F-701) | Split it with the Knife, or close it into a loop; to start at an end that LUDD refuses, draw the line again from that end. | Possibly. |
 | L-005 | **Per-letter stitch angle / direction** in lettering | YES since 2026-11-25 (limit lifted; F-1413), except True satin and stitched-font letters | For those, Break into shapes (True satin) and use each shape's purple dots. | Done. |
 | L-006 | **Direction dots on satin ribbons** | NO (stitches always straight across) | Convert to a satin fill (close the line and Stitch as → Satin) or draw a column. | Partly. |
 | L-007 | **Change stitch types of a bought stitch file** | NO | Edit stitches (F-1901), or re-digitize by tracing a picture of it. | Unlikely (no shapes inside a stitch file). |
 | L-008 | **Photo stitch** (photo → stitched portrait) | NO | Auto-digitize a simplified picture; satin-fill shapes by hand. | Yes, large. |
 | L-009 | **Specialty techniques**: 3D puff foam, sequins, chenille, cutwork, free-standing lace presets | NO | — | Some (FSL, puff) could be added. |
 | L-010 | **Sending to the machine directly** | NO | Save for machine to a USB stick; insert in the PE550D. | Not for the PE550D (USB stick only). |
-| L-011 | **Freehand drawing / brush** | NO (point-by-point drawing only) | Click points; use Auto-trace on a sketch. | Yes. |
+| L-011 | ~~Freehand drawing / brush~~ | SUPERSEDED by F-504 (2026-11-27) | Press `Y` (F-504). | — |
 | L-012 | **Opening Embrilliance `.be` / `.bt`** | NO (closed format) | Open the PES/JEF exported from Embrilliance; it opens as a stitch file. | No. |
 | L-013 | **Satin fill with holes** | NO | Stays a fill; add a satin border, or split into hole-free pieces. | Hard. |
 | L-014 | **True satin columns in installed-font lettering** | PARTIAL since 2026-11-25 (F-1414): a letter whose strokes can't be covered well sews whole in Satin look, more often on large letters | Satin look; or Break into shapes and adjust the columns. | Partly (better joins). |
 | L-015 | **Code-signed installers** | NO | Windows: More info → Run anyway (T-001). | Needs a certificate. |
 | L-016 | **Real machine verification** | Pending | Stitch-out tests queued in `docs/stitchout-log.md`; the owner tests at ~95% done. | — |
-| L-017 | **Optimize jumps on lettering, appliques, stitch files** | NO (left as they are) | Lettering already hands over letter to letter (F-1405). | Yes. |
+| L-017 | **Optimize jumps on stitch files** | PARTIAL (since 2026-11-27 it moves appliques' starts and a text's first letter; stitch files are left as they are) | Lettering already hands over letter to letter (F-1405). | Yes. |
 | L-018 | **Machines other than PE550D / Janome generic built in** | PARTIAL | Add a JSON profile in the data folder's `machines`. | Yes. |
 | L-019 | **Stitch Advisor turning a fill into a satin** | NO | Stitch as → Satin yourself (makes a satin fill). | Yes. |
 | L-020 | **Resizing bought designs a lot** | PARTIAL: Rebuild remakes fills, satins and lines; anything else is stretched | **Rebuild stitches at this size** (F-1905), then check the density map; re-digitize what isn't rebuilt. | Partly (more patterns could be recognized). |
@@ -1234,6 +1476,11 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | L-042 | **Turning fills are Tatami only.** There's no fixed limit on the turn (lines 60° apart are tested), but where it's too sharp for the shape the rows meet in a crease (the shape is still filled), with a warning when the crease is deep. Two lines with their middles under 1 mm apart: only the first is followed. Three or more lines in a row that point very differently can't all be followed: lines at 0°, 60° and 120°, 13 mm apart across a 50 × 30 mm shape, leave the rows 86° off the middle line where it lies | By design | Move the angle lines further apart or make the turn gentler; with three or more lines, keep neighboring lines closer in direction; check the preview. | Partly (smoother sharp turns). |
 | L-043 | **Maze on a shape with a hole, or pinched into many parts**, sews as separate mazes (a note suggests Contour) | By design | Use Contour, or cut the shape into simpler pieces (Knife). | Possibly. |
 | L-044 | **Push compensation ("End trim")**: stitching pushes fabric out past a fill's first and last rows and a satin's ends, so shapes can sew longer than drawn; LUDD doesn't shorten them for you | NO (not built: it waits on a patent check the owner hasn't confirmed). Edge pad handles pull, the other direction | Draw satin ends, and fill edges that run along the rows, a little short on stretchy or lofty fabric. | Yes, if the check allows. |
+| L-045 | **A branch takes drawn lines, satins and fills in one thread only**: no lettering, appliques, stitch files or blends | By design | Break lettering into shapes first (`Ctrl+Alt+X`); give the shapes one thread. | Possibly. |
+| L-046 | **Artwork import leaves out** text, pictures inside the file, gradients, clipping and dashed lines (they're listed under Left out). A DXF's separate lines and arcs (and an SVG's separate `<line>` pieces) come in one by one, even where their ends meet | By design for now | Turn text into outlines (paths) in your drawing program, or type it with LUDD's Text tool; add pictures with Picture. Join separate lines in your CAD program (in AutoCAD: PEDIT, Join), or save the drawing as an SVG that keeps each outline as one unbroken path. | Possibly. |
+| L-047 | **PDF import reads drawn paths only** (one level of grouped forms): text, pictures, shadings and deeper groups are left out, clips that cut a shape are only listed, and sharp corners of thick lines assume the usual miter limit. Locked PDFs, PDFs that say they have more than 2,000 pages, and PDFs that need more than 2 GB of memory are refused | By design | Save the drawing as SVG from the program that made it, or just the page you want as its own PDF. | Possibly. |
+| L-048 | **Freehand ignores pen pressure** | By design | Set widths in the panel. | Possibly. |
+| L-049 | **A branch joins without a cut only where the thread can stay hidden** (F-1808). It does: fills that share an edge, overlap or meet at corners; lines meeting end to end and satins that continue one another in a line; a fill to a line that starts on its edge; gaps later stitching covers. It doesn't: lines that cross or meet in a T, satins meeting at an L corner (a jump of about 2 mm), a satin lying across the edges of fills, a line along a fill's edge whose end is off the fill | By design for now | Make fills overlap or lines meet end to end, put a shape sewn later over the spot, or leave the cut. | Possibly. |
 
 ---
 
@@ -1272,6 +1519,10 @@ The stitch engine runs alongside the app. If it stops, LUDD restarts it; if not,
 | T-031 | "My carved line doesn't show" | It runs along the stitch rows (Check before stitching says so), or it's too short to cross enough of them | Turn the fill's **Angle** (or redraw the line) so the rows cross it (F-1313, L-041). |
 | T-032 | "My blend looks stripy" | Where a color thins out, its rows (single, or in pairs at a wide Spacing) lie far apart between the other color's rows | Make it denser (smaller **Spacing**), or set **Weave** to **Smooth** (F-1310). |
 | T-033 | "My motif isn't on another computer" | A shape carries its own copy and sews the same, but **My motifs** is kept per computer | The list shows it as "(kept in this shape, not in My motifs)". To add it there: on the first computer, **Export…** it in the Motifs window; **Import…** it on the other (F-1311). |
+| T-035 | "My branch still has a cut" | The thread can't get from one shape to the next hidden under stitching: nothing sewn later covers the whole way between them (the note names the two). Touching isn't always enough: lines that cross or meet in a T, satins meeting at an L corner, or a line that ends off a fill's edge still cut or jump (L-049) | Make fills share an edge or overlap, or start a line right at the end of the one before; put a shape sewn later over the spot; or leave the cut (F-1808). |
+| T-036 | "Imported artwork is the wrong size" | The file doesn't say its real size (an SVG without units is read at 96 pixels per inch, a DXF without units as mm; LUDD says so) | Set **Width** in the import window (Undo and import again if it's already added). |
+| T-037 | "Shapes are missing after import" | Text not turned into outlines; the Background rectangle or a color unticked; tiny pieces; gradients or clipped parts; DXF paper space; a curve saved as many very short separate lines (each under 1 mm is left out as tiny). An outline drawn as separate lines and arcs also comes in as lines, so **Fill closed shapes** doesn't fill it | Check **Left out** in the window; turn text into paths; tick the color or background; join separate lines in your CAD program (in AutoCAD: PEDIT, Join), or save an SVG that keeps each outline as one unbroken path (F-209, L-046). |
+| T-038 | "My freehand line is wobbly or has too many points" | Smoothing is low, or you drew zoomed out | Raise **Smoothing** (shown while freehand is on), zoom in and draw; or edit the points (F-504). |
 
 ---
 
@@ -1314,6 +1565,7 @@ Use this to answer "did that change?" or "why is it different?". Full detail: `d
 
 | Date | Change |
 | --- | --- |
+| 2026-11-27 | **Lines, sequencing and drawing tools** (nothing already in your designs sews differently): craft line styles, Which side and **Blackwork** (F-1317); **lock-stitch shapes** (F-1320); **buttonholes and eyelets** (F-1318, `Alt+B`, `Alt+E`); **branching** (F-1808, `Alt+Shift+B`); **freehand** (F-504, `Y`; lifts L-011) and adding at a line's start (F-505); **Repeat** Mirror, Wreath and Kaleidoscope (F-1109); **stitch presets** (F-1319, `Alt+P`); **artwork import** SVG, DXF, PDF (F-209, `Ctrl+Alt+I`; separate lines and arcs come in one by one, L-046). Optimize jumps moves appliques and first letters (L-017 partial). FIXED: turning a line round no longer bends mixed lines (F-1805). Before release, after the phase audit: lines that would sew differently turned keep their direction (F-701, F-1317); branches say what joins without a cut (L-049), keep the majority thread, stay whole through copies, cuts, merges, borders, outlines and Sew in the shortest order, list their sewing order, and a note names what splits one (F-1808); turned candlewick, knot and hand-sewn lines say how far their stitches move (F-1805); Blackwork joins run along the edge (F-1317); triangle locks stay by fills (F-1320); buttonholes sew the same wherever moved. |
 | 2026-11-26 | **Fills and stitch quality** (nothing already in your designs sews differently): **Blend** fill, up to three colors (F-1310); **Motif** fill and **My motifs** (F-1311, `Alt+Shift+M`); **Maze, Ripple, Mesh** fills (F-1312); **Weave** (F-1303); **carved lines** (F-1313, `Shift+C`); **Hand-sewn look** (F-1314); **turning fills** (F-1315, `Shift+I`); **feathered edges** (F-1316). Lifts L-001. Push compensation is not built (L-044). |
 | 2026-11-25 | **Lettering and personalization**: several lines with alignment (F-1410), slant (F-1411), envelopes and stacked letters (F-1412), single letters (F-1413, `Alt+Shift+A`), True satin (F-1414), stitch fonts from letter files (F-1415, `Ctrl+Alt+F`), name lists and templates (F-1416, `Ctrl+Alt+P`), monogram styles and frames (F-1417), shadow and outline (F-1418), placement guides (F-1419, `Alt+Shift+G`). Installed-font letters that sew under 6 mm tall (resizing counts) now sew without underlay (F-1420). The lettering panel's Advanced fold is now **More options**. Lifts L-003 and L-005; L-014 is now PARTIAL. |
 | 2026-11-25 | **Repair bought designs** (a stitch file with no repair sews as before): **Repair this design** (F-1902, `Ctrl+Alt+D`, with before and after numbers and Show on the design); **Remove tiny stitches** and **Thin out dense spots** (F-1903); **Limit density for this fabric** (F-1904); **Rebuild stitches at this size** (F-1905); **Fix it** on three checks; insert stitches and jumps and lock a jump (F-1906); needle path view (F-407); **Don't sew what's hidden under shapes on top** for drawn shapes (F-1207). Removing hidden stitches under another stitch file is not built (L-030). |
@@ -1564,14 +1816,21 @@ drawing a satin).
 | Show whole design | `End` | `player.end` |
 | Faster playback | `]` | `player.fasterAlt` |
 | Slower playback | `[` | `player.slowerAlt` |
+| Branch: sew the selected shapes as one path | `Alt+Shift+B` | `layout.branch` |
+| Take the selected shapes out of their branch | `Alt+Shift+U` | `layout.unbranch` |
+| Draw freehand | `Y` | `tool.freehand` |
+| Stitch presets… | `Alt+P` | `presets.open` |
 | Add another angle line (a turning fill) | `Shift+I` | `object.addAngle` |
 | Carve lines into the fill (grooves) | `Shift+C` | `object.carve` |
 | Motifs… | `Alt+Shift+M` | `motif.library` |
+| Import artwork (SVG, DXF, PDF)… | `Mod+Alt+I` | `file.importArt` |
 | Adjust single letters | `Alt+Shift+A` | `text.letters` |
 | Put the letters back | `Alt+Shift+Z` | `text.resetLetters` |
 | Make a stitch font from letter files… | `Mod+Alt+F` | `text.fontFromFiles` |
 | Save this layout as a name template… | `Mod+Alt+P` | `text.saveTemplate` |
 | Placement guides… | `Alt+Shift+G` | `text.placement` |
+| Add a buttonhole | `Alt+B` | `object.buttonhole` |
+| Add an eyelet | `Alt+E` | `object.eyelet` |
 | Repair this design… | `Mod+Alt+D` | `stitch.repair` |
 | Remove stitches hidden under what's on top | `Alt+Shift+H` | `stitch.removeHidden` |
 | Thin out dense spots | `Alt+Shift+D` | `stitch.declump` |
