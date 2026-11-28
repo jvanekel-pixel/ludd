@@ -51,7 +51,7 @@ def estimate(poly, params) -> float:
     """About how many stitches the fill takes: every stretch in whole stitches, sewn twice, and a
     little more where the lattice meets the edge."""
     cell, stitch = params.value("blackwork_mm"), _stitch(params)
-    per_mm2 = sum(2 * line / length * max(1, math.ceil(length / stitch - 1e-9))
+    per_mm2 = sum(2 * line / length * max(1, math.ceil(round(length / stitch, 6)))
                   for line, length in _line_kinds(params.blackwork_lattice, cell))
     return poly.area * per_mm2 + 2 * poly.length / cell
 

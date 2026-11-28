@@ -33,7 +33,7 @@ Segment = tuple[Point, Point]
 
 def _cells(span: float, cell: float) -> range:
     """Whole cells each way from the middle that cover `span` (and one more)."""
-    n = math.ceil(span / 2 / cell) + 1
+    n = math.ceil(round(span / 2 / cell, 6)) + 1
     return range(-n, n + 1)
 
 
@@ -218,7 +218,7 @@ class _Stretches:
         low, high = (a, b) if self.keys[a] <= self.keys[b] else (b, a)
         (x0, y0), (x1, y1) = self.at[low], self.at[high]
         length = math.hypot(x1 - x0, y1 - y0)
-        n = max(1, min(math.ceil(length / self.stitch_mm - 1e-9), math.floor(length / SHORTEST_STEP_MM + 1e-9)))
+        n = max(1, min(math.ceil(round(length / self.stitch_mm, 6)), math.floor(round(length / SHORTEST_STEP_MM, 6))))
         inner = [(x0 + (x1 - x0) * k / n, y0 + (y1 - y0) * k / n) for k in range(1, n)]
         return [*(inner if a == low else inner[::-1]), self.at[b]]
 

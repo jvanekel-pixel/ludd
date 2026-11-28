@@ -186,7 +186,7 @@ def _sampled(poly: list[Pt], closed: bool) -> list[Pt]:
     pts = list(poly) + ([poly[0]] if closed and poly else [])
     out: list[Pt] = []
     for a, b in zip(pts, pts[1:]):
-        n = max(1, math.ceil(math.dist(a, b) / SAMPLE_MM))
+        n = max(1, math.ceil(round(math.dist(a, b) / SAMPLE_MM, 6)))  # the same on every computer
         out += [(a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n) for k in range(n)]
     if not closed and pts:
         out.append(pts[-1])

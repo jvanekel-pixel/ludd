@@ -219,6 +219,12 @@ def _stretches(a: np.ndarray) -> np.ndarray:
     return rows[np.lexsort(rows.T[::-1])]
 
 
+def _sample_parts(a: np.ndarray) -> np.ndarray:
+    """How many parts each segment of the thread `a` is compared in, each at most TURN_SAMPLE_MM.
+    The ratio is rounded to a millionth first, so every computer compares the same points."""
+    return np.maximum(1, np.ceil(np.round(np.hypot(*(a[:, 1] - a[:, 0]).T) / TURN_SAMPLE_MM, 6))).astype(int)
+
+
 def _lies_on(a: np.ndarray, b: np.ndarray) -> bool:
     """Whether every part of the thread `a` lies within TURN_SAME_MM of the thread `b`."""
     if not len(a) or not len(b):
@@ -231,7 +237,7 @@ def _lies_on(a: np.ndarray, b: np.ndarray) -> bool:
 
     if not near(a.reshape(-1, 2)):  # the needle points first: a lopsided pattern shows there
         return False
-    parts = np.maximum(1, np.ceil(np.hypot(*(a[:, 1] - a[:, 0]).T) / TURN_SAMPLE_MM)).astype(int)
+    parts = _sample_parts(a)
     if not (parts > 1).any():
         return True
     which = np.repeat(np.arange(len(a)), parts - 1)

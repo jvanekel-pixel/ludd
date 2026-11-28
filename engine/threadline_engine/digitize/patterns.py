@@ -289,6 +289,14 @@ def _to_one_side(unit: Sequence[tuple[float, float]], side: str) -> list[tuple[f
     return [(u, sign * abs(v - flat)) for u, v in unit]
 
 
+def motif_repeats(length: float, repeat_mm: float) -> int:
+    """How many repeats a motif line `length` mm long takes, each as near `repeat_mm` as whole
+    repeats allow. The ratio is rounded to a millionth first, so a line exactly half a repeat over
+    (38 mm of a 4 mm motif) takes as many on every computer, whatever the last digit of its length
+    came out as."""
+    return max(1, round(round(length / repeat_mm, 6)))
+
+
 def motif_points(nodes: Sequence, name: str, repeat_mm: float, width_mm: float, closed: bool = False,
                  unit: Sequence[tuple[float, float]] | None = None, side: str = "center") -> list[Point]:
     """A motif repeated along the line: each repeat `repeat_mm` long and `width_mm` wide. `unit`:
@@ -301,7 +309,7 @@ def motif_points(nodes: Sequence, name: str, repeat_mm: float, width_mm: float, 
         return list(poly)
     cum = cumulative(poly)
     total = cum[-1]
-    n = max(1, round(total / repeat_mm))
+    n = motif_repeats(total, repeat_mm)
     step = total / n
     unit = _motif_unit(name) if unit is None else list(unit)
     if side != "center" and unit:

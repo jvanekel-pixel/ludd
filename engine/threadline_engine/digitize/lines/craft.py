@@ -51,8 +51,9 @@ def _nearest_along(poly: Sequence[Point], cum: Sequence[float], p: Point) -> flo
 
 def _parts(length: float, longest: float, shortest: float = SHORTEST_STEP_MM) -> int:
     """How many equal parts to lay a stretch in: each at most `longest` long, and none under
-    `shortest` (unless the whole stretch is)."""
-    return max(1, min(math.ceil(length / longest - 1e-9), math.floor(length / shortest + 1e-9)))
+    `shortest` (unless the whole stretch is). The ratios are rounded to a millionth first, so every
+    computer counts the same."""
+    return max(1, min(math.ceil(round(length / longest, 6)), math.floor(round(length / shortest, 6))))
 
 
 class _Path:
