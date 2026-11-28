@@ -10,6 +10,7 @@ import { addTraced, commit, currentDoc, currentLayout, defaultsFor, engine, fail
 import { holdEscape } from "./escape";
 import { exportList, typedList } from "./feat/names";
 import { slotThreads } from "./design/blend";
+import { branchOf } from "./design/branches";
 import { addObject, IDENTITY, newId } from "./design/layout";
 import type { Colorway, Guide, Layout, LayoutItem, LayoutOp, ObjectItem, PathNode, TextItem, Thread } from "./design/types";
 import { isObject, isText } from "./design/types";
@@ -255,7 +256,8 @@ export async function finishKnife(a: [number, number], b: [number, number]) {
     // The shape changed meanwhile (an undo, a nudge): the cut was worked out for the old one.
     if (!stillSame([o])) return info("The design changed while cutting: try the cut again.");
     // Each piece keeps everything of the original but its shape and name: colour changes, stops
-    // and trims (left out by the engine if they no longer fit), pin and group.
+    // and trims (left out by the engine if they no longer fit), pin, group and branch (the pieces
+    // take the shape's place, so the branch stays whole).
     const parts = r.geometries.map(
       (g, i) =>
         ({
@@ -270,6 +272,7 @@ export async function finishKnife(a: [number, number], b: [number, number]) {
           ops: o.ops,
           ...(o.locked ? { locked: true } : {}),
           ...(o.group ? { group: o.group } : {}),
+          ...(branchOf(o) ? { branch: branchOf(o) } : {}),
         }) as NewObject,
     );
     if ((await insertObjects(parts, o.id, [o.id])).length) info(`Cut into ${parts.length} pieces.`);
@@ -328,7 +331,8 @@ export async function cutOutSelected() {
     const extra: ObjectItem[] = [];
     for (const g of more) {
       const add = addObject(next, { kind: target.kind, name: target.name, geometry: g, params: withoutDots(target.params), thread: target.thread } as Omit<ObjectItem, "id" | "transform" | "threads" | "ops">);
-      const piece = { ...(add.layout.items[add.layout.items.length - 1] as ObjectItem), threads: target.threads, ...(target.locked ? { locked: true } : {}), ...(target.group ? { group: target.group } : {}) } as ObjectItem;
+      const kept = { ...(target.locked ? { locked: true } : {}), ...(target.group ? { group: target.group } : {}), ...(branchOf(target) ? { branch: branchOf(target) } : {}) };
+      const piece = { ...(add.layout.items[add.layout.items.length - 1] as ObjectItem), threads: target.threads, ...kept } as ObjectItem;
       next = { ...add.layout, items: add.layout.items.map((it) => (it.id === piece.id ? piece : it)) };
       extra.push(piece);
     }

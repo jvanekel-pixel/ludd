@@ -15,8 +15,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 vi.mock("@tauri-apps/plugin-dialog", () => ({ save: async () => null, open: async () => null, message: async () => "Cancel" }));
 vi.mock("@tauri-apps/api/path", () => ({ resolveResource: async (p: string) => p }));
 
-import { COMMANDS, whenIdle } from "../actions";
+import { commit, COMMANDS, whenIdle } from "../actions";
 import "../cmd";
+import { cutOutSelected, finishKnife } from "../features";
 import { newDoc } from "../design/layout";
 import { Kind, type Design, type ObjectItem, type PathNode } from "../design/types";
 import { useStore } from "../store";
@@ -148,6 +149,87 @@ describe("branching, with the real engine", () => {
         const sewn = firstColor(back.records);
         expect(sewn.length).toBeGreaterThan(300);
         expect(sewn.filter((k) => k !== Kind.Stitch)).toEqual([]); // no jump or trim from start to end
+      },
+      LONG_MS,
+    );
+  }
+
+  /** A design of branch "b1" (with its start and end dots set by hand) and, listed after it,
+   *  `cutters` outside it; rendered, with the shape `target` selected (and the cutters). */
+  async function branchOnCanvas(members: ObjectItem[], cutters: ObjectItem[], target: string) {
+    const blank = newDoc();
+    const dots = { b1: { start_mm: [0, 5] as [number, number], end_mm: [members.length * 10, 5] as [number, number] } };
+    const items = [...members.map((m) => ({ ...m, branch: "b1" }) as ObjectItem), ...cutters];
+    const doc = { ...blank, layout: { ...blank.layout, items, branches: dots } };
+    useStore.setState({ engine: engine as never, history: { past: [], present: blank, future: [] }, savedDoc: blank,
+                        selectedId: null, extraIds: [], design: null, notice: null, dialog: null, pen: null, tool: "select" });
+    await commit(doc.layout);
+    await whenIdle();
+    useStore.getState().setSelection(target, cutters.map((c) => c.id));
+    expect(useStore.getState().design?.branches?.map((b) => b.items.length)).toEqual([members.length]);
+    return { doc: useStore.getState().history.present!, dots };
+  }
+
+  /** After a cut of `target`: every piece is in the branch, in the shape's place, the branch keeps
+   *  its dots and sews as one path (no shape left out of it), and one undo puts the shape back. */
+  async function expectWhole(before: { doc: ReturnType<typeof newDoc>; dots: object }, target: string) {
+    const st = useStore.getState();
+    const items = st.history.present!.layout.items as ObjectItem[];
+    const was = before.doc.layout.items as ObjectItem[];
+    const added = items.filter((it) => !was.some((w) => w.id === it.id));
+    const at = was.findIndex((it) => it.id === target);
+    const pieces = items.slice(at, at + items.length - was.length + 1);
+    expect(pieces.filter((it) => added.includes(it)).length).toBe(added.length); // in the shape's place
+    expect(added.length).toBeGreaterThan(0);
+    const members = items.filter((it) => it.id !== "x");
+    expect(members.map((it) => it.branch)).toEqual(members.map(() => "b1"));
+    expect(items.find((it) => it.id === "x")?.branch).toBeUndefined();
+    expect(st.history.present!.layout.branches).toEqual(before.dots);
+    const design = st.design as Design;
+    expect(design.branches?.map((b) => [b.id, [...b.items].sort()])).toEqual([["b1", members.map((it) => it.id).sort()]]);
+    expect((design.warnings ?? []).filter((w) => /^branch_(apart|thread)/.test(w.code))).toEqual([]);
+    expect(st.history.past).toHaveLength(2); // the design as it was, then one step for the cut
+    await COMMANDS.find((c) => c.id === "edit.undo")!.run();
+    await whenIdle();
+    expect(useStore.getState().history.present!.layout).toEqual(before.doc.layout);
+    return design;
+  }
+
+  const row = (n: number) => ["a", "b", "c"].slice(0, n).map((id, k) => fill(id, 10 * k, 0, 10));
+  const CUTS = [
+    { what: "a middle member", shapes: 3, target: "b" },
+    { what: "the last member", shapes: 3, target: "c" },
+    { what: "one of a branch of two", shapes: 2, target: "b" },
+  ];
+
+  for (const { what, shapes, target } of CUTS) {
+    const middle = (target.charCodeAt(0) - 97) * 10 + 5; // the cut's x: the middle of the shape
+
+    it(
+      `the knife through ${what} keeps every piece in the branch`,
+      async () => {
+        const before = await branchOnCanvas(row(shapes), [], target);
+        COMMANDS.find((c) => c.id === "tool.knife")!.run();
+        await finishKnife([middle, -5], [middle, 15]);
+        await whenIdle();
+        expect(useStore.getState().notice?.text).toBe("Cut into 2 pieces.");
+        const design = await expectWhole(before, target);
+        expect(design.branches![0].cuts).toBe(0); // the pieces touch along the cut
+      },
+      LONG_MS,
+    );
+
+    it(
+      `a cut-out across ${what} keeps every piece in the branch`,
+      async () => {
+        // A 2 mm bar in another thread, sewn after the branch, cuts the shape in two.
+        const bar = { ...fill("x", 0, 0, 1, "#2222cc"), geometry: { outline: [[middle - 1, -2, "c"], [middle + 1, -2, "c"],
+          [middle + 1, 12, "c"], [middle - 1, 12, "c"]] as PathNode[] } } as ObjectItem;
+        const before = await branchOnCanvas(row(shapes), [bar], target);
+        await cutOutSelected();
+        await whenIdle();
+        expect(useStore.getState().notice?.text).toContain("leaving 2 pieces");
+        await expectWhole(before, target);
       },
       LONG_MS,
     );
