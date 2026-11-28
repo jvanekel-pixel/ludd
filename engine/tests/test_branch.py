@@ -396,7 +396,33 @@ def test_a_member_sewn_apart_starts_a_path_of_its_own():
     r = L.render(lay(*items))
     (note,) = [w for w in r.warnings if w["code"].startswith("branch_")]
     assert note["code"] == "branch_apart_3" and "Fill 4" in note["message"] and "Fill 1" in note["message"]
+    assert "something else is sewn between them" in note["message"]
     assert [b["items"] for b in r.branches] == [["a", "b"]]
+
+
+def _apart_note(items):
+    r = L.render(lay(*items))
+    (note,) = [w for w in r.warnings if w["code"].startswith("branch_apart_")]
+    return note["message"]
+
+
+def test_a_shape_recolored_in_the_middle_is_named_by_the_apart_note():
+    """A recolored middle member splits the branch (its color sits between): the note names it and
+    says its thread differs, not "something else"."""
+    items = [fill("a", 0, 0, 10), fill("b", 10, 0, 10, thread=BLUE), fill("c", 20, 0, 10)]
+    assert _apart_note(items) == (
+        "Fill 3 is in a branch with Fill 1, but Fill 2 between them sews in a different thread, so Fill 3 starts "
+        "a path of its own. To sew them as one path, give Fill 2 the branch's thread, or move it before or after "
+        "the branch in Order & colors.")
+    green = {**BLUE, "color": "#22aa22", "name": "Green"}
+    two = [fill("a", 0, 0, 10), fill("b", 10, 0, 10, thread=BLUE), fill("x", 20, 0, 10, thread=green),
+           fill("c", 30, 0, 10)]
+    assert "but Fill 2 and Fill 3 between them sew in a different thread" in _apart_note(two)
+    assert "give Fill 2 and Fill 3 the branch's thread, or move them before or after" in _apart_note(two)
+    blend = [fill("a", 0, 0, 10), fill("b", 10, 0, 10, params={"pattern": "blend"}), fill("c", 20, 0, 10)]
+    assert _apart_note(blend) == (
+        "Fill 3 is in a branch with Fill 1, but Fill 2 between them sews in more than one thread, so Fill 3 starts "
+        "a path of its own. To sew them as one path, move Fill 2 before or after the branch in Order & colors.")
 
 
 def test_a_branch_of_one_is_ignored():

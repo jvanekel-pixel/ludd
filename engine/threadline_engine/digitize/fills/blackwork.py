@@ -143,14 +143,15 @@ def _jump(a, b, zone) -> list:
 
 
 def _jumps_note(recs) -> list:
-    """How many times a fill had to jump, and what that means for the person sewing it."""
+    """How many times a fill had to jump (within its lattice, or between the pieces of a fill in
+    two or more), and what that means for the person sewing it."""
     from ..stitches import JUMP
 
     n = sum(1 for r in recs if r[2] == JUMP)
     if not n:
         return []
     times, threads = ("once", "a thread to snip") if n == 1 else (f"{n} times", f"{n} threads to snip")
-    return [f"This Blackwork jumps {times}, where no edge leads from one part of its lattice to the next. "
+    return [f"This Blackwork jumps {times}, where no edge leads from one part of the fill to the next. "
             f"On a machine that cuts only at color changes, that's {threads}."]
 
 

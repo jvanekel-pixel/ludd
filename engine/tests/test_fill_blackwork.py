@@ -306,8 +306,18 @@ def test_a_fill_that_jumps_says_how_many_threads_to_snip(name, cell):
     (note,) = [w for w in warnings if w.startswith("This Blackwork jumps ")]
     assert n >= 1
     assert note == (("This Blackwork jumps once" if n == 1 else f"This Blackwork jumps {n} times") +
-                    ", where no edge leads from one part of its lattice to the next. On a machine that cuts only at "
+                    ", where no edge leads from one part of the fill to the next. On a machine that cuts only at "
                     f"color changes, that's {'a thread to snip' if n == 1 else f'{n} threads to snip'}.")
+
+
+def test_the_jump_note_is_true_for_a_fill_in_two_pieces():
+    """A fill in two pieces (its outline crosses itself, so it is two triangles) jumps between
+    them: the note doesn't put that down to the lattice."""
+    bowtie = _nodes([(0, 0), (30, 30), (30, 0), (0, 30)])
+    recs, warnings = generate(_fill("diamonds", bowtie, blackwork_mm=5, underlay="auto"))
+    assert invariants.count(recs, JUMP) >= 1
+    (note,) = [w for w in warnings if w.startswith("This Blackwork jumps ")]
+    assert "from one part of the fill to the next" in note and "lattice" not in note
 
 
 @pytest.mark.parametrize("seed", [1, 2, 3])

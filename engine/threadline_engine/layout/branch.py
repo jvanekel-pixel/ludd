@@ -78,6 +78,13 @@ LEFT_OUT = {
             "Take it out of the branch (Alt+Shift+U).",
     "apart": "{name} is in a branch with {first} but something else is sewn between them, so it starts a path "
              "of its own. Select the branch's shapes and use Branch (Alt+Shift+B) to put them together.",
+    # ...when what's between is one of the branch's own shapes, left out for what it sews in:
+    "apart_thread": "{name} is in a branch with {first}, but {who} between them {sews} in a different thread, so "
+                    "{name} starts a path of its own. To sew them as one path, give {who} the branch's thread, or "
+                    "move {it} before or after the branch in Order & colors.",
+    "apart_blend": "{name} is in a branch with {first}, but {who} between them {sews} in more than one thread, so "
+                   "{name} starts a path of its own. To sew them as one path, move {who} before or after the branch "
+                   "in Order & colors.",
 }
 
 
@@ -129,6 +136,7 @@ def _runs(items: list) -> tuple[list[tuple[str, list[int]]], list[dict]]:
             v[0] += 1
     thread = {b: max(ts, key=lambda t: (ts[t][0], -ts[t][1])) for b, ts in votes.items()}
     ok: dict[int, str] = {}
+    left: dict[int, tuple[str, str]] = {}  # members left out: index -> (branch, why)
     for idx, it in enumerate(items):
         b = _bid(it)
         if not b:
@@ -138,7 +146,9 @@ def _runs(items: list) -> tuple[list[tuple[str, list[int]]], list[dict]]:
                "blend" if _is_blend(it) else "thread" if _thread_of(it) != thread.get(b) else None)
         if why is None:
             ok[idx] = b
-        elif sum(1 for o in items if _bid(o) == b) > 1:
+            continue
+        left[idx] = (b, why)
+        if sum(1 for o in items if _bid(o) == b) > 1:
             notes.append({"level": "warning", "code": f"branch_{why}_{idx}",
                           "message": LEFT_OUT[why].format(name=_name(it, idx))})
     pieces: list[tuple[str, list[int]]] = []
@@ -152,17 +162,34 @@ def _runs(items: list) -> tuple[list[tuple[str, list[int]]], list[dict]]:
         counts[b] = counts.get(b, 0) + 1
     runs: list[tuple[str, list[int]]] = []
     first_of: dict[str, int] = {}
+    last_of: dict[str, int] = {}  # where each branch's piece before ended
     for b, members in pieces:
         if counts[b] < 2:
             continue  # a branch of one is ignored
         if b in first_of:
-            notes.append({"level": "warning", "code": f"branch_apart_{members[0]}", "message": LEFT_OUT["apart"].format(
-                name=_name(items[members[0]], members[0]), first=_name(items[first_of[b]], first_of[b]))})
+            notes.append({"level": "warning", "code": f"branch_apart_{members[0]}",
+                          "message": _apart_note(items, left, b, last_of[b], members[0], first_of[b])})
         else:
             first_of[b] = members[0]
+        last_of[b] = members[-1]
         if len(members) > 1:
             runs.append((b, members))
     return runs, notes
+
+
+def _apart_note(items: list, left: dict[int, tuple[str, str]], b: str, after: int, start: int, first: int) -> str:
+    """Why the piece of branch `b` that starts at item `start` sews apart from the one before it
+    (which ends at item `after`): the branch's own shapes between them that are left out for what
+    they sew in are named; anything else is "something else"."""
+    names = {"name": _name(items[start], start), "first": _name(items[first], first)}
+    for why in ("thread", "blend"):
+        between = [_name(items[k], k) for k in range(after + 1, start) if left.get(k) == (b, why)]
+        if between:
+            one = len(between) == 1
+            who = between[0] if one else f"{', '.join(between[:-1])} and {between[-1]}"
+            verbs = {"sews": "sews" if one else "sew", "it": "it" if one else "them"}
+            return LEFT_OUT[f"apart_{why}"].format(who=who, **verbs, **names)
+    return LEFT_OUT["apart"].format(**names)
 
 
 # ---------------------------------------------------------------- shapes, in hoop mm

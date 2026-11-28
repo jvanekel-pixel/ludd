@@ -1,6 +1,9 @@
 """Turning a line round must never change what is sewn (Phase 7 audit, finding 3): a line whose
 curve would change, or a motif line whose pattern would come out differently, keeps its direction."""
 
+import math
+import random
+
 import pytest
 from shapely.geometry import MultiPoint
 from steady_util import forget_stitches, nudge_trig
@@ -101,3 +104,62 @@ def test_dragging_an_end_dot_still_turns_a_line_that_sews_the_same():
 def test_the_refusals_say_why_and_what_to_do():
     for words in jumps.NOT_TURNED.values():
         assert "keeps its direction" in words and "draw the line again from that end" in words
+
+
+# ---------------------------------------------------------------- how far the others move
+
+# Candlewicking, French knots and the hand-sewn look are turned (fewer jumps matter more than half
+# a millimeter along the line) although their stitches then sit a little differently along it. The
+# knowledge base (F-1805) and the manual give these figures: the most a turned line's needle points
+# lie from the drawn one's.
+TURNED_APART_MM = {
+    "candlewick": ({"style": "candlewick"}, 0.5),  # 1.6 mm knots: each knot's star points the other way
+    "candlewick, 3 mm knots": ({"style": "candlewick", "knot_mm": 3.0, "knot_gap_mm": 5.0}, 0.93),
+    "French knots": ({"style": "knots"}, 0.5),  # points at least a knot apart
+    "French knots, 3 mm": ({"style": "knots", "knot_mm": 3.0}, 0.93),
+    # points closer than a knot: the other of two such points may be the one left out
+    "French knots, crowded": ({"style": "knots"}, 2.1),
+    "hand-sewn single": ({"style": "single", "hand_pct": 100}, 0.9),  # 2.5 mm stitches
+    "hand-sewn triple": ({"style": "triple", "hand_pct": 100}, 0.9),
+    "hand-sewn bean": ({"style": "bean", "hand_pct": 100}, 0.9),
+    "hand-sewn single, 12 mm stitches": ({"style": "single", "hand_pct": 100, "stitch_mm": 12}, 3.6),
+}
+
+
+def _open_line(rng, apart: float):
+    """A random straight, cornered or curved line whose points lie at least `apart` mm apart."""
+    shape = rng.choice(("straight", "corners", "curves"))
+    if shape == "straight":
+        length, a = rng.uniform(3, 150), rng.uniform(0, 2 * math.pi)
+        return [[0, 0, "c"], [length * math.cos(a), length * math.sin(a), "l"]]
+    while True:
+        pts = [(0.0, 0.0)]
+        for _ in range(rng.randint(2, 7)):
+            step, a = rng.uniform(max(1.0, apart), 30), rng.uniform(0, 2 * math.pi)
+            pts.append((pts[-1][0] + step * math.cos(a), pts[-1][1] + step * math.sin(a)))
+        if all(math.dist(p, q) >= apart for i, p in enumerate(pts) for q in pts[i + 1:]):
+            return [[round(x, 3), round(y, 3), "c" if shape == "corners" else "s"] for x, y in pts]
+
+
+def _crowded_line(rng):
+    """Points about 0.5 to 1.5 mm apart, closer than a 1.6 mm knot."""
+    x, nodes = 0.0, []
+    for i in range(rng.randint(3, 12)):
+        x += rng.uniform(0.5, 1.5)
+        nodes.append([round(x, 3), round((i % 2) * rng.uniform(0, 1), 3), "c"])
+    return nodes
+
+
+@pytest.mark.parametrize("what", sorted(TURNED_APART_MM))
+def test_a_turned_line_moves_no_further_than_the_docs_say(what):
+    params, most = TURNED_APART_MM[what]
+    rng = random.Random(11)
+    apart = params.get("knot_mm", 1.6) if params["style"] == "knots" else 1.0
+    found = []
+    while len(found) < 150:
+        nodes = _crowded_line(rng) if "crowded" in what else _open_line(rng, apart)
+        it = line(nodes, **params)
+        if jumps.can_turn(it):
+            found.append(needles(it).hausdorff_distance(needles(jumps.turned_round(it))))
+    assert max(found) <= most, max(found)
+    assert max(found) >= 0.6 * most, max(found)  # the figure isn't far more than lines really move
