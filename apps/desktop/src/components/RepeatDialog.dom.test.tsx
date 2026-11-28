@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 /** The Repeat window (P7-C3): its four patterns, the outline boxes on the design while it's open,
  *  and the stitch warning and refusal worked out before any copy is made (a fake engine). */
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -143,6 +145,19 @@ describe("the Repeat window", () => {
     await act(() => whenIdle());
     expect(currentLayout()!.items).toHaveLength(2);
     expect(useStore.getState().repeatOpen).toBe(false);
+  });
+
+  it("is narrow and docked at the right, so the hoop and the copy boxes stay in view", () => {
+    // The test DOM doesn't lay out CSS, so the rule itself is checked: at 460 px, as before the
+    // Phase 7 audit, the window hid most of the Mirror box.
+    const css = readFileSync(resolve(__dirname, "../styles.css"), "utf-8");
+    const width = /dialog\.modal\.repeat \{ width: min\((\d+)px,/.exec(css);
+    expect(Number(width?.[1])).toBeLessThanOrEqual(340);
+    expect(css).toContain("dialog.modal.repeat .seg { flex-wrap: wrap; }");
+    show();
+    const dialog = host.querySelector("dialog")!;
+    expect(dialog.className).toBe("modal repeat"); // the window those rules are for
+    expect(dialog.style.marginLeft).toBe("auto");
   });
 
   it("keeps the counts in range however they are typed", () => {

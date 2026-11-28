@@ -3,7 +3,7 @@
 - **Updated:** 2026-11-27
 - **Current Phase:** Phase 7 (lines, sequencing and drawing tools) built and the audit's findings fixed (NOT YET at `1299ab8`) on local branch `claude/phase-07-lines-cf5833`; re-audit pending, nothing pushed.
 - **Active Routing:** Sonnet lead; fix workers: artwork (Sonnet 5.5) and branching (Opus 5.5), their commits cherry-picked.
-- **Checks:** `check.py --all` PASS (engine frozen from this code): engine 3297 passed, 2 skipped; UI 726; types, kb, build; Rust 2 passed. With the owner's designs copied in: 3342 passed, 1 skipped (copies removed). No stitch snapshot from before this phase changed; re-recorded since the audit: `branch/lines_and_fill` (one jump fewer).
+- **Checks:** `check.py --all` PASS (engine frozen from this code): engine 3297 passed, 2 skipped; UI 727; types, kb, build; Rust 2 passed. With the owner's designs copied in: 3342 passed, 1 skipped (copies removed). No stitch snapshot from before this phase changed; re-recorded since the audit: `branch/lines_and_fill` (one jump fewer).
 - **Findings:** 1, 3, 4, 5 fixed. 2 partly: crossing and T lines not built (BACKLOG); two tries at the other joins broke their limits and were reverted.
 - **Branching:** 9 of the 15 three-shape cases sew whole (L-049 says what still cuts or jumps). 120 random branches: 6.6 mm uncovered, 281 snips by hand (5.1 mm and 301 before the fixes).
 - **Blackwork:** a join is sewn only by an edge or on a lattice line, else it jumps (planner's decision). Solid shapes never jump; shapes with holes can (up to 14 with four holes), and the fill says how many.
