@@ -120,6 +120,8 @@ you press Add.**
   wider: a filled shape), Running stitch, or Satin.
 - Tick the colors you want. A background rectangle behind everything starts unticked.
 - DXF drawings have **Fill closed shapes**; a PDF with several pages lets you choose the page.
+- Separate lines and arcs (in a DXF or an SVG) come in one by one, even where their ends meet, so join
+  an outline into one piece first (in AutoCAD: PEDIT, Join).
 - **Match colors to my threads** picks your closest spools.
 - **Left out** says what didn't come in, such as text (turn it into outlines in your drawing program, or
   type it in LUDD), pictures, gradients, clipping and dashes.
