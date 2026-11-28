@@ -200,10 +200,10 @@ def test_paint_that_names_an_address_is_read_by_hand(tmp_path):
 
 
 def test_a_very_long_class_never_reaches_svgelements(tmp_path):
-    """The second audit's sweep: svgelements takes every name in a class attribute through its styles
-    for every copy of the shape, so a 4,000-character one copied 24,900 times kept its one call,
-    which nothing can stop, busy for 24 s. A class over MAX_CLASS is left out (the drawing still
-    comes in)."""
+    """The sweep after the second audit: svgelements takes every name in a class attribute through
+    its styles for every copy of the shape, so a 4,000-character one copied 24,900 times kept its
+    one call, which nothing can stop, busy for 24 s. A class over MAX_CLASS is left out (the drawing
+    still comes in)."""
     long_class = "a " * 300  # 600 characters
     body = f'<defs><rect id="r" class="{long_class}" width="5" height="5" fill="red"/></defs><use href="#r"/>'
     assert long_class.strip().encode() not in svgclean.prepare(svg(body).encode()).data
@@ -421,7 +421,7 @@ def _long_curves(count: int) -> str:
 
 
 def test_a_first_shape_too_detailed_to_trace_is_not_traced_for_a_background(tmp_path, monkeypatch):
-    """The second audit's sweep: 1,000 long curves in a first shape (28 KB) held the engine for 24 s
+    """The sweep after the second audit: 1,000 long curves in a first shape (28 KB) held the engine for 24 s
     and 1.6 GB while it checked whether that shape was a background, and the file limits let 100 times
     as many through. Past the count it isn't traced: it's no plain rectangle."""
     body = f'<path d="{_long_curves(1_000)}" fill="red"/><rect x="1" y="1" width="1" height="1"/>'
@@ -496,7 +496,7 @@ def _ring(points: int, r: float, phase: float = 0.0):
 
 
 def test_huge_closed_outlines_drawn_twice_are_refused_before_they_are_compared(tmp_path):
-    """The second audit's sweep: telling whether two closed outlines are one drawn twice compares
+    """The sweep after the second audit: telling whether two closed outlines are one drawn twice compares
     their points pair by pair in one call; two rings of 20,000 points took 19 s, and the point cap
     let two of 150,000 through (about 18 minutes). Too many pairs are refused before comparing."""
 

@@ -1220,8 +1220,7 @@ cover become small travel stitches instead of jump + trim.
 
 ### F-1804 Sew in the shortest order — YES
 `Ctrl+Alt+O`: reorders same-thread shapes for the shortest moves; overlapping shapes keep their order,
-and a branch moves as one piece (F-1808). **FIXED 2026-11-27**: it could sew a shape inside a
-branch, which then sewed apart.
+and a branch moves as one piece (F-1808).
 
 ### F-1805 Optimize jumps — YES
 `Ctrl+Alt+J` (Design section, ⋯): keeps the order; chooses each piece's start and end so same-thread

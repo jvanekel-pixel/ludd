@@ -27,8 +27,8 @@ FLATTEN_STEP_MM = 0.25  # ... in steps about this long
 MAX_CURVE_STEPS = 4096
 # Curves are traced into points in one go, and most of what's then worked out from them is single
 # calls that can't be stopped, so the points are counted before any are made (traced_points). At the
-# limit (about 190 m of curve) the longest of those calls takes about 9 s here, and the engine about
-# 1 GB.
+# limit (about 190 m of curve) the longest of those calls takes about 8 s here, and the engine stays
+# under 1 GB.
 MAX_TRACED_POINTS = 750_000
 TOO_DETAILED = (f"This artwork has too much detail to import: more than {MAX_TRACED_POINTS:,} points once its curves "
                 "are traced. Simplify it in your drawing program, or set a smaller Width.")
