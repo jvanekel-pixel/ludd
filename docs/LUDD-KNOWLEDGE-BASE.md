@@ -330,6 +330,10 @@ design open, LUDD makes an empty one for the preview and takes it away if you ca
   objects (old-style polyline points are counted apart, up to 300,000), or with more than 1,000,000
   pairs of lines in all (about 2 million lines of text); a PDF that says it has more than 2,000 pages; a PDF, or a very wide line, that takes more than
   2 GB of memory.
+- Two made-to-break cases aren't caught yet and can keep LUDD busy for minutes or use up the
+  computer's memory: very long curves in a drawing's first shape or in a DXF's closed outlines, and two
+  nearly identical closed DXF outlines of tens of thousands of points each. Ordinary drawings don't
+  come close.
 - PDFs, and very wide lines with many points, are worked out by a short-lived helper copy of LUDD's
   engine, stopped at the time limit, or as soon as it is seen using over 2 GB, so a bad file can't
   stall or crash LUDD (these previews take a second or two longer). A new preview (a changed setting or another file) stops the
