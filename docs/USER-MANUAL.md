@@ -514,7 +514,8 @@ also ignores the arrow keys, R, Alt+H / Alt+V and the resize handles (a note tel
 selected, a set distance out from its stitches: a border around lettering, an edge for a patch,
 an outline round a design (several things close together get one outline). Sew it as a **Satin
 border** (with its width), a **Line** or a **Triple line**; tick **Also around the inside of holes**
-for the middle of an O. It's sewn right after what it goes around. A negative distance makes an
+for the middle of an O. It's sewn right after what it goes around (after the whole branch, for a
+shape in one). A negative distance makes an
 inset inside the stitches instead; if nothing is left that far in, try a smaller inset (closer
 to 0).
 
@@ -522,7 +523,7 @@ to 0).
 - **Knife** (Shift+K, or ⋯ → Knife at the top of the panel): with a fill, line or satin ribbon
   selected, click two points (they snap to points, guides and the grid); it's cut along that line
   (extended right across the shape) into separate pieces, each with the same settings and thread,
-  colors changed in Order & colors, stops and trims, pin and group. One cut across a closed line or ring
+  colors changed in Order & colors, stops and trims, pin, group and branch. One cut across a closed line or ring
   gives two pieces. Holes stay with the piece they're in. It cuts the shape where you see it, even
   after it's been moved, turned or resized. A cut that misses leaves the knife ready to try again.
 - **Cut out** (Shift+O): see *Cut out with a shape* above.
@@ -862,6 +863,12 @@ side. LUDD sews a motif line from its other end (Optimize jumps, a branch, or a 
 it sews the same from there: blanket, scallop and zigzag set to one side, and a centered wave. The
 others keep the direction you drew them.
 
+Candlewicking, French-knot and **Hand-sewn look** lines are turned too: the line keeps its shape and
+look, but its stitches may sit up to this far along it: 0.5 mm for candlewicking and French knots with
+the usual 1.6 mm knots (0.93 mm with 3 mm ones); 0.9 mm for the hand-sewn look at 100% with 2.5 mm
+stitches (more with longer stitches, up to 3.6 mm at 12 mm). French-knot points closer than a knot
+may leave out the other of the two, moving that knot by up to about 2 mm.
+
 ### Size and points
 Size (W, H), **Add points (K)** and **Add a hole (O)** for fills. Turn, mirror, duplicate,
 Repeat…, Pin and Remove are at the top of the panel.
@@ -884,13 +891,21 @@ start and end dots or carved lines. A file with a setting its kind of shape does
 ### Branch: sew shapes as one path
 Select shapes in one thread (lines, satins and fills) and press **Alt+Shift+B** (or right-click →
 **Branch: sew as one path**). LUDD sews them as one path: one start, one end, and the moves between them
-hidden under stitching sewn later. Fills that touch or overlap, and lines or satins that meet end to
-end, sew with no cut. Lines that cross or meet in a T, satins meeting at a corner, and a satin laid
+hidden under stitching sewn later. Fills that touch or overlap, lines that meet end to end, and satins
+that continue one another in a line sew with no cut. Lines that cross or meet in a T, satins meeting at a corner, and a satin laid
 across fills' edges still cut or jump. Where the thread can't stay hidden, LUDD tells you which two
 shapes and what helps: over 3 mm it is cut there; 3 mm or less is jumped, leaving a short thread.
 Select a shape of the branch to see the branch's **green and red dots**, and drag them to choose where
 it starts and ends. **Alt+Shift+U** takes shapes out of the branch, and a branch down to one shape ends.
-- The branch sews in the thread most of its shapes have: a shape you recolor sews on its own.
+- The branch sews in the thread most of its shapes have: a shape you recolor sews on its own (one in
+  the middle splits the branch, and the note names it: give it the branch's thread, or move it before
+  or after the branch in Order & colors).
+- **A branch stays whole**: every piece of a shape cut with the knife or **Cut out** stays in it, with
+  its dots; **Sew in the shortest order** moves it as one piece, and Sort and Combine colors sew it as
+  one block; a satin border or outline round one of its shapes is sewn after it; shapes merged from
+  one branch stay in it (merged with anything else, the result is an ordinary shape, sewn after it);
+  lettering broken into shapes keeps its branch; a shape made an applique leaves it. Moving a shape
+  yourself (Order & colors, Sew earlier or later) puts it where you put it, even inside a branch.
 - **Order & colors** lists a branch's shapes in the order they sew. The branch chooses that order, so a
   row you move inside it may go back; take the shape out to place it yourself.
 - Copying shapes of a branch: see **Copying and repeating**.
@@ -907,7 +922,8 @@ outlines, borders and details over a fill. In LUDD you draw a satin like a line:
 
 Ways to get a satin without drawing it:
 - **Add a satin border** (Shift+B, or the button in a fill's section): a closed ribbon along the
-  fill's edge, sewn right after it. This is the "fill blob, then satin outline" look.
+  fill's edge, sewn right after it (after the whole branch, for a fill in one). This is the "fill
+  blob, then satin outline" look.
 - **Stitch as → Satin** turns an open line into a ribbon, and a fill (or a line drawn all the way
   round) into a **satin fill** (below).
 
@@ -1192,8 +1208,8 @@ machine.
   on machines like the PE550D that only cut at color changes).
 - **Sew in the shortest order** (Ctrl+Alt+O): shapes in the same thread (fills, satins and lines
   alike) are put in the order that keeps the moves between them shortest. Shapes whose stitches
-  overlap keep their order, since it decides which is on top; the others move around them. If
-  nothing can be shortened, LUDD says so.
+  overlap keep their order, since it decides which is on top; the others move around them. A branch
+  moves as one piece. If nothing can be shortened, LUDD says so.
 - **Optimize jumps** (Ctrl+Alt+J, in the Design section and ⋯): keeps the sewing order, and instead
   chooses where each piece **starts and ends**, so that pieces in the same thread hand over to each
   other like magnets: each piece ends next to the one after it, and that one starts right there. A
