@@ -471,6 +471,58 @@ def test_remove_overlap_cuts_the_lower_member_and_the_path_follows():
     assert on.branches[0]["cuts"] == 0
 
 
+# ---------------------------------------------------------------- the shortest sewing order
+
+
+def _piece_travel(layout):
+    """The travel between pieces as the design sews, from its rendered stitches: each shape's own
+    stitches (a branch's shapes count as one piece), from one piece's last to the next one's first."""
+    r = L.render(layout)
+    branch_of = {str(i): b["id"] for b in r.branches for i in b["items"]}
+    pieces = {}  # piece -> [first stitch, last stitch], in the order the pieces start
+    for (x, y, k), item, src in zip(r.pattern.stitches, r.item_of, r.src_of):
+        if item >= 0 and src >= 0 and k & M == pe.STITCH:
+            it = layout["items"][item]
+            piece = branch_of.get(str(it["id"]), it["id"])
+            pieces.setdefault(piece, [(x / 10, y / 10)] * 2)[1] = (x / 10, y / 10)
+    spans = list(pieces.values())
+    return sum(math.dist(a[1], b[0]) for a, b in zip(spans, spans[1:]))
+
+
+def _reordered(layout, order):
+    by_id = {it["id"]: it for it in layout["items"]}
+    return {**layout, "items": [by_id[i] for i in order]}
+
+
+def _near_the_branch():
+    """A branch of three squares 30 mm apart, a spot near its first square and one past its last:
+    sewing nearest first by each shape's own ends would go from the first square to the spot."""
+    return lay(fill("a", 0, 0, 10), fill("b", 40, 0, 10), fill("c", 80, 0, 10),
+               fill("x", 14, 18, 4, br=None), fill("y", 100, 18, 6, br=None))
+
+
+def test_the_shortest_order_keeps_a_branch_together():
+    layout = _near_the_branch()
+    assert [b["items"] for b in L.render(layout).branches] == [["a", "b", "c"]]
+    out = L.optimize_order(layout)
+    assert out["order"] == ["a", "b", "c", "y", "x"]
+    after = _reordered(layout, out["order"])
+    r = L.render(after)
+    assert [b["items"] for b in r.branches] == [["a", "b", "c"]]
+    assert not [w for w in r.warnings if w["code"].startswith("branch_apart")]
+    saved = _piece_travel(layout) - _piece_travel(after)
+    assert saved > 20 and out["saved_mm"] == pytest.approx(saved, abs=0.051)
+
+
+def test_the_shortest_order_never_moves_a_shape_ahead_of_a_branch_it_lies_on():
+    """z lies on b, a branch member that isn't its first: nearest first from y would sew z before
+    the branch (and bury it); it stays after the branch."""
+    layout = lay(fill("y", 90, 30, 4, br=None), fill("a", 0, 0, 10), fill("b", 12, 0, 10),
+                 fill("z", 14, 4, 12, br=None), fill("w", 40, 30, 4, br=None))
+    order = L.optimize_order(layout)["order"]
+    assert order.index("a") < order.index("z") and order.index("b") == order.index("a") + 1
+
+
 # ---------------------------------------------------------------- caching and speed
 
 

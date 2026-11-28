@@ -17,7 +17,7 @@ vi.mock("@tauri-apps/api/path", () => ({ resolveResource: async (p: string) => p
 
 import { commit, COMMANDS, whenIdle } from "../actions";
 import "../cmd";
-import { cutOutSelected, finishKnife } from "../features";
+import { cutOutSelected, finishKnife, shortestOrder } from "../features";
 import { newDoc } from "../design/layout";
 import { Kind, type Design, type ObjectItem, type PathNode } from "../design/types";
 import { useStore } from "../store";
@@ -234,6 +234,34 @@ describe("branching, with the real engine", () => {
       LONG_MS,
     );
   }
+
+  it(
+    "Sew in the shortest order keeps a branch together, in one undo step",
+    async () => {
+      const blank = newDoc();
+      // Three squares 30 mm apart in a branch, a spot near the first and one past the last.
+      const spots = [fill("x", 14, 18, 4), fill("y", 100, 18, 6)];
+      const items = [...[0, 40, 80].map((at, k) => ({ ...fill("abc"[k], at, 0, 10), branch: "b1" }) as ObjectItem), ...spots];
+      useStore.setState({ engine: engine as never, history: { past: [], present: blank, future: [] }, savedDoc: blank,
+                          selectedId: null, extraIds: [], design: null, notice: null, dialog: null, pen: null, tool: "select" });
+      await commit({ ...blank.layout, items });
+      await whenIdle();
+      const before = useStore.getState().history.present!.layout;
+      await shortestOrder();
+      await whenIdle();
+      const st = useStore.getState();
+      expect(st.notice?.text).toMatch(/^Reordered: about \d+ mm less travel/);
+      expect(st.history.present!.layout.items.map((it) => it.id)).toEqual(["a", "b", "c", "y", "x"]);
+      const design = st.design as Design;
+      expect(design.branches?.map((b) => b.items)).toEqual([["a", "b", "c"]]);
+      expect((design.warnings ?? []).filter((w) => w.code.startsWith("branch_apart"))).toEqual([]);
+      expect(st.history.past).toHaveLength(2);
+      await COMMANDS.find((c) => c.id === "edit.undo")!.run();
+      await whenIdle();
+      expect(useStore.getState().history.present!.layout).toEqual(before);
+    },
+    LONG_MS,
+  );
 
   it(
     "the Branch command refuses two threads in plain words",
