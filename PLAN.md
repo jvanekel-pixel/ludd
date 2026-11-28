@@ -104,7 +104,7 @@ Spec: docs/phases/PHASE-06-fills-and-stitch-quality.md
 ## Phase 7: Lines, Sequencing & Drawing Tools
 Why it matters: branching is sold only in StitchArtist Level 3 ($699); freehand drawing and SVG import are what people expect from any drawing program.
 Spec: docs/phases/PHASE-07-lines-sequencing-drawing.md
-> Verify: `python scripts/check.py --all` | Done when: three touching same-thread shapes in a branch sew with no trim or jump between them, a 300-sample freehand stroke becomes 25 curve points or fewer within 0.4 mm, and an SVG imports as a fill, a line and a satin ribbon at real size after a preview
+> Verify: `python scripts/check.py --all` | Done when: three touching same-thread fills in a branch, and lines and satin ribbons meeting end to end, sew with no trim or jump between them (any other join sews hidden or says why it cuts), a 300-sample freehand stroke becomes 25 curve points or fewer within 0.4 mm at 3.8 screen pixels per mm or more, and an SVG imports as a fill, a line and a satin ribbon at real size after a preview (the first two reworded by the planner, 2026-11-27)
 - [x] P7-A1 Line styles: backstitch, stem stitch, candlewicking, redwork, French knots
 - [x] P7-A2 Blackwork fill
 - [x] P7-A3 Which side a motif line sits on

@@ -1,22 +1,20 @@
 # Session Handoff (Overwrite Every Session — <=25 Lines)
 
 - **Updated:** 2026-11-27
-- **Current Phase:** Phase 7 (lines, sequencing and drawing tools) **built**, all 14 tasks ticked, on local branch `claude/phase-07-lines-cf5833`; not audited, not pushed. (Paused once mid-build for the usage limit on 11-26.)
-- **Active Routing:** Sonnet lead; tracks A, C, D on Sonnet 5.5, B (branching) on Opus 5.5. Merged D, A, C, B with `check.py` after each.
-- **Checks:** `check.py --all` PASS at `d2d736a` (engine frozen from it): engine 2958 passed, 2 skipped; UI 695; types, kb, build; Rust 2 passed. With `fixtures/` copied in: 3003 passed, 1 skipped (copies removed). Before (`89bdd29`): 2263/2 (2308/1 with designs), UI 563, Rust 2. No older stitch snapshot changed.
-- **Done-when:** 1 to 5 met. Branch thread left showing: 0.0 mm and no cuts in the three-shape cases; 120 random branches 34.5 mm in all, worst 1.89 mm, 205 cuts. Freehand within 0.4 mm at ordinary zoom (coarser zoomed far out: the spec's 1.5 px floor).
-- **Owner decisions:** 1 and 2 yes (`svgelements`, `ezdxf` with `pyparsing`, `pypdfium2`); 3 to 5 as recommended (D-022). P7-D2 succeeded (about 7 of 90 minutes): PDF vector paths import.
-- **Frozen engine:** 77,110,585 → 84,065,177 bytes (+6,954,592). Its smoke check reads an SVG, a DXF and a PDF.
-- **P7-B3:** built (a text's first letter and appliques; L-017 now PARTIAL).
-- **Tried by hand** (browser preview, throwaway data folder): freehand, a branch of three and dragging its start dot, Repeat's Kaleidoscope outlines, SVG import. Not by hand: the buttonhole, eyelet and preset windows, DXF/PDF in the app, mirror/wreath outlines, a pen tablet, the desktop app.
-- **For later phases:** `canvas/hooks.ts` unchanged; `LineStyle` gained `recs`; `RunParams` gained `notes`; `FillPatternDef` gained `choices`; `fills/lattice.py` is ready for Phase 8.
-- **Spec deviations** (all in PHASE-07 section 12), one line each:
-  - Branch: touching shapes join over up to 1 mm outside the later cover (`REACH_MM`); an uncovered gap of 3 mm or less is a jump, not a cut.
-  - Motif side goes by its flat edge; the rounded buttonhole's length tip differs; Backstitch and Stem stitch restart at sharp corners.
-  - Freehand gives each stretch the fewest points before adding and dropping; Repeat warns over 60,000 stitches and refuses over 400,000.
-  - Artwork import leaves an unticked background out of the size and adds limits (1,000 mm, about 400,000 stitches, 60 s).
-- **Integration fixes:** an older bug (turning a line could bend it); Optimize jumps saves turned pieces whole and leaves two-dot satins; mirrored motif sides; a dropped first-letter change; others in section 12.
+- **Current Phase:** Phase 7 (lines, sequencing and drawing tools) built and the audit's findings fixed (NOT YET at `1299ab8`) on local branch `claude/phase-07-lines-cf5833`; re-audit pending, nothing pushed.
+- **Active Routing:** Sonnet lead; fix workers: artwork (Sonnet 5.5) and branching (Opus 5.5), their commits cherry-picked.
+- **Checks:** `check.py --all` PASS (engine frozen from this code): engine 3297 passed, 2 skipped; UI 726; types, kb, build; Rust 2 passed. With the owner's designs copied in: 3342 passed, 1 skipped (copies removed). No stitch snapshot from before this phase changed; re-recorded since the audit: `branch/lines_and_fill` (one jump fewer).
+- **Findings:** 1, 3, 4, 5 fixed. 2 partly: crossing and T lines not built (BACKLOG); two tries at the other joins broke their limits and were reverted.
+- **Branching:** 9 of the 15 three-shape cases sew whole (L-049 says what still cuts or jumps). 120 random branches: 6.6 mm uncovered, 281 snips by hand (5.1 mm and 301 before the fixes).
+- **Blackwork:** a join is sewn only by an edge or on a lattice line, else it jumps (planner's decision). Solid shapes never jump; shapes with holes can (up to 14 with four holes), and the fill says how many.
+- **Artwork:** limits refuse by rule; PDFs and big wide lines are worked out by a one-use helper (`--ludd-artwork-worker`). Mac and Linux not tried by hand.
+- **Frozen engine:** 77,110,585 bytes on `main` → about 84.1 MB (about 7 MB more); its start-up check reads an SVG, a DXF and a PDF and starts the helper.
+- **Owner decisions:** 1 and 2 yes (`svgelements`, `ezdxf` with `pyparsing`, `pypdfium2`); 3 to 5 as recommended (D-022). P7-D2 succeeded. P7-B3 built (L-017 PARTIAL).
+- **Tried by hand** (browser preview, scratch data folder): a hostile SVG refused, then SVG and PDF imports; a branch's order list and pasting; Repeat's Mirror outline; the end-dot refusal; the K preview; the Blackwork note.
+- **Not tried by hand:** buttonhole, eyelet and preset windows, DXF in the app, a pen tablet, the desktop app.
+- **For later phases:** `LineStyle.recs`, `RunParams.notes`, `FillPattern.join`/`notes`, `FillPatternDef.choices`, `fills/lattice.py` (Phase 8). One router for Blackwork joins and Phase 8's lace (BACKLOG).
+- **Spec deviations:** PHASE-07 section 12, with the changes after the audit.
 - **Known, older:** a lone plain fill starting at a corner isn't the same on every computer (BACKLOG).
-- **For the owner:** a test build left `.cache\ezdxf\font_manager_cache.json` in the home folder; safe to delete (the app and the build no longer write it).
+- **For the owner:** a test build left `.cache\ezdxf\font_manager_cache.json` in the home folder; safe to delete.
 - **Blocked On Human:** nothing for Phase 7. Older: P6-A1 and P4-A1 patent checks; tag v1.0.1; AI tracing download check; photo stitch (Phase 9).
-- **Next Action:** Phase 7 audit on the stronger model (notes and pull request text are in the planning session's shared notes folder); push only on the owner's yes.
+- **Next Action:** the planning session's re-audit (notes and pull request text are in its shared notes folder); push only on the owner's yes.

@@ -35,9 +35,9 @@
   },
   "phase": 7,
   "status": "active",
-  "nextAction": "Phase 7 audit on the stronger model; push and pull request only on the owner's yes after it",
+  "nextAction": "Phase 7 re-audit by the planning session; push and pull request only on the owner's yes after it",
   "blockedOnHuman": null,
-  "lastSessionAt": "2026-11-27T21:17:57Z",
+  "lastSessionAt": "2026-11-28T00:52:19Z",
   "health": {
     "tests": "passing",
     "build": "passing",
