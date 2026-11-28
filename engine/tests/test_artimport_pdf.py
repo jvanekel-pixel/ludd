@@ -188,7 +188,9 @@ def test_a_page_of_pictures_says_there_is_nothing_to_sew(tmp_path):
 # ---------------------------------------------------------------- hostile files
 
 
-def _quickly(path, seconds=20.0, **options) -> str:
+# A guard, not a speed test: each starts the PDF helper, which on a busy computer can take many
+# times as long as usual (one of these took 14 s beside other work, 1 s alone).
+def _quickly(path, seconds=60.0, **options) -> str:
     started = time.perf_counter()
     message = refusal(path, **options)
     assert time.perf_counter() - started < seconds
@@ -226,7 +228,7 @@ def test_a_huge_page_is_not_rendered(tmp_path):
     data = document("1 0 0 rg 100000 100000 72 72 re f", size=(1_000_000, 1_000_000))
     started = time.perf_counter()
     result = preview(pdf_file(tmp_path, data))
-    assert result["size_mm"] == [25.4, 25.4] and time.perf_counter() - started < 10
+    assert result["size_mm"] == [25.4, 25.4] and time.perf_counter() - started < 60
 
 
 def test_a_path_across_a_huge_page_asks_for_a_width(tmp_path):
@@ -246,17 +248,17 @@ def test_only_the_asked_page_of_many_is_read(tmp_path):
     path = pdf_file(tmp_path, document(*pages))
     started = time.perf_counter()
     result = preview(path)
-    assert result["pages"] == 800 and len(result["shapes"]) == 1 and time.perf_counter() - started < 10
+    assert result["pages"] == 800 and len(result["shapes"]) == 1 and time.perf_counter() - started < 60
 
 
 def test_too_many_points_on_a_page_are_refused(tmp_path):
     content = "0 0 m " + "1 1 l 2 0 l " * 160_000 + "S"
-    assert "more points than LUDD imports" in _quickly(pdf_file(tmp_path, document(content)), 30)
+    assert "more points than LUDD imports" in _quickly(pdf_file(tmp_path, document(content)))
 
 
 def test_too_many_objects_on_a_page_are_refused(tmp_path):
     content = "0 0 m 10 10 l S\n" * 50_001
-    assert "more than 50,000 objects" in _quickly(pdf_file(tmp_path, document(content)), 30)
+    assert "more than 50,000 objects" in _quickly(pdf_file(tmp_path, document(content)))
 
 
 def test_previews_at_once_each_get_their_own_answer(tmp_path):
