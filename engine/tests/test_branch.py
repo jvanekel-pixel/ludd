@@ -395,9 +395,45 @@ def test_a_member_sewn_apart_starts_a_path_of_its_own():
              fill("c", 20, 0, 10)]
     r = L.render(lay(*items))
     (note,) = [w for w in r.warnings if w["code"].startswith("branch_")]
-    assert note["code"] == "branch_apart_3" and "Fill 4" in note["message"] and "Fill 1" in note["message"]
-    assert "something else is sewn between them" in note["message"]
+    assert note["code"] == "branch_apart_3"
+    assert note["message"] == (
+        "Fill 4 is in a branch with Fill 1, but Fill 3 is sewn between them, so Fill 4 starts a path of its own. To "
+        "sew the branch as one path, move Fill 3 before or after the branch in Order & colors, or give it the "
+        "branch's thread and add it to the branch: select it with the branch's shapes and use Branch (Alt+Shift+B).")
     assert [b["items"] for b in r.branches] == [["a", "b"]]
+
+
+def test_the_apart_note_follows_a_change_to_the_shape_between():
+    """The shape between isn't in the branch, so the cached paths don't depend on it: the note must."""
+    def note(between):
+        return _apart_note([fill("a", 0, 0, 10), fill("b", 10, 0, 10), between, fill("c", 20, 0, 10)])
+
+    assert "or add it to the branch" in note(fill("x", 40, 0, 5, br=None))
+    assert "give it the branch's thread" in note(fill("x", 40, 0, 5, br=None, thread=BLUE))
+    assert "but Star is sewn between them" in note(fill("x", 40, 0, 5, br=None, name="Star"))
+
+
+def test_the_apart_note_names_the_shape_between_or_counts_them_and_says_what_to_do():
+    def between(*extra):
+        return _apart_note([fill("a", 0, 0, 10), fill("b", 10, 0, 10), *extra, fill("c", 20, 0, 10)])
+
+    # One shape in the branch's thread: move it, or add it.
+    assert between(fill("x", 40, 0, 5, br=None)).endswith(
+        "To sew the branch as one path, move Fill 3 before or after the branch in Order & colors, or add it to the "
+        "branch: select it with the branch's shapes and use Branch (Alt+Shift+B).")
+    # Two: they're counted.
+    two = between(fill("x", 40, 0, 5, br=None), fill("y", 50, 0, 5, thread=BLUE, br=None))
+    assert "but 2 other shapes are sewn between them" in two and "move those shapes before or after" in two
+    assert two.endswith("or give them the branch's thread and add them to the branch: select them with the branch's "
+                        "shapes and use Branch (Alt+Shift+B).")
+    # A blend, and another branch's shapes, can't join: only moving them helps.
+    blend = between(fill("x", 40, 0, 5, br=None, params={"pattern": "blend"}))
+    assert blend.endswith("move Fill 3 before or after the branch in Order & colors.")
+    other = between(fill("x", 40, 0, 5, br="b2"), fill("y", 50, 0, 5, br="b2"))
+    assert "2 other shapes" in other and other.endswith("move those shapes before or after the branch in Order & colors.")
+    # A recolored member with something else between as well: both have to move.
+    mixed = between(fill("r", 30, 0, 5, thread=BLUE), fill("x", 40, 0, 5, br=None))
+    assert "2 other shapes" in mixed and mixed.endswith("move those shapes before or after the branch in Order & colors.")
 
 
 def _apart_note(items):

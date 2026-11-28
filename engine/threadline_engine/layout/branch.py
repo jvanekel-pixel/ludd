@@ -76,8 +76,10 @@ LEFT_OUT = {
                 "Take it out of the branch (Alt+Shift+U).",
     "kind": "{name} can't be in a branch (only drawn lines, satins and fills can), so it is sewn on its own. "
             "Take it out of the branch (Alt+Shift+U).",
-    "apart": "{name} is in a branch with {first} but something else is sewn between them, so it starts a path "
-             "of its own. Select the branch's shapes and use Branch (Alt+Shift+B) to put them together.",
+    # ...when something else is between: `who` is the one thing's name, or how many there are
+    "apart": "{name} is in a branch with {first}, but {who} {is_} sewn between them, so {name} starts a path of "
+             "its own. To sew the branch as one path, move {move} before or after the branch in Order & "
+             "colors{or_add}.",
     # ...when what's between is one of the branch's own shapes, left out for what it sews in:
     "apart_thread": "{name} is in a branch with {first}, but {who} between them {sews} in a different thread, so "
                     "{name} starts a path of its own. To sew them as one path, give {who} the branch's thread, or "
@@ -86,6 +88,10 @@ LEFT_OUT = {
                    "{name} starts a path of its own. To sew them as one path, move {who} before or after the branch "
                    "in Order & colors.",
 }
+# Added to "apart" when everything between can join the branch (as it is, or in the branch's thread).
+_OR_ADD = ", or add {it} to the branch: select {it} with the branch's shapes and use Branch (Alt+Shift+B)"
+_OR_RECOLOR_AND_ADD = (", or give {it} the branch's thread and add {it} to the branch: select {it} with the branch's "
+                       "shapes and use Branch (Alt+Shift+B)")
 
 
 # ---------------------------------------------------------------- who is in a branch
@@ -168,7 +174,7 @@ def _runs(items: list) -> tuple[list[tuple[str, list[int]]], list[dict]]:
             continue  # a branch of one is ignored
         if b in first_of:
             notes.append({"level": "warning", "code": f"branch_apart_{members[0]}",
-                          "message": _apart_note(items, left, b, last_of[b], members[0], first_of[b])})
+                          "message": _apart_note(items, left, b, thread[b], last_of[b], members[0], first_of[b])})
         else:
             first_of[b] = members[0]
         last_of[b] = members[-1]
@@ -177,19 +183,31 @@ def _runs(items: list) -> tuple[list[tuple[str, list[int]]], list[dict]]:
     return runs, notes
 
 
-def _apart_note(items: list, left: dict[int, tuple[str, str]], b: str, after: int, start: int, first: int) -> str:
-    """Why the piece of branch `b` that starts at item `start` sews apart from the one before it
-    (which ends at item `after`): the branch's own shapes between them that are left out for what
-    they sew in are named; anything else is "something else"."""
+def _apart_note(items: list, left: dict[int, tuple[str, str]], b: str, thread: tuple, after: int, start: int,
+                first: int) -> str:
+    """Why the piece of branch `b` (sewn in `thread`) that starts at item `start` sews apart from the
+    one before it, which ends at item `after`, and what to do. When all that's between is the
+    branch's own shapes left out for what they sew in, they're named, with what to change; otherwise
+    the one thing between is named (or how many there are), to move out of the way, or, when all of
+    it can join the branch, to add to it."""
     names = {"name": _name(items[start], start), "first": _name(items[first], first)}
+    between = range(after + 1, start)
     for why in ("thread", "blend"):
-        between = [_name(items[k], k) for k in range(after + 1, start) if left.get(k) == (b, why)]
-        if between:
-            one = len(between) == 1
-            who = between[0] if one else f"{', '.join(between[:-1])} and {between[-1]}"
+        if all(left.get(k) == (b, why) for k in between):
+            shapes = [_name(items[k], k) for k in between]
+            one = len(shapes) == 1
+            who = shapes[0] if one else f"{', '.join(shapes[:-1])} and {shapes[-1]}"
             verbs = {"sews": "sews" if one else "sew", "it": "it" if one else "them"}
             return LEFT_OUT[f"apart_{why}"].format(who=who, **verbs, **names)
-    return LEFT_OUT["apart"].format(**names)
+    one = len(between) == 1
+    it = "it" if one else "them"
+    free = [items[k] for k in between
+            if items[k].get("kind") in BRANCH_KINDS and not _is_blend(items[k]) and not _bid(items[k])]
+    or_add = ("" if len(free) < len(between) else
+              (_OR_ADD if all(_thread_of(x) == thread for x in free) else _OR_RECOLOR_AND_ADD).format(it=it))
+    who = _name(items[between[0]], between[0]) if one else f"{len(between)} other shapes"
+    return LEFT_OUT["apart"].format(who=who, is_="is" if one else "are", move=who if one else "those shapes",
+                                    or_add=or_add, **names)
 
 
 # ---------------------------------------------------------------- shapes, in hoop mm
@@ -364,7 +382,7 @@ class Plan:
     prepared: dict[int, dict[str, Any]] = field(default_factory=dict)  # item index -> the copy to sew
 
 
-_plan_cache: dict[str, tuple[list[Plan], list[dict]]] = {}
+_plan_cache: dict[str, list[Plan]] = {}
 _join_cache: dict[bytes, tuple] = {}
 _CACHE_MAX = 256
 
@@ -383,24 +401,22 @@ def _dots(layout: dict[str, Any], b: str) -> tuple[Pt | None, Pt | None]:
 
 
 def plans(layout: dict[str, Any]) -> tuple[list[Plan], list[dict]]:
-    """Every path to sew as one, and the notes about members left out or sewn apart. Cached by
-    the members (their geometry, settings, transforms and threads), where they sit in the sewing
-    order, the branches' dots and the fabric."""
+    """Every path to sew as one, and the notes about members left out or sewn apart. The paths are
+    cached by the members (their geometry, settings, transforms and threads), where they sit in the
+    sewing order, the branches' dots and the fabric. The notes can name what's sewn between a
+    branch's shapes, which that doesn't cover, so they are worked out every time (it's quick)."""
     items = layout.get("items") or []
     if not any(_bid(it) for it in items):
         return [], []
+    runs, notes = _runs(items)
     key = json.dumps({"items": [it if _bid(it) else None for it in items], "fabric": layout.get("fabric"),
                       "branches": layout.get("branches")}, sort_keys=True, default=str)
-    hit = _plan_cache.get(key)
-    if hit is not None:
-        return hit
-    runs, notes = _runs(items)
-    out: list[Plan] = []
-    for b, run in runs:
-        plan = _plan(b, run, items, layout.get("fabric"), _dots(layout, b))
-        if plan is not None:
-            out.append(plan)
-    return _remember(_plan_cache, key, (out, notes))
+    out = _plan_cache.get(key)
+    if out is None:
+        out = [plan for b, run in runs
+               if (plan := _plan(b, run, items, layout.get("fabric"), _dots(layout, b))) is not None]
+        _remember(_plan_cache, key, out)
+    return out, notes
 
 
 def _plan(b: str, run: list[int], items: list, fabric: str | None, dots: tuple[Pt | None, Pt | None]) -> Plan | None:

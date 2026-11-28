@@ -15,7 +15,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 vi.mock("@tauri-apps/plugin-dialog", () => ({ save: async () => null, open: async () => null, message: async () => "Cancel" }));
 vi.mock("@tauri-apps/api/path", () => ({ resolveResource: async (p: string) => p }));
 
-import { commit, COMMANDS, whenIdle } from "../actions";
+import { commit, COMMANDS, moveItemTo, whenIdle } from "../actions";
 import "../cmd";
 import { cutOutSelected, finishKnife, shortestOrder } from "../features";
 import { newDoc } from "../design/layout";
@@ -259,6 +259,39 @@ describe("branching, with the real engine", () => {
       await COMMANDS.find((c) => c.id === "edit.undo")!.run();
       await whenIdle();
       expect(useStore.getState().history.present!.layout).toEqual(before);
+    },
+    LONG_MS,
+  );
+
+  it(
+    "a shape moved by hand into a branch splits it with a note that names it; undo brings the branch back",
+    async () => {
+      const before = await branchOnCanvas(row(3), [fill("x", 60, 0, 10)], "x"); // x in the branch's thread
+      const apart = () => (useStore.getState().design?.warnings ?? []).filter((w) => w.code.startsWith("branch_apart"));
+      await moveItemTo("x", 2); // dropped in Order & colors between b and c: it goes where it is dropped
+      await whenIdle();
+      const moved = useStore.getState().history.present!.layout.items as ObjectItem[];
+      expect(moved.map((it) => it.id)).toEqual(["a", "b", "x", "c"]);
+      expect(moved.map((it) => it.branch)).toEqual(["b1", "b1", undefined, "b1"]);
+      expect(apart().map((w) => w.message)).toEqual([
+        "Fill 4 is in a branch with Fill 1, but Fill 3 is sewn between them, so Fill 4 starts a path of its own. To " +
+          "sew the branch as one path, move Fill 3 before or after the branch in Order & colors, or add it to the " +
+          "branch: select it with the branch's shapes and use Branch (Alt+Shift+B).",
+      ]);
+      await COMMANDS.find((c) => c.id === "edit.undo")!.run();
+      await whenIdle();
+      expect(useStore.getState().history.present!.layout).toEqual(before.doc.layout);
+      expect(apart()).toEqual([]);
+      expect(useStore.getState().design?.branches?.map((b) => [...b.items].sort())).toEqual([["a", "b", "c"]]);
+
+      // The note's other advice works too: add it to the branch.
+      await moveItemTo("x", 2);
+      await whenIdle();
+      useStore.getState().setSelection("a", ["b", "c", "x"]);
+      await COMMANDS.find((c) => c.id === "layout.branch")!.run();
+      await whenIdle();
+      expect(apart()).toEqual([]);
+      expect(useStore.getState().design?.branches?.map((b) => [...b.items].sort())).toEqual([["a", "b", "c", "x"]]);
     },
     LONG_MS,
   );
