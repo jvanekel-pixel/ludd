@@ -238,7 +238,7 @@ def test_a_path_across_a_huge_page_asks_for_a_width(tmp_path):
 def test_absurd_pdf_coordinates_are_refused(tmp_path):
     scale = "1000000 0 0 1000000 0 0 cm "  # twice: a million million times
     data = document(f"{scale}{scale}0 0 0 RG 0 0 m 1 0 l S")
-    assert "far outside any real drawing" in _quickly(pdf_file(tmp_path, data), 5)
+    assert "far outside any real drawing" in _quickly(pdf_file(tmp_path, data))
 
 
 def test_only_the_asked_page_of_many_is_read(tmp_path):

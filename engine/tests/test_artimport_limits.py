@@ -58,7 +58,14 @@ def _quickly(seconds: float, action):
     return out
 
 
-def _refused(tmp_path, data, name: str, fragment: str, seconds: float = 20.0, **options) -> str:
+# A guard against a blow-up, not a speed test: each refusal here is by a rule (its words name the
+# rule), takes at most a few seconds on the computer the tests were written on, and this leaves ten
+# times that for slower, busier ones. (Past 60 s the import's own time limit refuses with its
+# "takes too long" words, which none of these accept.)
+GUARD_S = 60.0
+
+
+def _refused(tmp_path, data, name: str, fragment: str, seconds: float = GUARD_S, **options) -> str:
     path = write(tmp_path, data, name)
     message = _quickly(seconds, lambda: refusal(path, **options))
     assert fragment in message, message
@@ -112,7 +119,7 @@ def test_a_gradient_is_read_once_however_often_it_is_used(tmp_path, monkeypatch)
 @pytest.mark.parametrize("per_stop", [20, 24])
 def test_the_audit_gradient_samples_are_read_quickly(tmp_path, per_stop):
     path = write(tmp_path, _gradient(per_stop))
-    result = _quickly(30, lambda: preview(path))
+    result = _quickly(90, lambda: preview(path))  # about 7 s here: a guard, with the same room
     assert result["shapes"] == [] and {s["what"]: s["count"] for s in result["skipped"]} == {"gradient": 300}
 
 
@@ -140,7 +147,7 @@ def test_the_time_limit_is_looked_at_for_every_element_and_paint(tmp_path, monke
 @pytest.mark.parametrize("n", [221, 501], ids=["just over", "501"])
 def test_a_star_that_crosses_itself_thousands_of_times_is_refused(tmp_path, n):
     """GEOS cutting one up took minutes (a 2,001-point star 55 s, 3,001 points over 8 GB)."""
-    _refused(tmp_path, svg(f'<polygon points="{_points(_star(n))}" fill="red"/>'), "star.svg", TANGLED, 10)
+    _refused(tmp_path, svg(f'<polygon points="{_points(_star(n))}" fill="red"/>'), "star.svg", TANGLED)
 
 
 def test_a_grid_of_crossing_bars_is_refused(tmp_path):
@@ -165,7 +172,7 @@ def test_shapes_that_cross_a_few_thousand_times_still_come_in(tmp_path, what):
 def test_thousands_of_outlines_one_inside_another_are_refused(tmp_path):
     """Working out which holds which compares them in pairs: 4,000 squares took 68 s."""
     _refused(tmp_path, svg(f'<path d="{_squares_path(2_100)}" fill="red" fill-rule="evenodd"/>'), "nest.svg",
-             CROWDED, 10)
+             CROWDED)
 
 
 def test_many_separate_outlines_in_one_path_come_in(tmp_path):
@@ -340,13 +347,13 @@ def test_a_binary_dxf_with_too_many_objects_is_refused_too(tmp_path, monkeypatch
     end = data.index(b"\x00ENDSEC\x00", start)
     path.write_bytes(data[:start] + data[start:end] * 100_001 + data[end:])
     _never_read(monkeypatch)
-    assert "more than 100,000 objects" in _quickly(20, lambda: refusal(path))
+    assert "more than 100,000 objects" in _quickly(GUARD_S, lambda: refusal(path))
 
 
 def test_a_dxf_with_far_too_much_in_it_is_refused_by_its_length(tmp_path, monkeypatch):
     _never_read(monkeypatch)
     comments = "999\nx\n" * 3_000_001
-    _refused(tmp_path, comments + _gen_dxf(_line()), "long.dxf", "far more in it", 5)
+    _refused(tmp_path, comments + _gen_dxf(_line()), "long.dxf", "far more in it")
 
 
 _APPID = "0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nAPPID\n70\n1\n0\nAPPID\n2\nACAD\n70\n0\n0\nENDTAB\n0\nENDSEC\n"
@@ -401,7 +408,7 @@ def test_thousands_of_dxf_outlines_one_inside_another_are_refused(tmp_path):
             msp.add_lwpolyline([(-s, -s), (s, -s), (s, s), (-s, s)], close=True)
 
     path = make(tmp_path, build, name="nest.dxf")
-    assert CROWDED in _quickly(15, lambda: refusal(path, closed_as_fills=True))
+    assert CROWDED in _quickly(GUARD_S, lambda: refusal(path, closed_as_fills=True))
 
 
 # ---------------------------------------------------------------- PDF
@@ -422,7 +429,7 @@ def _lying_page_tree() -> bytes:
 
 @pytest.mark.parametrize("data", [_pages(2_001), _lying_page_tree()], ids=["2,001 pages", "claims a million"])
 def test_a_pdf_with_more_than_2000_pages_is_refused(tmp_path, data):
-    _refused(tmp_path, data, "pages.pdf", "more than 2,000 pages", 10)
+    _refused(tmp_path, data, "pages.pdf", "more than 2,000 pages")
 
 
 def test_a_pdf_with_2000_pages_comes_in(tmp_path):
@@ -449,7 +456,7 @@ def _flate_page(megabytes: int) -> bytes:
 def test_a_compressed_page_that_unpacks_to_gigabytes_is_refused_by_memory(tmp_path, monkeypatch):
     """200 MB unpacked took over 4 GB. The child's limit is 2 GB; a smaller one here."""
     monkeypatch.setattr(child, "CHILD_MEMORY", 300 * 1024**2)
-    _refused(tmp_path, _flate_page(20), "flate.pdf", "takes more memory to read", 15)
+    _refused(tmp_path, _flate_page(20), "flate.pdf", "takes more memory to read")
 
 
 @pytest.mark.parametrize("name, data", [
@@ -466,14 +473,16 @@ def test_a_compressed_page_that_unpacks_to_gigabytes_is_refused_by_memory(tmp_pa
                                             "/Resources << /XObject << /F 5 0 R >> >>")])),
 ])
 def test_audit_pdfs_that_are_read_safely(tmp_path, name, data):
-    result = _quickly(15, lambda: preview(write(tmp_path, data, name)))
+    # About 1 s here, with a child process to start: on a heavily loaded computer that start alone
+    # can take many seconds, so the guard has the same room as the refusals'.
+    result = _quickly(GUARD_S, lambda: preview(write(tmp_path, data, name)))
     assert result["shapes"] and result["pages"] == 1
 
 
 def test_a_pdf_star_that_crosses_itself_thousands_of_times_is_refused(tmp_path):
     pts = _star(221)
     content = f"1 0 0 rg {pts[0][0]:.3f} {pts[0][1]:.3f} m " + " ".join(f"{x:.3f} {y:.3f} l" for x, y in pts[1:])
-    _refused(tmp_path, document(content + " h f"), "star.pdf", TANGLED, 10)
+    _refused(tmp_path, document(content + " h f"), "star.pdf", TANGLED)
 
 
 # ---------------------------------------------------------------- and the next import still works

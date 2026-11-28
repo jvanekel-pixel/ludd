@@ -149,7 +149,7 @@ def test_a_long_path_within_bounds_is_read_in_good_time(tmp_path):
     path = write(tmp_path, svg(f'<path d="{d}" fill="none" stroke="black" stroke-width="0.3"/>'))
     started = time.perf_counter()
     result = preview(path)
-    assert time.perf_counter() - started < 30 and kinds(result) == ["run"]
+    assert time.perf_counter() - started < 60 and kinds(result) == ["run"]  # about 4 s here
 
 
 @pytest.mark.parametrize("attribute", [

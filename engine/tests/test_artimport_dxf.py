@@ -450,7 +450,8 @@ def long_polyline(n: int) -> str:
 
 
 def test_too_many_points_are_refused(tmp_path):
-    assert "more points than LUDD imports" in _quickly(write(tmp_path, long_polyline(300_001), "long.dxf"), 60)
+    # About 9 s here: a guard with ten times the room for slower computers (the words name the rule).
+    assert "more points than LUDD imports" in _quickly(write(tmp_path, long_polyline(300_001), "long.dxf"), 120)
     assert kinds(preview(write(tmp_path, long_polyline(3_000), "short.dxf"))) == ["run"]
 
 

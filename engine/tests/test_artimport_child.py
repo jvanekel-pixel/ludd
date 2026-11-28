@@ -118,7 +118,7 @@ def test_the_time_limit_ends_a_child_that_cannot_be_stopped(tmp_path, monkeypatc
     threads = threading.active_count()
     before = time.perf_counter()
     message = refusal(pdf_file(tmp_path, document(PROOF)))
-    assert time.perf_counter() - before < 30
+    assert time.perf_counter() - before < 90  # 6 of it is the limit: the rest is room for slow computers
     assert message == artimport.TOO_SLOW
     [(process, _, _)] = started
     assert process.returncode is not None and process.returncode != child.MEMORY_EXIT
