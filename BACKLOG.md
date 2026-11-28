@@ -124,6 +124,7 @@ Planned on 2026-11-24: every item in this section, and the nice-to-haves above t
 - [ ] Lock stitches: the panel doesn't say which ends of a fill got the Standard lock instead of the triangle (about one end in five): a hint under the Lock stitches row
 - [ ] Artwork: read DXFs in the helper, where the read can be stopped, so the counts on a DXF's records and line pairs can be generous again (today a drawing of more than about 19,000 CAD lines is refused so that no read can run long)
 - [ ] Planner item: run the whole artwork import in the helper (`artimport/child.py`), so every step can be stopped whatever a file holds
+- [ ] Test: `test_qa_c3_nothing_to_join_costs_nothing` (older than Phase 7) compares two renders' wall-clock times with 0.2 s of room and failed once on a busy computer (each render takes about 8 ms): count the work done instead
 - [ ] At the default panel width the motif picker and the Motif button make the side panel scroll sideways (older than Phase 7)
 - [ ] Closing the import window doesn't stop its preview: the engine works on until it finishes or reaches a limit (a new import stops it). A cancel from the app would end it at once
 - [ ] Optimize jumps chooses piece by piece, looking ahead only to the next shape; when that next piece keeps its start, a choice can lengthen the total (the app applies a result only when the whole design gets shorter)
