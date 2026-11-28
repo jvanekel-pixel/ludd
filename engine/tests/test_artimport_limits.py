@@ -199,6 +199,19 @@ def test_paint_that_names_an_address_is_read_by_hand(tmp_path):
     assert kinds(_quickly(5, lambda: preview(path))) == ["fill"]
 
 
+def test_a_very_long_class_never_reaches_svgelements(tmp_path):
+    """The second audit's sweep: svgelements takes every name in a class attribute through its styles
+    for every copy of the shape, so a 4,000-character one copied 24,900 times kept its one call,
+    which nothing can stop, busy for 24 s. A class over MAX_CLASS is left out (the drawing still
+    comes in)."""
+    long_class = "a " * 300  # 600 characters
+    body = f'<defs><rect id="r" class="{long_class}" width="5" height="5" fill="red"/></defs><use href="#r"/>'
+    assert long_class.strip().encode() not in svgclean.prepare(svg(body).encode()).data
+    assert kinds(preview(write(tmp_path, svg(body)))) == ["fill"]
+    short = body.replace(long_class, "a " * 200)  # 400 characters: kept
+    assert ("a " * 200).strip().encode() in svgclean.prepare(svg(short).encode()).data
+
+
 @pytest.mark.parametrize("raw, target, after", [
     ("url(#g)", "#g", ""), ("url( #g )  red", "#g", "red"), ("URL('#g') none", "#g", "none"),
     ('url("#g")', "#g", ""), ("url(http://example.invalid/a.svg#b) blue", "http://example.invalid/a.svg#b", "blue"),

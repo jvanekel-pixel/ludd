@@ -36,6 +36,10 @@ MAX_CSS = 256 * 1024  # characters of stylesheet
 MAX_TEXT_WORK = 5_000_000  # characters of styles and transforms svgelements has to read, in all
 MAX_TRANSFORM = 20_000  # characters of one shape's transforms, its groups' included
 MAX_VALUE = 4000  # characters of any other attribute
+# svgelements takes every name in a class through its styles again for each copy of a shape, in its
+# one call that can't be stopped: 24,900 copies of a class this long take it about 9 s here (of
+# 4,000 characters, 24 s).
+MAX_CLASS = 500
 MAX_DIGITS = 40  # in one number
 
 # Elements kept as they are (a symbol only draws when a <use> points at it).
@@ -509,7 +513,7 @@ class _Builder:
             value = el.get(name)
             if value is None or (name == "id" and not keep_ids):
                 continue
-            if name not in ("d", "points") and len(value) > MAX_VALUE:
+            if name not in ("d", "points") and len(value) > (MAX_CLASS if name == "class" else MAX_VALUE):
                 continue
             # (svgelements takes minutes over a long run of spaces in "points".)
             if name in ("class", "points"):
