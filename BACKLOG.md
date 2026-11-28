@@ -131,3 +131,4 @@ Planned on 2026-11-24: every item in this section, and the nice-to-haves above t
 - [ ] In the browser preview, Ctrl+N with unsaved work does nothing (the "save first?" question uses the desktop app's dialog; older than Phase 7)
 - [ ] Artwork import makes an empty design through `addTraced` with no shapes when none is open: give `actions.ts` an `ensureDoc` and use it
 - [ ] The Repeat window styles its backdrop inline; move it to `styles.css`
+- [ ] Artwork, DXF: lines, arcs and open polylines that meet end to end come in one shape each, so a CAD outline drawn as LINEs and ARCs is never filled by Fill closed shapes, and a curve exported as many short LINEs comes in as tiny pieces (left out). Join same-layer, same-color pieces whose ends meet within 0.01 mm, and close them into an outline when they come round (Phase 7 third check; the knowledge base states the limit and what helps: L-046, T-037)

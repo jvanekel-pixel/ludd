@@ -1,21 +1,14 @@
 # Session Handoff (Overwrite Every Session — <=25 Lines)
 
-- **Updated:** 2026-11-27
-- **Current Phase:** Phase 7 built; both audits' findings and the planner's answers done on local branch `claude/phase-07-lines-cf5833`; the audit session checks the second fix pass next, nothing pushed.
-- **Active Routing:** Sonnet lead; this pass one Opus 5.5 worker (branch planning speed), its commit cherry-picked.
-- **Checks:** `check.py --all` PASS (engine frozen from this code): engine 3331 passed, 2 skipped; UI 742; types, kb, build; Rust 2 passed. Two engine suites side by side: 3331/2 each. With the owner's designs copied in: 3376 passed, 1 skipped (copies removed). No stitch snapshot from before this phase changed.
-- **This pass:** the knife, Cut out, Sew in the shortest order and every command that moves or derives shapes keep branches whole (a move by hand can split one; the note names what's between). Half repeats round the same everywhere; branch planning about twice as fast.
-- **Artwork limits:** DXF 20,000 records, 100,000 old-style points, 450,000 line pairs. Counted before the step: curves over 750,000 traced points, very detailed duplicate outlines, crowded fills (over 20M overlapping pieces). Build notes table every step: longest unstoppable call 7.8 s (DXF read 12.4 s); engine under 1 GB.
-- **Branching:** 9 of the 15 three-shape cases sew whole (L-049 says what still cuts or jumps; crossing and T lines in BACKLOG). 120 random branches: 6.6 mm uncovered, 281 snips by hand.
-- **Blackwork:** a join is sewn only by an edge or on a lattice line, else it jumps (planner's decision); shapes with holes can jump, and the fill says how many.
-- **Artwork:** PDFs and big wide lines are worked out by a one-use helper (`--ludd-artwork-worker`). Mac and Linux not tried by hand.
-- **Frozen engine:** 77,110,585 bytes on `main` → about 84.1 MB; its start-up check reads an SVG, a DXF and a PDF and starts the helper.
-- **Owner decisions:** 1 and 2 yes (`svgelements`, `ezdxf` with `pyparsing`, `pypdfium2`); 3 to 5 as recommended (D-022). P7-D2 succeeded. P7-B3 built (L-017 PARTIAL).
-- **Tried by hand** (browser preview, scratch data folder): imports and refusals, a branch's order list and pasting, Repeat's outline, the end-dot refusal, the K preview, the Blackwork note, shortest order, the knife and a border on a branch.
-- **Not tried by hand:** buttonhole, eyelet and preset windows, DXF in the app, the new split-branch note on screen (tested in the app with the real engine), a pen tablet, the desktop app.
-- **For later phases:** `LineStyle.recs`, `RunParams.notes`, `FillPattern.join`/`notes`, `FillPatternDef.choices`, `fills/lattice.py` (Phase 8). One router for Blackwork joins and Phase 8's lace (BACKLOG).
-- **Spec deviations:** PHASE-07 section 12, with the changes after both audits.
-- **Known, older:** a lone plain fill starting at a corner isn't the same on every computer; the QA C3 timing test can fail on a busy computer (both BACKLOG).
-- **For the owner:** safe to delete: `.cache\ezdxf\font_manager_cache.json` in the home folder (a test build) and `.claude\worktrees\agent-a3bd025439d53d834` (git couldn't delete this worker folder: no links, no designs).
-- **Blocked On Human:** nothing for Phase 7. Older: P6-A1 and P4-A1 patent checks; tag v1.0.1; AI tracing download check; photo stitch (Phase 9).
-- **Next Action:** the audit session checks the second fix pass (notes and pull request text are in the planning session's shared notes folder); push only on the owner's yes.
+- **Updated:** 2026-11-28
+- **Current Phase:** Phase 7 (lines, sequencing, drawing tools, artwork import) audit **PASSED** at `a5d6692` (branch `claude/phase-07-lines-cf5833`): first audit at `1299ab8` NOT YET (five findings), second at `39c6078` NOT YET (four), third check at `2967d33` PASS with three small findings, none blocking, handled in `86d7baa` and `a5d6692` and confirmed. `phase` is now 8.
+- **Active Routing:** balanced (top model plans and audits; Sonnet lead built; Opus 5.5 workers for the fix passes)
+- **Checks Run (third check, at `2967d33`):** `check.py --all` PASS with the engine frozen from it (84.1 MB, smoke ok): engine 3331 passed, 2 skipped; UI 742; types, kb, build; Rust 2 passed. Engine with the owner's designs copied in: 3376 passed, 1 skipped (copies removed). The audit's 79 hostile artwork files: see the audit notes. No stitch snapshot from before Phase 7 changed.
+- **What Phase 7 added:** line styles (backstitch, stem, candlewicking, redwork, French knots) and Blackwork; lock stitch choice; buttonholes and eyelets; Branch (one path, one start and end); freehand drawing; Repeat; stitch presets; SVG, DXF and PDF import after a preview, with limits counted before every step that can't be stopped and a stoppable helper for PDFs and wide lines.
+- **All earlier findings fixed:** DXF counts (20,000 records, 100,000 old-style points, 450,000 line pairs); knife and cut-out keep a branch; half repeats count the same on every computer; branch planning about 4 times faster (20 shapes 0.16 s, no stitch changed); every command that moves or derives shapes keeps branches whole; a move by hand can split one, and the note names what's between.
+- **Third check's findings:** two fixed and checked at `a5d6692` (the DXF line-pair refusal now says "fewer objects or less detail"; the split note says "2 shapes" when one between is the branch's own); the third documented (L-046, T-037: a DXF's lines and arcs come in one by one even where they meet; join them in CAD or save an SVG) and in BACKLOG.
+- **Known limits kept (BACKLOG):** L-049 (crossing and T lines, satin L corners still cut or jump); a DXF over about 19,000 CAD lines is refused (read DXFs in the helper later); the helper's 2 GB limit is a 50 ms check; the crowded rule on wide strokes takes about 80 s; closing the import window doesn't stop its preview.
+- **Not tried by hand:** buttonhole, eyelet and preset windows, DXF in the app, a pen tablet, the desktop (Tauri) app, the helper on a Mac or Linux. Stitch-outs queued in stitchout-log.md.
+- **Phase 8 owner decisions (answered 2026-11-27):** 1 skip FCM cut files; 2 build Brother's 4 x 6.75 inch multi-position hoop into the PE550D profile, marked unverified until stitched; 3 to 5 as the spec recommends.
+- **Blocked On Human:** nothing for Phase 8. Older: P6-A1 and P4-A1 patent checks; tag v1.0.1; AI tracing download check; photo stitch (Phase 9).
+- **Next Action:** after the merge, the Phase 8 build from `docs/phases/PHASE-08-specialty-in-the-hoop.md` in a fresh session.
