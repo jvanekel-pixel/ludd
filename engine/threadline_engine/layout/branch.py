@@ -32,7 +32,7 @@ import json
 import math
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import pyembroidery as pe
 import shapely
@@ -529,14 +529,17 @@ def _edge_route(a: Pt, b: Pt, z: dz.Zone) -> list[Pt] | None:
     return None
 
 
-def _join(a: Pt, b: Pt, zone: Any) -> tuple[str, list[Pt]]:
+def _join(a: Pt, b: Pt, zone_of: Callable[[], Any]) -> tuple[str, list[Pt]]:
     """How the thread gets from a (one member's last stitch) to b (the next one's first):
-    ("on", route) running on (route empty: nothing needed), or ("cut", [])."""
+    ("on", route) running on (route empty: nothing needed), or ("cut", []). `zone_of()` gives the
+    zone the join may hide in; it is only asked for when the join is longer than REACH_MM (closing
+    it is the costly part of planning, and a short join never looks at it)."""
     d = math.dist(a, b)
     if d < dz.MIN_STITCH_MM:
         return "on", []
     if d <= REACH_MM:
         return "on", [a, b]
+    zone = zone_of()
     if zone is None or zone.is_empty:
         return "cut", []
     try:
@@ -564,12 +567,52 @@ def _zone(covers: list) -> Any:
     found = [c for c in covers if c is not None]
     if not found:
         return None
+    return _closed(found, len(found) == 1)
+
+
+def _closed(found: list, alone: bool) -> Any:
+    """`found` merged and closed by CLOSE_MM, as _zone does; `alone`: the whole set it was taken
+    from is one cover, which _zone leaves as it is."""
+    if not found:
+        return None
     try:
-        if len(found) == 1:
+        if alone:
             return found[0]
         return shapely.union_all(found).buffer(CLOSE_MM, quad_segs=2).buffer(-CLOSE_MM, quad_segs=2)
     except GEOSException:
         return None
+
+
+# The closing only ever merges covers lying near each other, so a join's zone is made from the
+# covers near its ends and from whatever those are linked to (the zone near a join is then the same
+# shape as the whole closed zone there, at a fraction of the cost). A closed cover lies within
+# CLOSE_MM of its cover, and the zone closes the later blocks' closed covers once more, so covers
+# 4 x CLOSE_MM apart (plus a margin) can end up merged, and the zone lies within 2 x CLOSE_MM of
+# its covers: a join's end can reach it from covers REACH_MM + 2 x CLOSE_MM away.
+LINK_MM = 4 * CLOSE_MM + 0.05
+NEAR_MM = REACH_MM + 2 * CLOSE_MM + 0.05
+
+
+def _linked(covers: list) -> list[int]:
+    """For each cover, the smallest index of the covers linked to it (through others) within LINK_MM:
+    a group that does not depend on the order the geometry library finds the pairs in."""
+    group = list(range(len(covers)))
+
+    def root(k: int) -> int:
+        while group[k] != k:
+            group[k] = group[group[k]]
+            k = group[k]
+        return k
+
+    idx = [k for k, c in enumerate(covers) if c is not None]
+    if len(idx) > 1:
+        geoms = [covers[k] for k in idx]
+        pairs = shapely.STRtree(geoms).query(geoms, predicate="dwithin", distance=LINK_MM)
+        for i, j in zip(pairs[0].tolist(), pairs[1].tolist()):
+            ra, rb = root(idx[i]), root(idx[j])
+            if ra != rb:
+                group[max(ra, rb)] = min(ra, rb)
+    return [root(k) for k in range(len(covers))]
 
 
 def _route_recs(route: list[Pt]) -> list[list]:
@@ -678,14 +721,31 @@ def _joins(seq: list[Block], later: list[Block]) -> tuple[list[str], list[list[P
     if hit is not None:
         return hit
     covers = [_cover(b) for b in seq] + [_cover(b) for b in later]
-    later_cover = _zone(covers[len(seq):])
+    n = len(seq)
+    idx = [k for k, c in enumerate(covers) if c is not None]
+    later_count = sum(1 for k in idx if k >= n)
+    state: dict[str, Any] = {}  # the groups and the tree, made only if some join needs a zone
+
+    def zone_of(pos: int, a: Pt, b: Pt) -> Any:
+        """_zone([*covers[pos:n], _zone(covers[n:])]) near a and b: the same pieces there."""
+        if not state:
+            state["group"] = _linked(covers)
+            state["tree"] = shapely.STRtree([covers[k] for k in idx])
+        group, tree = state["group"], state["tree"]
+        near = {group[idx[j]] for p in (a, b)
+                for j in tree.query(SPoint(p), predicate="dwithin", distance=NEAR_MM).tolist()}
+        keep = [k for k in idx if group[k] in near]  # in the covers' own order, as _zone takes them
+        inner = _closed([covers[k] for k in keep if k >= n], later_count == 1)
+        found = [covers[k] for k in keep if pos <= k < n] + ([inner] if inner is not None else [])
+        total = sum(1 for k in idx if pos <= k < n) + (1 if later_count else 0)
+        return _closed(found, total == 1)
+
     kinds: list[str] = []
     routes: list[list[Pt]] = []
     for pos in range(1, len(seq)):
         sa, sb = _stitches(seq[pos - 1])[-1], _stitches(seq[pos])[0]
         a, b = (sa[0] / 10, sa[1] / 10), (sb[0] / 10, sb[1] / 10)
-        zone = _zone([*covers[pos:len(seq)], later_cover])
-        kind, route = _join(a, b, zone)
+        kind, route = _join(a, b, lambda pos=pos, a=a, b=b: zone_of(pos, a, b))
         kinds.append(kind)
         routes.append(route)
     return _remember(_join_cache, key, (kinds, routes))

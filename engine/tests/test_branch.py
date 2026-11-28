@@ -464,18 +464,36 @@ def test_plan_is_cached(monkeypatch):
     assert planned == [1]
 
 
-def test_twenty_members_plan_in_under_two_seconds():
+def test_twenty_members_close_only_the_covers_near_each_join(monkeypatch):
     rng = random.Random(3)
     cells = [(c, r) for r in range(4) for c in range(5)]
     rng.shuffle(cells)
     items = [fill(f"s{k}", c * 9.0, r * 9.0, 8) for k, (c, r) in enumerate(cells)]
     layout = lay(*items)
     L.render({**layout, "items": [{**it, "branch": None} for it in items]})  # the stitches, made once
+    closed = []  # how many shapes each closing in branch.py merges (the costly step of planning)
+
+    class Counted:
+        def __getattr__(self, name):
+            return getattr(shapely, name)
+
+        def union_all(self, geoms, *args, **kwargs):
+            closed.append(len(geoms))
+            return shapely.union_all(geoms, *args, **kwargs)
+
+    monkeypatch.setattr(branch, "shapely", Counted())
     t0 = time.perf_counter()
     r = L.render(layout)
     seconds = time.perf_counter() - t0
     assert len(r.branches[0]["items"]) == 20
-    assert seconds < 2.0, seconds
+    # The same on every computer. These 8 mm squares lie 1 mm apart, too far for the closing to
+    # merge any two, so a join's zone needs only the covers within branch.NEAR_MM of its two ends
+    # (the squares around them, at most 6 here): 37 shapes over the 18 joins that close anything.
+    # The ceiling of 60 leaves room for small moves of the members' start and end points, and is
+    # far below the 189 (19 + 18 + ... + 2) of closing every later cover for every join, which
+    # took most of the planning time.
+    assert sum(closed) <= 60, (sum(closed), closed)
+    assert seconds < 20.0, seconds  # only a guard against a blow-up; the count above is the real check
 
 
 # ---------------------------------------------------------------- the Branch command
