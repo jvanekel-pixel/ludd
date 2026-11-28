@@ -25,6 +25,13 @@ from .widestroke import ring_of
 FLATTEN_TOL_MM = 0.05  # a flattened curve stays this close to the curve (artwork is flattened to 0.1 mm)
 FLATTEN_STEP_MM = 0.25  # ... in steps about this long
 MAX_CURVE_STEPS = 4096
+# Curves are traced into points in one go, and most of what's then worked out from them is single
+# calls that can't be stopped, so the points are counted before any are made (traced_points). At the
+# limit (about 190 m of curve) the longest of those calls takes about 9 s here, and the engine about
+# 1 GB.
+MAX_TRACED_POINTS = 750_000
+TOO_DETAILED = (f"This artwork has too much detail to import: more than {MAX_TRACED_POINTS:,} points once its curves "
+                "are traced. Simplify it in your drawing program, or set a smaller Width.")
 CORNER_DEG = 40.0  # a joint turning more than this is a sharp corner
 CORNER_MIN_EDGE_MM = 0.3  # ... when both sides of it are at least this long (not just jitter)
 JOIN_MM = 0.1  # a line whose ends are this close is closed
@@ -227,6 +234,25 @@ def _rounded(p: Point) -> Point:
     return round(p[0], ROUND) + 0.0, round(p[1], ROUND) + 0.0  # + 0.0: never -0.0
 
 
+def _steps(c: Sequence[Point]) -> int:
+    """How many equal steps flatten() takes along the cubic `c`."""
+    # Wang's formula: this many equal steps keep the polyline within FLATTEN_TOL_MM.
+    bend = max(math.hypot(c[0][0] - 2 * c[1][0] + c[2][0], c[0][1] - 2 * c[1][1] + c[2][1]),
+               math.hypot(c[1][0] - 2 * c[2][0] + c[3][0], c[1][1] - 2 * c[2][1] + c[3][1]))
+    n = max(math.ceil(math.sqrt(0.75 * bend / FLATTEN_TOL_MM) - 1e-9),
+            math.ceil(_span(c) / FLATTEN_STEP_MM - 1e-9), 1)
+    return min(n, MAX_CURVE_STEPS)
+
+
+def traced_points(sub: Subpath, scale: float = 1.0) -> int:
+    """How many points tracing `sub`, made `scale` times its size, would make (about: a closing
+    edge and repeated points aside)."""
+    total = 1
+    for c in _controls(sub):
+        total += 1 if len(c) == 2 else _steps([(x * scale, y * scale) for x, y in c] if scale != 1.0 else c)
+    return total
+
+
 def flatten(sub: Subpath, close: bool = False) -> tuple[list[Point], set[Point]]:
     """The subpath as points about FLATTEN_STEP_MM apart along its curves (straight segments keep
     only their ends), and its sharp corners. `close`: also come back to the start (a fill does,
@@ -240,12 +266,7 @@ def flatten(sub: Subpath, close: bool = False) -> tuple[list[Point], set[Point]]
         if len(c) == 2:
             points.append(c[1])
             continue
-        # Wang's formula: this many equal steps keep the polyline within FLATTEN_TOL_MM.
-        bend = max(math.hypot(c[0][0] - 2 * c[1][0] + c[2][0], c[0][1] - 2 * c[1][1] + c[2][1]),
-                   math.hypot(c[1][0] - 2 * c[2][0] + c[3][0], c[1][1] - 2 * c[2][1] + c[3][1]))
-        n = max(math.ceil(math.sqrt(0.75 * bend / FLATTEN_TOL_MM) - 1e-9),
-                math.ceil(_span(c) / FLATTEN_STEP_MM - 1e-9), 1)
-        n = min(n, MAX_CURVE_STEPS)
+        n = _steps(c)
         points += [_bezier(c, i / n) for i in range(1, n)] + [c[3]]
     out: list[Point] = []
     for p in points:

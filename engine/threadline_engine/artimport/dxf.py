@@ -21,7 +21,8 @@ import threading
 from dataclasses import dataclass
 
 from . import MAX_COORDINATE, ArtError, Deadline, Options
-from .geometry import CROWDED, MAX_BOX_PAIRS, box_pairs, check_tangle, flatten, ring_of
+from .geometry import (CROWDED, MAX_BOX_PAIRS, MAX_TRACED_POINTS, box_pairs, check_tangle, flatten, ring_of,
+                       traced_points)
 from .model import Drawing, Item, Point, Subpath, rgb_hex
 
 # The whole file, counted before ezdxf reads it: one call that can't be stopped, whose cost goes by
@@ -37,6 +38,15 @@ MAX_BLOCK_DEPTH = 16  # blocks inside blocks
 MAX_POINTS = 300_000  # vertices and control points, once every block is expanded
 MAX_SPLINE_DEGREE = 11
 MAX_SPLINE_POINTS = 10_000
+# Telling whether a closed outline is another one drawn again compares every point of each with every
+# edge of the other in one call: two outlines whose points multiply past this are refused first (about
+# 2 s here at the limit; an exact copy is seen at once, whatever its size).
+MAX_COMPARED = 100_000_000
+TOO_DETAILED_OUTLINES = (f"This DXF's closed outlines have too much detail to fill: more than {MAX_TRACED_POINTS:,} "
+                         "points once its curves are traced. Simplify it in your CAD program, or untick Fill closed "
+                         "shapes.")
+TWINS_TOO_DETAILED = ("This DXF has very detailed closed outlines drawn over one another, too much for LUDD to tell "
+                      "apart. Delete the extra copies in your CAD program, or untick Fill closed shapes.")
 
 # $INSUNITS: millimeters in one drawing unit.
 UNIT_MM = {1: 25.4, 2: 304.8, 3: 1_609_344.0, 4: 1.0, 5: 10.0, 6: 1000.0, 7: 1e6, 8: 2.54e-5, 9: 0.0254, 10: 914.4,
@@ -495,6 +505,17 @@ class _Reader:
 
     # ---------------------------------------------------------------- closed outlines as fills
 
+    def _drawn_again(self, outline, other) -> bool:
+        """Is the closed outline `other` just `outline` again, within 0.01 mm all the way round?"""
+        import shapely
+
+        self.deadline.check()
+        if outline.equals_exact(other, 0.0):  # copied exactly, as CAD programs copy
+            return True
+        if shapely.get_num_coordinates(outline) * shapely.get_num_coordinates(other) > MAX_COMPARED:
+            raise ArtError(TWINS_TOO_DETAILED)
+        return other.exterior.hausdorff_distance(outline.exterior) < 0.01
+
     def items(self) -> list[Item]:
         """Everything found, in drawing order. Closed outlines that become fills are paired up by
         color and layer: an outline right inside another is its hole (an island inside the hole
@@ -510,6 +531,13 @@ class _Reader:
                 groups.setdefault((found.item.fill, found.item.name), []).append(i)
         holes_of: dict[int, list[int]] = {}
         consumed: set[int] = set()
+        traced = 0  # the outlines are all traced below, so what that takes is counted first
+        for members in groups.values():
+            for i in members:
+                self.deadline.check()
+                traced += traced_points(self.found[i].item.subpaths[0])
+                if traced > MAX_TRACED_POINTS:
+                    raise ArtError(TOO_DETAILED_OUTLINES)
         pairs = 0  # of outlines with overlapping boxes, in all: each pair is compared below
         for members in groups.values():
             self.deadline.check()
@@ -533,7 +561,7 @@ class _Reader:
                 near = np.sort(near[(near > a) & np.all(np.abs(bounds[near] - bounds[a]) <= 0.0101, axis=1)])
                 for b in near.tolist():
                     if b not in twice and abs(shapes[b].area - outline.area) <= 0.01 * outline.length \
-                            and shapes[b].exterior.hausdorff_distance(outline.exterior) < 0.01:
+                            and self._drawn_again(outline, shapes[b]):
                         twice.add(b)
                         consumed.add(members[b])
             containers: list[list[int]] = [[] for _ in members]

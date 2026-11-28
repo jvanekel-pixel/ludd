@@ -11,7 +11,7 @@ import pytest
 from artimport_util import kinds, preview, refusal, svg, write
 from test_artimport_dxf import make, minimal
 from test_artimport_pdf import PROOF, build_pdf, document, stream
-from threadline_engine.artimport import Deadline, Options, child, dxf, pdf, svg as art_svg, svgclean
+from threadline_engine.artimport import Deadline, Options, child, dxf, geometry, pdf, svg as art_svg, svgclean
 
 SQUARE = '<rect x="10" y="10" width="20" height="20" fill="#ff0000"/>'
 
@@ -389,6 +389,102 @@ def test_one_object_carrying_too_much_is_refused_by_the_count_before_the_read(tm
     # itself takes seconds).
     dxf.load_ezdxf()
     assert dxf._check_size(_one_line_with_extra_data(449_900), Deadline()) is None
+
+
+TOO_DETAILED = "once its curves are traced"
+TWIN_OUTLINES = "drawn over one another"
+
+
+def _never_traced(monkeypatch):
+    """The refusal comes from the count, before any curve is traced into points."""
+
+    def flatten(*_a, **_k):
+        raise AssertionError("curves were traced before the count refused them")
+
+    monkeypatch.setattr(geometry, "flatten", flatten)
+    monkeypatch.setattr(dxf, "flatten", flatten, raising=False)
+
+
+def test_a_drawing_with_too_much_to_trace_is_refused_by_the_count_before_it_is_traced(tmp_path, monkeypatch):
+    """700 curves of 400 mm each, within the hoop and the limit on length, would be 1.1 million
+    points."""
+    loops = "M0 0" + " C 150 0 150 100 0 100 C 150 100 150 0 0 0" * 350
+    _never_traced(monkeypatch)
+    _refused(tmp_path, svg(f'<path d="{loops}" fill="none" stroke="black" stroke-width="0.4"/>'), "loops.svg",
+             TOO_DETAILED)
+
+
+def _long_curves(count: int) -> str:
+    """A closed path of `count` curves, each 200 m of control polygon: each is traced in the most
+    steps a curve takes (4,096)."""
+    return "M0 0" + " C 100000 0 100000 100 0 100" * count + " z"
+
+
+def test_a_first_shape_too_detailed_to_trace_is_not_traced_for_a_background(tmp_path, monkeypatch):
+    """The second audit's sweep: 1,000 long curves in a first shape (28 KB) held the engine for 24 s
+    and 1.6 GB while it checked whether that shape was a background, and the file limits let 100 times
+    as many through. Past the count it isn't traced: it's no plain rectangle."""
+    body = f'<path d="{_long_curves(1_000)}" fill="red"/><rect x="1" y="1" width="1" height="1"/>'
+    path = write(tmp_path, svg(body), "curves.svg")
+    _never_traced(monkeypatch)
+    assert "bigger than any hoop" in _quickly(GUARD_S, lambda: refusal(path))
+    # At 100 mm wide the curves would still take over a million points: refused by the count.
+    assert TOO_DETAILED in _quickly(GUARD_S, lambda: refusal(path, width_mm=100))
+
+
+def test_closed_dxf_outlines_with_too_much_to_trace_are_refused_before_they_are_traced(tmp_path, monkeypatch):
+    """The same for a DXF's closed outlines, all together, before any is traced (long arcs here)."""
+
+    def build(doc, msp):
+        for k in range(10):  # 30 long arcs each: about 123,000 points an outline, 1.2 million in all
+            msp.add_lwpolyline([((i % 2) * 100_000, 10 * k + i * 0.1, 0.4) for i in range(30)], format="xyb",
+                               close=True)
+        msp.add_line((0, 0), (10, 10))
+
+    path = make(tmp_path, build, name="arcs.dxf")
+    _never_traced(monkeypatch)
+    message = _quickly(GUARD_S, lambda: refusal(path, closed_as_fills=True))
+    assert TOO_DETAILED in message and "Fill closed shapes" in message
+
+
+def test_ordinary_curved_drawings_are_traced_as_before(tmp_path):
+    """100 circles (about 28,000 points once traced) are well within the count."""
+    circles = "".join(f'<circle cx="{25 * (i % 10) + 12}" cy="{25 * (i // 10) + 12}" r="10"/>' for i in range(100))
+    path = write(tmp_path, svg(circles, size='width="250mm" height="250mm" viewBox="0 0 250 250"'), "rings.svg")
+    assert kinds(preview(path)) == ["fill"] * 100
+
+    def build(doc, msp):
+        for i in range(100):
+            msp.add_circle((25 * (i % 10), 25 * (i // 10)), 10)
+
+    assert kinds(preview(make(tmp_path, build, name="rings.dxf"), closed_as_fills=True)) == ["fill"] * 100
+
+
+def _ring(points: int, r: float, phase: float = 0.0):
+    return [(r * math.cos(phase + 2 * math.pi * i / points), r * math.sin(phase + 2 * math.pi * i / points))
+            for i in range(points)]
+
+
+def test_huge_closed_outlines_drawn_twice_are_refused_before_they_are_compared(tmp_path):
+    """The second audit's sweep: telling whether two closed outlines are one drawn twice compares
+    their points pair by pair in one call; two rings of 20,000 points took 19 s, and the point cap
+    let two of 150,000 through (about 18 minutes). Too many pairs are refused before comparing."""
+
+    def twins(n, phase):
+        def build(doc, msp):
+            msp.add_lwpolyline(_ring(n, 40.0), close=True)
+            msp.add_lwpolyline(_ring(n, 40.0, phase), close=True)
+
+        return build
+
+    path = make(tmp_path, twins(10_100, 0.0001), name="twins.dxf")
+    assert TWIN_OUTLINES in _quickly(GUARD_S, lambda: refusal(path, closed_as_fills=True))
+    # An outline copied exactly (as CAD copies are) is seen at once, however many points it has...
+    path = make(tmp_path, twins(10_100, 0.0), name="copy.dxf")
+    assert kinds(preview(path, closed_as_fills=True)) == ["fill"]
+    # ...and outlines of a few thousand points are compared as before.
+    path = make(tmp_path, twins(2_000, 0.0001), name="small.dxf")
+    assert kinds(preview(path, closed_as_fills=True)) == ["fill"]
 
 
 def test_an_ordinary_large_drawing_still_reads(tmp_path):

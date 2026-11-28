@@ -68,6 +68,8 @@ def _union(boxes) -> g.Box:
 def _is_rectangle(item: Item, box: g.Box) -> bool:
     if len(item.subpaths) != 1 or box.width <= 0 or box.height <= 0:
         return False
+    if g.traced_points(item.subpaths[0]) > g.MAX_TRACED_POINTS:  # too much to trace here, and no plain rectangle
+        return False
     ring = g.ring_of(g.flatten(item.subpaths[0], close=True)[0])
     return len(ring) >= 3 and abs(g.signed_area(ring)) >= BACKGROUND_COVER * box.width * box.height
 
@@ -272,6 +274,12 @@ def convert(drawing: Drawing, opts: Options, deadline: Deadline) -> dict[str, An
     if sum(g.control_length(s) for item in items for s in item.subpaths) * scale > MAX_LENGTH_MM:
         raise ArtError("This artwork has too much detail to import at this size. Simplify it in your drawing program, "
                        "or set a smaller Width.")
+    traced = 0
+    for item in items:
+        deadline.check()
+        traced += sum(g.traced_points(s, scale) for s in item.subpaths)
+        if traced > g.MAX_TRACED_POINTS:
+            raise ArtError(g.TOO_DETAILED)
     cx, cy = (art.x0 + art.x1) / 2, (art.y0 + art.y1) / 2
     shapes = _Shapes(drawing, opts, scale, round(cx, 6), round(cy, 6), deadline)
     shapes.outline_big_strokes([item for i, item in enumerate(items) if boxes[i][1] is not None])
