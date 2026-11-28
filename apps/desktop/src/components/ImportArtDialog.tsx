@@ -14,6 +14,10 @@ import { useModal } from "./ThreadDialogs";
 
 const close = () => useStore.getState().setDialog(null);
 
+/** The most pages offered: the engine refuses a PDF with more, and a longer list (a file can claim
+ *  a million pages) would freeze the window. */
+const MAX_PAGES = 2000;
+
 const LINES_AS: { id: StrokeMode; label: string; title: string }[] = [
   { id: "auto", label: "Automatic", title: "Under 1 mm wide: running stitch. 1 to 12 mm: satin of that width. Wider: a filled shape." },
   { id: "lines", label: "Running stitch", title: "Every line as a running stitch along its middle" },
@@ -164,7 +168,7 @@ export function ImportArtDialog() {
         <label className="field">
           Page
           <select value={options.page} onChange={(e) => setArtOptions({ page: Number(e.target.value) })}>
-            {Array.from({ length: pages }, (_, i) => (
+            {Array.from({ length: Math.min(pages, MAX_PAGES) }, (_, i) => (
               <option key={i} value={i}>
                 {i + 1} of {pages}
               </option>

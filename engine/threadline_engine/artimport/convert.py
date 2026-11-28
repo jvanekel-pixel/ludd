@@ -96,6 +96,30 @@ class _Shapes:
         self.wide = 0  # strokes brought in as their outline
         self.thin = 0  # lines made into 1 mm satins
         self.stitches = 0.0
+        self.painted: dict[int, Any] = {}  # id(item): what its big wide stroke covers (outline_big_strokes)
+
+    def as_outline(self, width: float) -> bool:
+        """Does a stroke `width` mm wide come in as its outline (too wide for a satin)?"""
+        return self.opts.strokes != "lines" and width > SATIN_MAX_MM + 1e-6
+
+    def outline_big_strokes(self, items: list[Item]) -> None:
+        """The big wide strokes' outlines, worked out together first in a child process that can be
+        stopped: GEOS can take minutes and gigabytes over one (geometry.OUTLINE_IN_CHILD)."""
+        big, jobs = [], []
+        for item in items:
+            if not self.as_outline(item.stroke_width * self.scale):
+                continue
+            lines = [(points, closed) for points, _, closed in self.flat(item)]
+            if g.is_big_stroke(lines):
+                g.check_tangle(lines, self.deadline.check)
+                big.append(item)
+                jobs.append({"lines": lines, "width": item.stroke_width * self.scale, "cap": item.cap,
+                             "join": item.join, "miter_limit": item.miter_limit})
+        if jobs:
+            from .child import outline_strokes
+
+            for item, painted in zip(big, outline_strokes(jobs, self.deadline)):
+                self.painted[id(item)] = painted
 
     def add(self, shape: dict[str, Any]) -> None:
         self.out.append(shape)
@@ -125,8 +149,13 @@ class _Shapes:
                 self.drawing.skipped.add("tiny")
                 continue
             geometry: dict[str, Any] = {"outline": nodes}
-            kept = [n for h in holes if abs(g.signed_area(h)) >= HOLE_MIN_MM2
-                    if len(n := g.fit_ring(h, corners | g.vertex_corners(h, True), self.opts.spacing_mm)) >= 3]
+            kept = []
+            for h in holes:
+                self.deadline.check()
+                if abs(g.signed_area(h)) >= HOLE_MIN_MM2:
+                    fitted = g.fit_ring(h, corners | g.vertex_corners(h, True), self.opts.spacing_mm)
+                    if len(fitted) >= 3:
+                        kept.append(fitted)
             if kept:
                 geometry["holes"] = kept
             shape = {"kind": "fill", "geometry": geometry, "color": color, "name": name}
@@ -150,9 +179,9 @@ class _Shapes:
         if item.dashed:
             self.drawing.skipped.add("dash")
         flattened = self.flat(item)
-        if mode != "lines" and width > SATIN_MAX_MM + 1e-6:
+        if self.as_outline(width):
             regions = g.stroke_regions([(p, closed) for p, _, closed in flattened], width, item.cap, item.join,
-                                       item.miter_limit)
+                                       item.miter_limit, self.deadline.check, self.painted.get(id(item)))
             corners = set().union(*(c for _, c, _ in flattened)) if flattened else set()
             before = len(self.out)
             self.areas(regions, corners, item.stroke, name)
@@ -245,6 +274,7 @@ def convert(drawing: Drawing, opts: Options, deadline: Deadline) -> dict[str, An
                        "or set a smaller Width.")
     cx, cy = (art.x0 + art.x1) / 2, (art.y0 + art.y1) / 2
     shapes = _Shapes(drawing, opts, scale, round(cx, 6), round(cy, 6), deadline)
+    shapes.outline_big_strokes([item for i, item in enumerate(items) if boxes[i][1] is not None])
     for i, item in enumerate(items):
         deadline.check()
         name = item.name[:80]

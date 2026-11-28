@@ -14,12 +14,13 @@ from typing import Callable, Iterable, Sequence
 import numpy as np
 import shapely
 from shapely.geometry import LinearRing, LineString, Polygon
-from shapely.geometry import Point as SPoint
 from shapely.ops import polygonize, unary_union
 
 from ..digitize.paths import resample
 from ..shapeops import to_nodes
+from . import ArtError, widestroke
 from .model import Point, Subpath
+from .widestroke import ring_of
 
 FLATTEN_TOL_MM = 0.05  # a flattened curve stays this close to the curve (artwork is flattened to 0.1 mm)
 FLATTEN_STEP_MM = 0.25  # ... in steps about this long
@@ -30,6 +31,21 @@ JOIN_MM = 0.1  # a line whose ends are this close is closed
 STRAIGHT_MM = 0.03  # a piece that stays this close to its chord is drawn as one straight line
 TURN_PER_POINT_DEG = 30.0  # fitted points come close enough that a curve turns about this much per step
 ROUND = 4  # decimals kept before fitting (0.0001 mm)
+
+# Checked before GEOS is asked to cut up or outline shapes whose lines cross, or to compare crowded
+# outlines pair by pair: single calls that can't be stopped, which a small file can make take minutes
+# and gigabytes.
+MAX_CROSSINGS = 20_000  # places where a shape's lines cross or touch (neighbors along a line aside)
+MAX_NEAR_PAIRS = 20_000_000  # pairs of line pieces with overlapping boxes, looked at while counting
+MAX_BOX_PAIRS = 2_000_000  # pairs of outlines with overlapping boxes (as one inside another has)
+# A wide stroke with more points than this is outlined in a child process that can be stopped:
+# GEOS can take minutes and gigabytes over a line that doubles back on itself, even one that never
+# crosses itself.
+OUTLINE_IN_CHILD = 400
+TANGLED = ("This drawing has a shape whose outline crosses or touches itself more than 20,000 times, too tangled to "
+           "import. Simplify it in your drawing program, save it again and import that.")
+CROWDED = ("This drawing has thousands of outlines inside or on top of one another, too many for LUDD to work out. "
+           "Simplify it in your drawing program (fewer overlapping shapes), save it again and import that.")
 
 _AXES = ((1.0, 0.0), (0.0, 1.0), (-1.0, 0.0), (0.0, -1.0))
 
@@ -249,14 +265,6 @@ def flatten(sub: Subpath, close: bool = False) -> tuple[list[Point], set[Point]]
     return out, corners
 
 
-def ring_of(points: Sequence[Point]) -> list[Point]:
-    """Points round a ring, without the closing repeat of the first."""
-    ring = list(points)
-    while len(ring) > 1 and ring[0] == ring[-1]:
-        ring.pop()
-    return ring
-
-
 def line_length(points: Sequence[Point]) -> float:
     return sum(math.dist(a, b) for a, b in zip(points, points[1:]))
 
@@ -311,15 +319,85 @@ def _filled(rule: str, winding: int, depth: int, any_ring: bool = True) -> bool:
     return winding != 0
 
 
+def _batches(tree: shapely.STRtree, geoms: np.ndarray, check: Callable[[], None] | None):
+    """tree.query(geoms) a batch at a time, as (index into geoms, index into the tree) pairs of
+    overlapping boxes: batches grow where there are few and shrink where there are many."""
+    i, size = 0, 16
+    while i < len(geoms):
+        if check:
+            check()
+        a, b = tree.query(geoms[i : i + size])
+        yield a + i, b
+        i += size
+        size = min(4096, max(16, size * 200_000 // max(1, len(a))))
+
+
+def box_pairs(geoms: Sequence, limit: int, check: Callable[[], None] | None = None) -> int:
+    """How many pairs of these have overlapping boxes, counting no further than past `limit`."""
+    if len(geoms) < 2:
+        return 0
+    array = np.asarray(geoms, dtype=object)
+    found = 0
+    for a, b in _batches(shapely.STRtree(array), array, check):
+        found += int(np.count_nonzero(a < b))
+        if found > limit:
+            break
+    return found
+
+
+def check_tangle(lines: Sequence[tuple[Sequence[Point], bool]], check: Callable[[], None] | None = None) -> None:
+    """Refuse (points, closed) lines that cross or touch one another or themselves more than
+    MAX_CROSSINGS times: pairs of their straight pieces that meet, neighbors along a line aside."""
+    starts: list[Point] = []
+    ends: list[Point] = []
+    owner, place, size, loop = [], [], [], []
+    for k, (points, closed) in enumerate(lines):
+        pts = ring_of(points) if closed else list(points)
+        closed = closed and len(pts) > 2
+        after = [*pts[1:], pts[0]] if closed else pts[1:]
+        starts += pts[: len(after)]
+        ends += after
+        owner += [k] * len(after)
+        place += range(len(after))
+        size.append(len(after))
+        loop.append(closed)
+    if len(starts) * (len(starts) - 1) // 2 <= MAX_CROSSINGS:  # too few pieces to meet that often
+        return
+    pieces = shapely.linestrings(np.stack([np.array(starts, dtype=float), np.array(ends, dtype=float)], axis=1))
+    owner, place, size, loop = np.array(owner), np.array(place), np.array(size), np.array(loop)
+    crossings = near = 0
+    for a, b in _batches(shapely.STRtree(pieces), pieces, check):
+        near += len(a)
+        once = a < b
+        a, b = a[once], b[once]
+        gap = np.abs(place[a] - place[b])
+        neighbors = (owner[a] == owner[b]) & ((gap == 1) | (loop[owner[a]] & (gap == size[owner[a]] - 1)))
+        a, b = a[~neighbors], b[~neighbors]
+        crossings += int(np.count_nonzero(shapely.intersects(pieces[a], pieces[b])))
+        if crossings > MAX_CROSSINGS:
+            raise ArtError(TANGLED)
+        if near > MAX_NEAR_PAIRS:
+            raise ArtError(CROWDED)
+
+
 def fill_regions(rings: Sequence[list[Point]], rule: str = "nonzero", check: Callable[[], None] | None = None) -> list[Region]:
     """The areas a path's rings fill by `rule`, as outlines with holes. Rings that don't cross or
-    touch keep their own points, in the file's order; others are cut up where they cross."""
+    touch keep their own points, in the file's order; others are cut up where they cross. Rings too
+    crowded or tangled to work out are refused."""
     rings = [r for r in rings if not is_flat(r)]
     if not rings:
         return []
     lines = [LinearRing(r) for r in rings]
-    if all(line.is_simple for line in lines) and not _any_touch(lines):
+    if len(lines) * (len(lines) - 1) // 2 > MAX_BOX_PAIRS and box_pairs(lines, MAX_BOX_PAIRS, check) > MAX_BOX_PAIRS:
+        raise ArtError(CROWDED)
+    simple = all(line.is_simple for line in lines)
+    if check:
+        check()
+    if simple and not _any_touch(lines):
+        if check:
+            check()
         return _nested(rings, rule)
+    check_tangle([(r, True) for r in rings], check)
     return _noded(rings, rule, check)
 
 
@@ -414,22 +492,20 @@ def region_area(region: Region) -> float:
     return abs(signed_area(outline)) - sum(abs(signed_area(h)) for h in holes)
 
 
+def is_big_stroke(lines: Sequence[tuple[list[Point], bool]]) -> bool:
+    """So many points that outlining it is left to a child process (see OUTLINE_IN_CHILD)."""
+    return sum(len(points) for points, _ in lines) > OUTLINE_IN_CHILD
+
+
 def stroke_regions(lines: Sequence[tuple[list[Point], bool]], width: float, cap: str = "butt", join: str = "miter",
-                   miter_limit: float = 4.0) -> list[Region]:
+                   miter_limit: float = 4.0, check: Callable[[], None] | None = None, painted=None) -> list[Region]:
     """The outline of lines painted `width` wide, as areas (for strokes too wide for a satin).
-    `lines`: (points, closed) pairs."""
-    caps = {"butt": "flat", "round": "round", "square": "square"}
-    joins = {"round": "round", "bevel": "bevel"}
-    painted = []
-    for points, closed in lines:
-        if len(points) < 2:
-            if points and cap != "butt":
-                painted.append(SPoint(points[0]).buffer(width / 2, quad_segs=16))
-            continue
-        shape = LinearRing(ring_of(points)) if closed and len(ring_of(points)) >= 3 else LineString(points)
-        painted.append(shape.buffer(width / 2, quad_segs=16, cap_style=caps.get(cap, "flat"),
-                                    join_style=joins.get(join, "mitre"), mitre_limit=max(1.0, miter_limit)))
-    return _ordered(unary_union(painted)) if painted else []
+    `lines`: (points, closed) pairs. `painted`: what they cover, when a child process has worked it
+    out (a big stroke, already checked for tangles)."""
+    if painted is None:
+        check_tangle(lines, check)  # their outlines are as hard to join as they are to cut up
+        painted = widestroke.union(lines, width, cap, join, miter_limit)
+    return _ordered(painted)
 
 
 # ---------------------------------------------------------------- fitting pen points

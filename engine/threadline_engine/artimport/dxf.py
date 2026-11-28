@@ -21,9 +21,13 @@ import threading
 from dataclasses import dataclass
 
 from . import MAX_COORDINATE, ArtError, Deadline, Options
-from .geometry import flatten, ring_of
+from .geometry import CROWDED, MAX_BOX_PAIRS, box_pairs, check_tangle, flatten, ring_of
 from .model import Drawing, Item, Point, Subpath, rgb_hex
 
+# The whole file, counted before ezdxf reads it (one call that can't be stopped).
+MAX_OBJECTS = 100_000  # records: shapes, blocks, layers and other settings (old-style vertices apart)
+MAX_VERTICES = 300_000  # old-style polyline vertex records (more points than MAX_POINTS anyway)
+MAX_TAGS = 3_000_000  # pairs of lines (a code and its value): about 40 s for ezdxf to read here
 MAX_ENTITIES = 50_000  # in the drawing, once every block is expanded
 MAX_BLOCK_DEPTH = 16  # blocks inside blocks
 MAX_POINTS = 300_000  # vertices and control points, once every block is expanded
@@ -84,13 +88,54 @@ def load_ezdxf():
     return sys.modules["ezdxf"]
 
 
-def _open(data: bytes):
+def _check_size(data: bytes, deadline: Deadline) -> None:
+    """Refuse a drawing with too much in it before ezdxf reads it all, which can't be stopped
+    partway and takes minutes and gigabytes for a big enough file. The records are counted by
+    ezdxf's own tag readers, so they're counted as ezdxf will read them."""
+    too_many = ArtError(f"This DXF has more than {MAX_OBJECTS:,} objects, too many to import. Simplify the drawing in "
+                        "your CAD program (purge unused blocks too) and save it again.")
+    too_big = ArtError("This DXF has far more in it than LUDD imports. Simplify the drawing in your CAD program (purge "
+                       "unused blocks too) and save it again.")
+    if data.startswith(_BINARY):
+        from ezdxf.lldxf.tagger import binary_tags_loader as tags_of
+
+        tags = tags_of(data)
+    else:
+        lines = data.count(b"\n") + 1
+        if lines // 2 > MAX_TAGS:
+            raise too_big
+        if lines // 2 <= MAX_OBJECTS:  # too short to hold too many of anything
+            return
+        from ezdxf.recover import bytes_loader
+
+        tags = bytes_loader(io.BytesIO(data))
+    objects = vertices = 0
+    for n, (code, value) in enumerate(tags):
+        if n >= MAX_TAGS:
+            raise too_big
+        if n % 10_000 == 0:
+            deadline.check()
+        if code != 0:
+            continue
+        if value in (b"VERTEX", "VERTEX"):
+            vertices += 1
+            if vertices > MAX_VERTICES:
+                raise ArtError("This DXF has more points than LUDD imports. Simplify the drawing in your CAD program.")
+        else:
+            objects += 1
+            if objects > MAX_OBJECTS:
+                raise too_many
+
+
+def _open(data: bytes, deadline: Deadline):
     if data[:4] == b"AC10":
         raise ArtError("This is an AutoCAD DWG drawing, not a DXF. In your CAD program, use Save As and choose DXF.")
     if not data.rstrip(b"\x00\x1a \t\r\n").endswith(b"EOF"):  # ezdxf's recovery reads a cut file as empty
         raise ArtError("This DXF is cut off or damaged (it doesn't end the way a DXF does). Save or export it again "
                        "from your CAD program.")
     load_ezdxf()
+    _check_size(data, deadline)
+    deadline.check()
     if data.startswith(_BINARY):
         from ezdxf.document import Drawing as Document
         from ezdxf.lldxf.tagger import binary_tags_loader
@@ -450,6 +495,8 @@ class _Reader:
         """Everything found, in drawing order. Closed outlines that become fills are paired up by
         color and layer: an outline right inside another is its hole (an island inside the hole
         is filled again), so a letter O or a washer comes in with its hole."""
+        import numpy as np
+        import shapely
         from shapely.geometry import Polygon
         from shapely.strtree import STRtree
 
@@ -459,19 +506,29 @@ class _Reader:
                 groups.setdefault((found.item.fill, found.item.name), []).append(i)
         holes_of: dict[int, list[int]] = {}
         consumed: set[int] = set()
+        pairs = 0  # of outlines with overlapping boxes, in all: each pair is compared below
         for members in groups.values():
             self.deadline.check()
             shapes = []
             for i in members:
+                self.deadline.check()
                 ring = ring_of(flatten(self.found[i].item.subpaths[0], close=True)[0])
+                check_tangle([(ring, True)], self.deadline.check)
                 shapes.append(Polygon(ring) if len(ring) >= 3 else Polygon())
+            pairs += box_pairs(shapes, MAX_BOX_PAIRS - pairs, self.deadline.check)
+            if pairs > MAX_BOX_PAIRS:
+                raise ArtError(CROWDED)
             tree = STRtree(shapes)
+            bounds = shapely.bounds(np.array(shapes, dtype=object)).reshape(-1, 4)
             twice: set[int] = set()  # an outline drawn again on top of itself
             for a, outline in enumerate(shapes):
                 if a in twice or outline.is_empty:
                     continue
-                for b in sorted(tree.query(outline.exterior.buffer(0.01), predicate="intersects").tolist()):
-                    if b > a and b not in twice and abs(shapes[b].area - outline.area) <= 0.01 * outline.length \
+                self.deadline.check()
+                near = tree.query(outline)  # overlapping boxes: only a box within 0.01 of its own can be the same
+                near = np.sort(near[(near > a) & np.all(np.abs(bounds[near] - bounds[a]) <= 0.0101, axis=1)])
+                for b in near.tolist():
+                    if b not in twice and abs(shapes[b].area - outline.area) <= 0.01 * outline.length \
                             and shapes[b].exterior.hausdorff_distance(outline.exterior) < 0.01:
                         twice.add(b)
                         consumed.add(members[b])
@@ -479,6 +536,7 @@ class _Reader:
             for a, outer in enumerate(shapes):
                 if a in twice or not outer.is_valid or outer.is_empty:
                     continue
+                self.deadline.check()
                 for b in tree.query(outer, predicate="contains").tolist():
                     if b != a and b not in twice and shapes[b].is_valid and outer.area > shapes[b].area:
                         containers[b].append(a)
@@ -501,7 +559,7 @@ class _Reader:
 
 
 def read(data: bytes, opts: Options, deadline: Deadline) -> Drawing:
-    document, removed = _open(data)
+    document, removed = _open(data, deadline)
     deadline.check()
     # ezdxf fills in a default for a missing $INSUNITS in a few cases, so check the file itself.
     units = document.header.get("$INSUNITS", 0) if b"$INSUNITS" in data else 0

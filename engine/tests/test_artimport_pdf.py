@@ -2,14 +2,17 @@
 written by the test, byte by byte."""
 
 import math
+import subprocess
+import sys
 import threading
 import time
+from pathlib import Path
 
 import pytest
 from shapely.geometry import LineString
 
-from artimport_util import area_of, ask, bounds, close, kinds, layout_of, line_of, preview, refusal, write
-from threadline_engine import layout
+from artimport_util import area_of, bounds, close, kinds, layout_of, line_of, preview, refusal, write
+from threadline_engine import artimport, layout
 
 MM = 72 / 25.4  # PDF units (points) in a millimeter
 
@@ -256,9 +259,10 @@ def test_too_many_objects_on_a_page_are_refused(tmp_path):
     assert "more than 50,000 objects" in _quickly(pdf_file(tmp_path, document(content)), 30)
 
 
-def test_two_previews_at_once_take_turns_with_pdfium(tmp_path):
-    """art.preview runs on its own thread and PDFium isn't thread-safe: overlapping previews each
-    get their own right answer."""
+def test_previews_at_once_each_get_their_own_answer(tmp_path):
+    """PDFium isn't thread-safe, so each PDF is read in a process of its own: previews running at
+    once each get their own right answer. (Through the dispatcher a newer one would replace an
+    older: test_artimport_newest.py.)"""
     paths = []
     for i in range(6):
         side = 36 * (i + 1)
@@ -267,7 +271,7 @@ def test_two_previews_at_once_take_turns_with_pdfium(tmp_path):
     answers: dict[int, dict] = {}
 
     def run(i, path):
-        answers[i] = ask(path)
+        answers[i] = artimport.preview(str(path))
 
     threads = [threading.Thread(target=run, args=(i, p)) for i, (p, _) in enumerate(paths)]
     for t in threads:
@@ -275,32 +279,24 @@ def test_two_previews_at_once_take_turns_with_pdfium(tmp_path):
     for t in threads:
         t.join(60)
     for i, (_, side) in enumerate(paths):
-        result = answers[i]["result"]
+        result = answers[i]
         fill = [s for s in result["shapes"] if s["kind"] == "fill"][0]
         x0, y0, x1, y1 = bounds(fill)
         assert (x1 - x0, y1 - y0) == pytest.approx((side, side), abs=0.02)
 
 
-def test_every_pdfium_call_is_made_with_the_lock_held(tmp_path, monkeypatch):
-    """A call made without the module's lock would let two previews into PDFium at once."""
-    import pypdfium2.raw as pdfium
-
-    from threadline_engine.artimport import pdf as art_pdf
-
-    unlocked, calls = [], []
-    for name in [n for n in dir(pdfium) if n.startswith("FPDF") and callable(getattr(pdfium, n))
-                 and not isinstance(getattr(pdfium, n), type)]:
-        real = getattr(pdfium, name)
-
-        def checked(*args, _real=real, _name=name):
-            calls.append(_name)
-            if not art_pdf._lock.locked():
-                unlocked.append(_name)
-            return _real(*args)
-
-        monkeypatch.setattr(pdfium, name, checked)
+def test_pdfium_is_never_loaded_in_the_engine(tmp_path):
+    """Every PDFium call (which can't be stopped, and which a bad file can make crash or fill the
+    memory) happens in a one-use child process: the engine never even loads the library."""
     form = first_extra()
     data = document(PROOF + " q /F Do Q", resources=f"/XObject << /F {form} 0 R >>",
                     extra=(stream("0 0 m 9 9 l S", "/Type /XObject /Subtype /Form /BBox [0 0 10 10]"),))
-    assert preview(pdf_file(tmp_path, data))["shapes"]
-    assert "FPDF_LoadMemDocument64" in calls and "FPDFFormObj_GetObject" in calls and not unlocked
+    path = pdf_file(tmp_path, data)
+    code = ("import sys; from threadline_engine import artimport; "
+            "print(len(artimport.preview(sys.argv[1])['shapes']), "
+            "sorted(m for m in sys.modules if m.startswith('pypdfium2')))")
+    engine = Path(__file__).resolve().parents[1]
+    done = subprocess.run([sys.executable, "-c", code, str(path)], capture_output=True, text=True, timeout=120,
+                          cwd=engine)
+    assert done.returncode == 0, done.stderr[-2000:]
+    assert done.stdout.split() == ["3", "[]"], done.stdout  # the proof's two shapes and the form's line

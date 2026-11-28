@@ -5,6 +5,10 @@ you accept. Artwork files are untrusted input. Only the one chosen file is read,
 it is fetched, run or followed (links to other files and websites, XML entities, pictures and
 cross-references are all left alone); and every size is capped, with a refusal in plain words.
 
+The limits are rules about the file (counts and sizes), checked before any step that can't be
+stopped partway; the time limit backs them up. What no rule can bound (reading a PDF, outlining a
+big wide stroke) runs in a one-use child process that is stopped at the limit (child.py).
+
 The readers (svg.py, dxf.py, pdf.py) turn a file into painted paths in millimeters at the file's
 real size (model.py); convert.py turns those into fills, lines and satins.
 """
@@ -14,11 +18,14 @@ from __future__ import annotations
 import os
 import stat
 import sys
+import threading
 import time
 import traceback
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from ..rpc import REPLACED
 
 MB = 1024 * 1024
 MAX_BYTES = {"svg": 20 * MB, "dxf": 50 * MB, "pdf": 50 * MB}
@@ -28,8 +35,10 @@ MAX_SIZE_MM = 1000.0  # the engine refuses bigger shapes (digitize.stitches.MAX_
 MAX_LENGTH_MM = 400_000.0  # of all the outlines together, at the size they come in
 MAX_STITCHES = 400_000  # about what the whole artwork may take at LUDD's standard settings
 MAX_COORDINATE = 1e9  # anything further out than this (in mm) isn't a drawing
-TIME_LIMIT_S = 60.0
+TIME_LIMIT_S = 60.0  # well within the 120 s the app waits (feat/importArt.ts)
 STROKE_MODES = ("auto", "lines", "satins")
+TOO_SLOW = ("This artwork takes too long to read. Simplify it in your drawing program (fewer shapes and points), "
+            "save it again and import that.")
 
 
 class ArtError(Exception):
@@ -39,15 +48,24 @@ class ArtError(Exception):
 
 
 class Deadline:
-    """Checked as the work goes on, so a file that is slow to read is given up on."""
+    """Checked as the work goes on, so that a file that is slow to read is given up on, and a newer
+    preview stops an older one (`replaced` is set). `since` (time.monotonic()): when the request
+    arrived, so time spent waiting for the older preview to stop counts too."""
 
-    def __init__(self, seconds: float | None = None) -> None:
-        self.until = time.monotonic() + (TIME_LIMIT_S if seconds is None else seconds)
+    def __init__(self, seconds: float | None = None, replaced: threading.Event | None = None,
+                 since: float | None = None) -> None:
+        start = time.monotonic() if since is None else since
+        self.until = start + (TIME_LIMIT_S if seconds is None else seconds)
+        self.replaced = replaced
+
+    def left(self) -> float:
+        return max(0.0, self.until - time.monotonic())
 
     def check(self) -> None:
+        if self.replaced is not None and self.replaced.is_set():
+            raise ArtError(REPLACED)
         if time.monotonic() > self.until:
-            raise ArtError("This artwork takes too long to read. Simplify it in your drawing program (fewer shapes "
-                           "and points), save it again and import that.")
+            raise ArtError(TOO_SLOW)
 
 
 @dataclass(frozen=True)
@@ -122,14 +140,16 @@ def read_once(path: str, kind: str) -> bytes:
     return data
 
 
-def preview(path: Any, options: Any = None) -> dict[str, Any]:
-    """{size_mm, scale_note, shapes, skipped, warnings, pages} for the artwork at `path`."""
+def preview(path: Any, options: Any = None, deadline: Deadline | None = None) -> dict[str, Any]:
+    """{size_mm, scale_note, shapes, skipped, warnings, pages} for the artwork at `path`.
+    `deadline` (TIME_LIMIT_S from now if not given) is where the work is given up on."""
     if not isinstance(path, str) or not path:
         raise ArtError("Choose a file to import.")
     kind = kind_of(path)
     opts = Options.from_dict(options)
     data = read_once(path, kind)
-    deadline = Deadline()
+    deadline = deadline or Deadline()
+    deadline.check()
     from . import convert
 
     try:

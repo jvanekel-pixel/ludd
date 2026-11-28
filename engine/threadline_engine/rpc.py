@@ -10,6 +10,7 @@ import inspect
 import json
 import sys
 import threading
+import time
 import traceback
 from typing import Any, Callable, TextIO
 
@@ -20,8 +21,37 @@ INVALID_PARAMS = -32602
 INTERNAL_ERROR = -32603
 # Expected, user-facing failures (bad file, unsupported format). Exceptions opt in via `rpc_code`.
 APP_ERROR = -32000
+# The answer to a newest-wins request that a newer one replaced (the app has stopped waiting for it).
+REPLACED = "A newer preview replaced this one."
 
 Handler = Callable[..., Any]
+
+
+class Replaced(Exception):
+    """A newest-wins request that a newer one replaced before it could run."""
+
+    rpc_code = APP_ERROR
+
+    def __init__(self) -> None:
+        super().__init__(REPLACED)
+
+
+class Ticket:
+    """One request to a newest-wins method: when it came in, and whether a newer one has replaced
+    it (the method that is running checks `replaced` and stops)."""
+
+    def __init__(self) -> None:
+        self.arrived = time.monotonic()
+        self.replaced = threading.Event()
+
+
+class _Newest:
+    """A newest-wins method: the newest request's ticket, and the lock the running one holds."""
+
+    def __init__(self) -> None:
+        self.running = threading.Lock()
+        self.guard = threading.Lock()  # around `latest`
+        self.latest: Ticket | None = None
 
 
 class Dispatcher:
@@ -29,31 +59,62 @@ class Dispatcher:
         self._methods: dict[str, Handler] = {}
         # Slow methods (AI calls over the network) answer from a thread, so the canvas keeps working.
         self._background: set[str] = set()
+        self._newest: dict[str, _Newest] = {}
+        self._here = threading.local()  # .ticket: the one of the request this thread is running
         # Set by engine.shutdown: stop reading once the current answer is sent.
         self.stopping = False
         # Held while a method runs on the main loop. A background method takes it around any part
         # that uses the engine's shared caches (render's), so the two never touch them at once.
         self.lock = threading.RLock()
 
-    def method(self, name: str, background: bool = False) -> Callable[[Handler], Handler]:
+    def method(self, name: str, background: bool = False, newest_wins: bool = False) -> Callable[[Handler], Handler]:
+        """`newest_wins` (a background method): only one of its requests runs at a time, and a new
+        one replaces all the older ones. The one running is told through its ticket(), and one still
+        waiting is answered as replaced without running."""
+
         def register(fn: Handler) -> Handler:
             self._methods[name] = fn
-            if background:
+            if background or newest_wins:
                 self._background.add(name)
+            if newest_wins:
+                self._newest[name] = _Newest()
             return fn
 
         return register
 
+    def ticket(self) -> Ticket | None:
+        """The ticket of the newest-wins request this thread is running (None otherwise)."""
+        return getattr(self._here, "ticket", None)
+
+    def arrive(self, name: str) -> Ticket | None:
+        """A new request for `name` is here: for a newest-wins method, its ticket, and every older
+        request is replaced. (Others get None.)"""
+        state = self._newest.get(name)
+        if state is None:
+            return None
+        ticket = Ticket()
+        with state.guard:
+            if state.latest is not None:
+                state.latest.replaced.set()
+            state.latest = ticket
+        return ticket
+
     def is_background(self, line: str) -> bool:
+        return self._background_name(line) is not None
+
+    def _background_name(self, line: str) -> str | None:
+        """The method of a request line that is answered from a thread, else None."""
         try:
             req = json.loads(line)
         except (ValueError, RecursionError):  # handle_line answers it with a parse error
-            return False
-        return isinstance(req, dict) and req.get("method") in self._background
+            return None
+        method = req.get("method") if isinstance(req, dict) else None
+        return method if isinstance(method, str) and method in self._background else None
 
-    def handle_line(self, line: str) -> dict[str, Any] | None:
+    def handle_line(self, line: str, ticket: Ticket | None = None) -> dict[str, Any] | None:
         """Handle one request line. Returns the response, or None for notifications.
-        Never raises: whatever goes wrong becomes an error answer, and the engine keeps serving."""
+        Never raises: whatever goes wrong becomes an error answer, and the engine keeps serving.
+        `ticket`: from arrive(), for a newest-wins request (one is made here if not given)."""
         try:
             req = json.loads(line)
         except json.JSONDecodeError as exc:
@@ -83,7 +144,7 @@ class Dispatcher:
         except TypeError as exc:
             return None if is_notification else _error(req_id, INVALID_PARAMS, f"{method}: {exc}")
         try:
-            result = fn(*args, **kwargs)
+            result = self._run(method, fn, args, kwargs, ticket)
         except Exception as exc:  # noqa: BLE001 - report every engine failure to the UI
             code = getattr(exc, "rpc_code", INTERNAL_ERROR)
             if code == INTERNAL_ERROR:
@@ -97,10 +158,29 @@ class Dispatcher:
 
         return None if is_notification else {"jsonrpc": "2.0", "id": req_id, "result": result}
 
-    def respond(self, line: str) -> str | None:
+    def _run(self, name: str, fn: Handler, args, kwargs, ticket: Ticket | None) -> Any:
+        state = self._newest.get(name)
+        if state is None:
+            return fn(*args, **kwargs)
+        ticket = ticket or self.arrive(name)  # handle_line called directly: it arrives now
+        while not state.running.acquire(timeout=0.05):
+            if ticket.replaced.is_set():
+                raise Replaced()
+        try:
+            if ticket.replaced.is_set():
+                raise Replaced()
+            before, self._here.ticket = self.ticket(), ticket
+            try:
+                return fn(*args, **kwargs)
+            finally:
+                self._here.ticket = before
+        finally:
+            state.running.release()
+
+    def respond(self, line: str, ticket: Ticket | None = None) -> str | None:
         """The answer to one request line as one line of strict JSON (no NaN), or None."""
         try:
-            resp = self.handle_line(line)
+            resp = self.handle_line(line, ticket)
             if resp is None:
                 return None
             try:
@@ -115,8 +195,8 @@ class Dispatcher:
     def serve(self, stdin: TextIO, stdout: TextIO) -> None:
         lock = threading.Lock()
 
-        def answer(line: str) -> None:
-            text = self.respond(line)
+        def answer(line: str, ticket: Ticket | None = None) -> None:
+            text = self.respond(line, ticket)
             if text is not None:
                 with lock:  # responses may finish out of order; each is one whole line
                     stdout.write(text + "\n")
@@ -126,8 +206,10 @@ class Dispatcher:
         for line in stdin:
             if not line.strip():
                 continue
-            if self.is_background(line):
-                t = threading.Thread(target=answer, args=(line,), daemon=True)
+            if (name := self._background_name(line)) is not None:
+                # Its ticket is taken here, on the reading thread, so requests replace each other
+                # in the order they came in, whichever thread gets going first.
+                t = threading.Thread(target=answer, args=(line, self.arrive(name)), daemon=True)
                 t.start()
                 running = [r for r in running if r.is_alive()] + [t]
             else:

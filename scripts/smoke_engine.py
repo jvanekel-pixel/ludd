@@ -68,9 +68,32 @@ def tiny_pdf(path: Path) -> None:
     path.write_bytes(bytes(out))
 
 
+def wide_svg(path: Path) -> None:
+    """A 14 mm wide line of 450 points. The engine outlines a wide line of many points in a child
+    process (a copy of itself), as it reads every PDF."""
+    points = " ".join(f"{10 + i * 0.2:.1f},{20 + (i % 2) * 0.1:.1f}" for i in range(450))
+    path.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="120mm" height="40mm" viewBox="0 0 120 40">'
+                    f'<polyline points="{points}" fill="none" stroke="#0000cc" stroke-width="14"/></svg>',
+                    encoding="utf-8")
+
+
 #: One file for each library that reads artwork, and the shapes it has to come out as.
 ARTWORK = (("smoke.svg", tiny_svg, "svgelements", ["fill"]), ("smoke.dxf", tiny_dxf, "ezdxf", ["run"]),
-           ("smoke.pdf", tiny_pdf, "pypdfium2", ["fill", "satin"]))
+           ("smoke.pdf", tiny_pdf, "pypdfium2", ["fill", "satin"]),
+           ("smoke-wide.svg", wide_svg, "GEOS in the child process", ["fill"]))
+
+
+def never_a_second_engine(command: list[str], data_dir: str) -> None:
+    """The engine's child process mode (--ludd-artwork-worker), and any other option, must never
+    answer the app's requests the way the engine does."""
+    ping = b'{"jsonrpc":"2.0","id":1,"method":"ping"}\n'
+    for option in ("--ludd-artwork-worker", "--no-such-option"):
+        done = subprocess.run([*command, option], input=ping, capture_output=True, timeout=180,
+                              env=dict(os.environ, THREADLINE_DATA_DIR=data_dir))
+        assert done.returncode == 2 and done.stdout == b"", (
+            f"smoke: the engine started with {option} exited with {done.returncode} and wrote "
+            f"{done.stdout[:200]!r}; its messages: {done.stderr[-500:]!r}")
+    print("smoke: a copy started with an option never answers as a second engine")
 
 
 class Engine:
@@ -165,6 +188,7 @@ def smoke(command: list[str]) -> None:
             if eng.p.poll() is None:
                 eng.p.kill()
             eng.err.close()  # Windows can't delete the scratch folder while this is open
+        never_a_second_engine(command, tmp)
     print("smoke: ok")
 
 

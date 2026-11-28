@@ -40,8 +40,20 @@ export type ArtOptions = { width_mm: number | null; strokes: StrokeMode; closed_
  *  engine can say how to save it instead.) */
 export const ART_FILE = /\.(svg|svgz|dxf|pdf)$/i;
 
-const PREVIEW_MS = 120_000;
+/** How long the app waits for a preview. The engine gives up on a drawing itself after 60 s
+ *  (artimport TIME_LIMIT_S, counted from when the request comes in), well before this. */
+export const PREVIEW_MS = 120_000;
 const BLACK: Thread = { color: "#000000", name: "Black", brand: "", catalog: "" };
+
+/** Said if the wait ends anyway (a stuck or very busy computer), instead of the engine client's
+ *  "Engine did not answer art.preview within 120000 ms". */
+export const NO_ANSWER =
+  "LUDD got no answer about this drawing in time. Close this window and import it again. If it happens again, simplify the drawing in your drawing program (fewer shapes and points) and save it again.";
+
+function previewError(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.startsWith("Engine did not answer") ? NO_ANSWER : message;
+}
 
 type State = {
   /** The file being imported (null: no import going on). */
@@ -140,7 +152,7 @@ async function requestPreview(): Promise<void> {
     frame(preview.size_mm);
   } catch (err) {
     if (mine !== asking) return;
-    useImportArt.setState({ preview: null, asked: "", busy: false, error: err instanceof Error ? err.message : String(err) });
+    useImportArt.setState({ preview: null, asked: "", busy: false, error: previewError(err) });
   }
 }
 

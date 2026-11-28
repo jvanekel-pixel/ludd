@@ -3,25 +3,25 @@ pypdfium2). PDF units are real (72 to the inch), forms are opened one level deep
 own rotation is applied. Text, pictures and shadings are counted and left out. Nothing is rendered,
 scripts never run and links are never followed.
 
-PDFium isn't safe to call from two threads at once (art.preview runs on its own thread), so one
-lock is held round every call, and everything opened is closed before it's let go.
+PDFium only ever runs in a one-use child process (child.py), which reads one file and ends: its
+page loading can't be stopped and can take gigabytes, and a file that crashes it crashes only the
+child. (So no two threads ever call it at once either.) read() is the engine's side; _read() is
+what the child runs.
 """
 
 from __future__ import annotations
 
 import ctypes
 import math
-import threading
 
 from . import MAX_COORDINATE, ArtError, Deadline, Options
 from .model import Drawing, Item, Point, Subpath
 
 PT_MM = 25.4 / 72
+MAX_PAGES = 2000  # the dialog offers every page in a list
 MAX_OBJECTS = 50_000  # on the page, forms included
 MAX_SEGMENTS = 300_000
 _IDENTITY = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
-
-_lock = threading.Lock()
 
 
 def read(data: bytes, opts: Options, deadline: Deadline) -> Drawing:
@@ -29,9 +29,9 @@ def read(data: bytes, opts: Options, deadline: Deadline) -> Drawing:
         raise ArtError("This file isn't a PDF. Save or export it again as a PDF.")
     if b"%%EOF" not in data[-4096:]:  # PDFium would repair a cut file and read part of it
         raise ArtError("This PDF is cut off or damaged (it doesn't end the way a PDF does). Save or export it again.")
-    with _lock:
-        deadline.check()  # (it may have waited for another preview)
-        return _read(data, opts, deadline)
+    from .child import read_pdf
+
+    return read_pdf(data, opts, deadline)
 
 
 def _read(data: bytes, opts: Options, deadline: Deadline) -> Drawing:
@@ -49,9 +49,12 @@ def _read(data: bytes, opts: Options, deadline: Deadline) -> Drawing:
                            "program and import that.")
         raise ArtError("LUDD couldn't read this PDF: it may be damaged. Save or export it again.")
     try:
-        pages = pdfium.FPDF_GetPageCount(document)
+        pages = pdfium.FPDF_GetPageCount(document)  # as the file says, which may be a lie
         if pages < 1:
             raise ArtError("LUDD found no pages in this PDF. Save or export it again.")
+        if pages > MAX_PAGES:
+            raise ArtError(f"This PDF says it has more than {MAX_PAGES:,} pages. Save just the page you want as its "
+                           "own PDF and import that.")
         if opts.page >= pages:
             raise ArtError(f"This PDF has {pages} page{'s' if pages > 1 else ''}: choose one of them.")
         page = pdfium.FPDF_LoadPage(document, opts.page)

@@ -31,6 +31,7 @@ MAX_ELEMENTS = 50_000  # in the file, and once every <use> is expanded
 MAX_DEPTH = 64  # groups inside groups, <use> included
 MAX_ATTRIBUTES = 256  # on one element
 MAX_PATH_NUMBERS = 600_000  # numbers in path and point data, once every <use> is expanded
+MAX_CLOSE_WORK = 2_000_000  # steps svgelements takes working out where each "z" goes back to, in all
 MAX_CSS = 256 * 1024  # characters of stylesheet
 MAX_TEXT_WORK = 5_000_000  # characters of styles and transforms svgelements has to read, in all
 MAX_TRANSFORM = 20_000  # characters of one shape's transforms, its groups' included
@@ -54,13 +55,16 @@ _SELECTOR = re.compile(r"\*|[A-Za-z][\w-]{0,100}|[#.][^\s.#:>+~\[\]{},;*()]{1,20
 _TRANSFORM_PART = re.compile(r"[\s,]*(matrix|translate|translatex|translatey|scale|scalex|scaley|rotate|skew|skewx|skewy)"
                              r"\s*\(([^()]{0,600})\)", re.IGNORECASE)
 _PLAIN_NUMBER = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
+_PATH_TOKEN = re.compile(r"[MmZz]|" + _PLAIN_NUMBER)  # what close_work counts in path data
 _PARAMETER = re.compile(_PLAIN_NUMBER + r"(px|pt|pc|mm|cm|in|q|deg|rad|grad|turn)?", re.IGNORECASE)
 # How many numbers each transform takes, and whether they may carry units (svgelements stops on
 # "scale(2px)", and with it on the whole file).
 _PARAMETERS = {"matrix": ((6,), False), "translate": ((1, 2), True), "translatex": ((1,), True),
                "translatey": ((1,), True), "scale": ((1, 2), False), "scalex": ((1,), False), "scaley": ((1,), False),
                "rotate": ((1, 3), True), "skew": ((1, 2), True), "skewx": ((1,), True), "skewy": ((1,), True)}
-_LENGTH = re.compile(r"\s*(" + _PLAIN_NUMBER + r")\s*([a-zA-Z%]{0,4})\s*\Z")
+# Matched against the text with its ends stripped: with a \s* at each end as well, this took minutes
+# on a long run of spaces.
+_LENGTH = re.compile(r"(" + _PLAIN_NUMBER + r")\s*([a-zA-Z%]{0,4})")
 
 PX_PER = {"": 1.0, "px": 1.0, "mm": 96 / 25.4, "cm": 96 / 2.54, "in": 96.0, "pt": 96 / 72, "pc": 16.0, "q": 96 / 101.6}
 _REAL_UNITS = frozenset({"mm", "cm", "in", "pt", "pc", "q"})
@@ -259,16 +263,40 @@ def _ids(root: ET.Element) -> dict[str, ET.Element]:
     return {el.attrib["id"]: el for el in root.iter() if "id" in el.attrib}
 
 
+def close_work(d: str, stop: int = MAX_CLOSE_WORK) -> int:
+    """About how many steps svgelements takes over the "z"s of this path data: for each one it
+    walks back, piece by piece, to the last "M" or "m", so a path closed thousands of times takes it
+    minutes. Counting stops once past `stop`."""
+    if "z" not in d and "Z" not in d:
+        return 0
+    work = since = 0
+    for found in _PATH_TOKEN.finditer(d):
+        token = found[0]
+        if token in ("M", "m"):
+            since = 0
+            continue
+        since += 1  # a piece takes at least one number, or is a "z" itself
+        if token in ("Z", "z"):
+            work += since
+            if work > stop:
+                break
+    return work
+
+
 @dataclass
 class _Cost:
     elements: int
     numbers: int
+    closes: int  # close_work of its paths
     height: int
     styles: int  # characters of styles and transforms read for this subtree (its parents' not counted)
     transform: int  # the longest chain of transforms inside it
 
 
-def check_budget(root: ET.Element, sheet: Stylesheet) -> None:
+_CLOSED_TOO_OFTEN = "has paths too long, or closed too many times over, for LUDD to read"
+
+
+def check_budget(root: ET.Element, sheet: Stylesheet, check: Callable[[], None] | None = None) -> None:
     """Refuse loops, and drawings that multiply out too far, following every <use> as svgelements
     does."""
     ids = _ids(root)
@@ -288,11 +316,16 @@ def check_budget(root: ET.Element, sheet: Stylesheet) -> None:
                 raise _too_complex(f"has groups nested more than {MAX_DEPTH} deep")
             return known
         open_now.add(key)
+        if check:
+            check()
         tag = _local(el) or ""
         own_transform = len(el.get("transform", ""))
-        total = _Cost(1, len(_NUMBER.findall(el.get("d", ""))) + len(_NUMBER.findall(el.get("points", ""))), 0,
+        total = _Cost(1, len(_NUMBER.findall(el.get("d", ""))) + len(_NUMBER.findall(el.get("points", ""))),
+                      close_work(el.get("d", "")) if tag == "path" else 0, 0,
                       sheet.size(tag, el.get("id"), el.get("class", "")) + len(el.get("style", "")) + own_transform,
                       own_transform)
+        if total.closes > MAX_CLOSE_WORK:
+            raise _too_complex(_CLOSED_TOO_OFTEN)
         inside = list(el)
         if tag == "use" and (href := _href(el)) and href.startswith("#") and (target := ids.get(href[1:])) is not None:
             inside.append(target)
@@ -300,6 +333,7 @@ def check_budget(root: ET.Element, sheet: Stylesheet) -> None:
             c = cost(child, depth + 1)
             total.elements = min(cap, total.elements + c.elements)
             total.numbers = min(cap, total.numbers + c.numbers)
+            total.closes = min(cap, total.closes + c.closes)  # each copy is worked through again
             total.height = max(total.height, c.height + 1)
             total.styles = min(cap, total.styles + c.styles + own_transform * c.elements)
             total.transform = max(total.transform, own_transform + c.transform)
@@ -307,6 +341,8 @@ def check_budget(root: ET.Element, sheet: Stylesheet) -> None:
                 raise _too_complex(f"multiplies out to more than {MAX_ELEMENTS:,} elements with its copies")
             if total.numbers > MAX_PATH_NUMBERS:
                 raise _too_complex("has far more points than LUDD imports")
+            if total.closes > MAX_CLOSE_WORK:
+                raise _too_complex(_CLOSED_TOO_OFTEN)
         open_now.discard(key)
         memo[key] = total
         return total
@@ -333,35 +369,50 @@ def _check_digits(root: ET.Element, css: list[str]) -> None:
 # ---------------------------------------------------------------- gradients and patterns
 
 
-def paint_servers(root: ET.Element, sheet: Stylesheet) -> Callable[[str], tuple | None]:
-    """What url(#id) paint points at: ("gradient", its first color or None), ("pattern",), or None."""
+def paint_servers(root: ET.Element, sheet: Stylesheet,
+                  check: Callable[[], None] | None = None) -> Callable[[str], tuple | None]:
+    """What url(#id) paint points at: ("gradient", its first color or None), ("pattern",), or None.
+    Each element's stops are read once, however many gradients and shapes use them."""
     ids = _ids(root)
+    read_stops: dict[int, tuple[bool, str | None]] = {}
+    answers: dict[str, tuple | None] = {}
+
+    def own_stops(el: ET.Element) -> tuple[bool, str | None]:
+        """Whether `el` has stops, and the first color among them."""
+        if (known := read_stops.get(id(el))) is not None:
+            return known
+        stops = [s for s in el if _local(s) == "stop"]
+        color = None
+        for stop in stops:
+            if check:
+                check()
+            opacity = (_cascade(stop, sheet, "stop-opacity") or "1").strip()
+            try:
+                seen_through = float(opacity.rstrip("%")) <= 0
+            except ValueError:
+                seen_through = False
+            if seen_through:
+                continue
+            color = parse_color(_cascade(stop, sheet, "stop-color") or "black")
+            if color == INVALID:
+                color = "#000000"
+            if color is not None:
+                break
+        read_stops[id(el)] = (bool(stops), color)
+        return read_stops[id(el)]
 
     def first_color(el: ET.Element) -> str | None:
         seen: set[int] = set()
         while el is not None and id(el) not in seen and len(seen) < 20:
             seen.add(id(el))
-            stops = [s for s in el if _local(s) == "stop"]
-            if stops:
-                for stop in stops:
-                    opacity = (_cascade(stop, sheet, "stop-opacity") or "1").strip()
-                    try:
-                        seen_through = float(opacity.rstrip("%")) <= 0
-                    except ValueError:
-                        seen_through = False
-                    if seen_through:
-                        continue
-                    color = parse_color(_cascade(stop, sheet, "stop-color") or "black")
-                    if color == INVALID:
-                        color = "#000000"
-                    if color is not None:
-                        return color
-                return None
+            has_stops, color = own_stops(el)
+            if has_stops:
+                return color
             href = _href(el) or ""
             el = ids.get(href[1:]) if href.startswith("#") else None
         return None
 
-    def find(element_id: str) -> tuple | None:
+    def look_up(element_id: str) -> tuple | None:
         el = ids.get(element_id)
         tag = _local(el) if el is not None else None
         if tag in ("linearGradient", "radialGradient"):
@@ -369,6 +420,11 @@ def paint_servers(root: ET.Element, sheet: Stylesheet) -> Callable[[str], tuple 
         if tag == "pattern":
             return ("pattern",)
         return None
+
+    def find(element_id: str) -> tuple | None:
+        if element_id not in answers:
+            answers[element_id] = look_up(element_id)
+        return answers[element_id]
 
     return find
 
@@ -378,7 +434,7 @@ def paint_servers(root: ET.Element, sheet: Stylesheet) -> Callable[[str], tuple 
 
 def _length(text: str | None) -> tuple[float, str] | None:
     """A length and its unit ("100mm"), or None for a missing, relative (%, em) or odd one."""
-    m = _LENGTH.match(text or "")
+    m = _LENGTH.fullmatch((text or "").strip())
     if not m:
         return None
     value, unit = float(m[1]), m[2].lower()
@@ -455,7 +511,8 @@ class _Builder:
                 continue
             if name not in ("d", "points") and len(value) > MAX_VALUE:
                 continue
-            if name == "class":
+            # (svgelements takes minutes over a long run of spaces in "points".)
+            if name in ("class", "points"):
                 value = " ".join(value.split())
             elif name == "preserveAspectRatio":
                 value = " ".join(p for p in value.split() if p != "defer")
@@ -567,9 +624,11 @@ def without_broken_paths(data: bytes) -> tuple[bytes, int]:
     return ET.tostring(root, encoding="utf-8"), broken
 
 
-def prepare(data: bytes) -> Prepared:
-    """Check an SVG and rebuild it safely (see above)."""
+def prepare(data: bytes, check: Callable[[], None] | None = None) -> Prepared:
+    """Check an SVG and rebuild it safely (see above). `check`: called as the work goes on."""
     check_xml(data)
+    if check:
+        check()
     try:
         root = ET.fromstring(data)
     except ET.ParseError:
@@ -580,8 +639,8 @@ def prepare(data: bytes) -> Prepared:
     css = ["".join(el.itertext()) for el in root.iter() if _local(el) == "style"]
     _check_digits(root, css)
     sheet = parse_css(css)
-    check_budget(root, sheet)
-    paint = paint_servers(root, sheet)
+    check_budget(root, sheet, check)
+    paint = paint_servers(root, sheet, check)
     wide, tall, real = viewport(root)
     builder = _Builder(root)
     clean = builder.element(root)
@@ -593,5 +652,5 @@ def prepare(data: bytes) -> Prepared:
         style = ET.Element(f"{{{SVG_NS}}}style")
         style.text = sheet.text()
         clean.insert(0, style)
-    check_budget(clean, sheet)  # what svgelements gets, with symbol copies
+    check_budget(clean, sheet, check)  # what svgelements gets, with symbol copies
     return Prepared(ET.tostring(clean, encoding="utf-8"), paint, real, builder.links, builder.clips)

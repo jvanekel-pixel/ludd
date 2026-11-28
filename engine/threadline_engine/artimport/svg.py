@@ -13,13 +13,13 @@ from .model import INVALID, Drawing, Item, Point, Subpath, parse_color
 MM_PER_PX = 25.4 / 96  # CSS pixels: 96 to the inch
 NO_REAL_SIZE = ("This SVG doesn't say its real size, so LUDD read it at 96 pixels per inch. Set Width to the size you "
                 "want.")
-_PAINT_URL = re.compile(r"url\(\s*(['\"]?)([^'\"()]{0,2000})\1\s*\)(.*)\Z", re.IGNORECASE | re.DOTALL)
+MAX_URL = 2000  # characters of the address in url(...) paint
 
 
 def read(data: bytes, deadline: Deadline) -> Drawing:
     if data[:2] == b"\x1f\x8b":
         raise ArtError("This is a compressed SVG (.svgz): save the drawing as a plain .svg and import that.")
-    prepared = svgclean.prepare(data)
+    prepared = svgclean.prepare(data, deadline.check)
     deadline.check()
     from svgelements import SVG, Shape
 
@@ -38,13 +38,12 @@ def read(data: bytes, deadline: Deadline) -> Drawing:
     drawing.skipped.add("damaged", broken)
     drawing.skipped.add("link", prepared.links)
     drawing.skipped.add("clip", prepared.clips)
-    for i, element in enumerate(document.elements()):
-        if i % 100 == 0:
-            deadline.check()
+    for element in document.elements():
+        deadline.check()
         values = getattr(element, "values", None) or {}
         if isinstance(element, Shape):
             if not _hidden(values):
-                _shape(element, values, prepared, drawing)
+                _shape(element, values, prepared, drawing, deadline)
         elif values.get("tag") in ("luddText", "luddImage") and not _hidden(values):
             drawing.skipped.add("text" if values["tag"] == "luddText" else "picture")
     return drawing
@@ -68,8 +67,7 @@ def _paint(raw: str, default: str | None, values: dict, prepared: svgclean.Prepa
     color comes to (black for a fill, as SVG's fill is; no stroke)."""
     raw = raw.strip()
     if raw[:4].lower() == "url(":
-        found = _PAINT_URL.match(raw)
-        target = found[2].strip() if found else ""
+        target, after = _url(raw)
         if target.startswith("#"):
             server = prepared.paint(target[1:])
             if server and server[0] == "gradient":
@@ -80,15 +78,32 @@ def _paint(raw: str, default: str | None, values: dict, prepared: svgclean.Prepa
                 return None
         elif target:
             drawing.skipped.add("link")  # paint in another file or on a website
-        raw = (found[3].strip() if found else "") or "none"  # SVG's own fallback, after url()
+        raw = after or "none"  # SVG's own fallback, after url()
     if raw.lower() == "currentcolor":
         raw = str(values.get("color") or "black")
     color = parse_color(raw)
     return default if color == INVALID else color
 
 
-def _shape(element, values: dict, prepared: svgclean.Prepared, drawing: Drawing) -> None:
+def _url(raw: str) -> tuple[str, str]:
+    """For paint that starts "url(": the address in it and what follows it, or ("", "") if it isn't
+    written properly. (Read by hand: a pattern took minutes on a long run of spaces.)"""
+    end = raw.find(")", 4)
+    if end < 0:
+        return "", ""
+    address = raw[4:end].strip()
+    if address[:1] in ("'", '"'):
+        if len(address) < 2 or address[-1] != address[0]:
+            return "", ""
+        address = address[1:-1]
+    if len(address) > MAX_URL or any(c in address for c in "'\"("):
+        return "", ""
+    return address.strip(), raw[end + 1:].strip()
+
+
+def _shape(element, values: dict, prepared: svgclean.Prepared, drawing: Drawing, deadline: Deadline) -> None:
     fill = _paint(str(values.get("fill", "black")), "#000000", values, prepared, drawing)
+    deadline.check()
     stroke = _paint(str(values.get("stroke", "none")), None, values, prepared, drawing)
     if _fraction(values, "fill-opacity") <= 0:
         fill = None
