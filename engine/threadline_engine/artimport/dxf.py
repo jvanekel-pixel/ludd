@@ -27,7 +27,7 @@ from .model import Drawing, Item, Point, Subpath, rgb_hex
 # The whole file, counted before ezdxf reads it (one call that can't be stopped).
 MAX_OBJECTS = 100_000  # records: shapes, blocks, layers and other settings (old-style vertices apart)
 MAX_VERTICES = 300_000  # old-style polyline vertex records (more points than MAX_POINTS anyway)
-MAX_TAGS = 3_000_000  # pairs of lines (a code and its value): about 40 s for ezdxf to read here
+MAX_TAGS = 1_000_000  # pairs of lines (a code and its value): a full one takes ezdxf about 12 s here
 MAX_ENTITIES = 50_000  # in the drawing, once every block is expanded
 MAX_BLOCK_DEPTH = 16  # blocks inside blocks
 MAX_POINTS = 300_000  # vertices and control points, once every block is expanded

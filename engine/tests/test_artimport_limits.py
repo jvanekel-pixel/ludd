@@ -332,10 +332,12 @@ def test_objects_in_unused_blocks_count_too(tmp_path, monkeypatch):
 
 
 def test_a_binary_dxf_with_too_many_objects_is_refused_too(tmp_path, monkeypatch):
-    path = make(tmp_path, lambda doc, msp: msp.add_line((0, 0), (1, 1)), binary=True, name="bin.dxf")
+    # An R12 line is a short record (9 pairs, with 1-byte codes), so 100,001 of them stay under the
+    # limit on pairs and reach the one on objects.
+    path = make(tmp_path, lambda doc, msp: msp.add_line((0, 0), (1, 1)), binary=True, name="bin.dxf", version="R12")
     data = path.read_bytes()
-    start = data.index(b"\x00\x00LINE\x00")
-    end = data.index(b"\x00\x00ENDSEC\x00", start)
+    start = data.index(b"\x00LINE\x00", data.index(b"ENTITIES"))
+    end = data.index(b"\x00ENDSEC\x00", start)
     path.write_bytes(data[:start] + data[start:end] * 100_001 + data[end:])
     _never_read(monkeypatch)
     assert "more than 100,000 objects" in _quickly(20, lambda: refusal(path))
@@ -347,20 +349,43 @@ def test_a_dxf_with_far_too_much_in_it_is_refused_by_its_length(tmp_path, monkey
     _refused(tmp_path, comments + _gen_dxf(_line()), "long.dxf", "far more in it", 5)
 
 
-def _old_polyline(vertices: int) -> str:
-    corners = "".join(f"0\nVERTEX\n8\n0\n10\n{i % 500 * 0.2}\n20\n{i // 500 * 0.3}\n" for i in range(vertices))
+_APPID = "0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nAPPID\n70\n1\n0\nAPPID\n2\nACAD\n70\n0\n0\nENDTAB\n0\nENDSEC\n"
+
+
+def _one_line_with_extra_data(pieces: int) -> bytes:
+    """A DXF with one LINE carrying `pieces` of extended data: one object, however much it holds."""
+    return (_APPID + _gen_dxf(_line() + "1001\nACAD\n" + "1000\nx\n" * pieces)).encode()
+
+
+def test_one_object_carrying_too_much_is_refused_by_the_count_before_the_read(tmp_path, monkeypatch):
+    """The second Phase 7 audit: one LINE with 2.95 million pieces of extended data was let through,
+    and ezdxf's one read of it took over half a minute, which nothing can stop. Over a million pairs
+    of lines is refused by the count."""
+    _never_read(monkeypatch)
+    path = write(tmp_path, _one_line_with_extra_data(1_000_000), "extra.dxf")
+    assert "far more in it than LUDD imports" in refusal(path)
+    # Just under a million is counted through and read (the count alone is checked here: the read
+    # itself takes seconds).
+    dxf.load_ezdxf()
+    assert dxf._check_size(_one_line_with_extra_data(999_000), Deadline()) is None
+
+
+def _old_polyline(vertices: int, layer: str = "8\n0\n") -> str:
+    """`layer`: each vertex's own layer pair ("" for the shortest record LUDD can be given)."""
+    corners = "".join(f"0\nVERTEX\n{layer}10\n{i % 500 * 0.2}\n20\n{i // 500 * 0.3}\n" for i in range(vertices))
     return _gen_dxf(f"0\nPOLYLINE\n8\n0\n66\n1\n70\n0\n{corners}0\nSEQEND\n8\n0\n")
 
 
 def test_old_style_polylines_are_counted_by_their_points(tmp_path, monkeypatch):
     """Each vertex of an old-style (R12) polyline is a record of its own, so they are counted apart:
     a drawing with more than 100,000 of them (within LUDD's 300,000 points) gets past the count
-    (reading it all takes a while), and one with more than 300,000 is refused before ezdxf."""
+    (reading it all takes a while), and one with more than 300,000 is refused before ezdxf. (Only
+    records of three pairs reach that many within the limit on pairs.)"""
     assert kinds(preview(write(tmp_path, _old_polyline(50), "old.dxf"))) == ["run"]
     dxf.load_ezdxf()
     dxf._check_size(_old_polyline(100_500).encode(), Deadline())
     _never_read(monkeypatch)
-    _refused(tmp_path, _old_polyline(300_001), "older.dxf", "more points than LUDD imports")
+    _refused(tmp_path, _old_polyline(300_001, layer=""), "older.dxf", "more points than LUDD imports")
 
 
 def test_a_dxf_closed_outline_that_crosses_itself_thousands_of_times_is_refused(tmp_path):
